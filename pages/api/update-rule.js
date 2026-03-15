@@ -7,16 +7,15 @@ export default async function handler(req, res) {
 
   const { id, updates } = req.body;
   
-  // Clean the data before sending to Supabase
   const sanitizedUpdates = {
     vendor_url: updates.vendor_url,
     auto_update: updates.auto_update,
-    price_adjustment_factor: parseFloat(updates.price_adjustment_factor),
-    needs_review: false // Reset review status if edited
+    price_adjustment_factor: parseFloat(updates.price_adjustment_factor) || 1.1111,
+    needs_review: false 
   };
 
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('watcher_rules')
       .update(sanitizedUpdates)
       .eq('id', id);
