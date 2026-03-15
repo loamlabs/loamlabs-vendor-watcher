@@ -104,8 +104,15 @@ export default function OpsDashboard() {
     fetchRules();
   };
 
-  const visibleVendorNames = ['All', ...new Set(rules.map(r => r.vendor_name).filter(Boolean))];
-  const filteredRules = filterVendor === 'All' ? rules : rules.filter(r => r.vendor_name === filterVendor);
+  // --- REFINED VENDOR BUTTON LOGIC ---
+  const visibleVendorNames = ['All', ...new Set(rules.map(r => {
+      // If vendor_name is missing, extract the first word from the title as a fallback
+      return r.vendor_name || r.title.split(' ')[0];
+  }).filter(Boolean))].sort();
+
+  const filteredRules = filterVendor === 'All' 
+    ? rules 
+    : rules.filter(r => (r.vendor_name || r.title).toLowerCase().includes(filterVendor.toLowerCase()));
 
   if (!isAuthorized) {
     return (
@@ -159,7 +166,8 @@ export default function OpsDashboard() {
 
         <div className="flex gap-3 mb-8 overflow-x-auto pb-4 no-scrollbar min-h-[50px]">
           {visibleVendorNames.map(v => {
-            const logo = vendorLogos.find(l => l.name === v);
+            // Case-insensitive search for logos
+            const logo = vendorLogos.find(l => l.name.toLowerCase() === v.toLowerCase());
             return (
               <button key={v} onClick={() => setFilterVendor(v)} className={`flex items-center gap-3 px-5 py-2 rounded-full border-2 transition-all whitespace-nowrap ${filterVendor === v ? 'bg-black text-white border-black shadow-lg scale-105 font-black' : 'bg-white text-zinc-500 border-zinc-100 hover:border-zinc-300 font-bold'}`}>
                 {logo?.logo_url && <img src={logo.logo_url} className="h-4 w-auto object-contain" alt="" />}
