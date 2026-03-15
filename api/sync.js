@@ -28,28 +28,31 @@ export default async function handler(req, res) {
       const vResponse = await fetch(`${rule.vendor_url}.js`);
       const vData = await vResponse.json();
 
-      const variant = vData.variants.find(v => {
+      const spokeNum = rule.option_values["Spoke Count"] ? rule.option_values["Spoke Count"].replace(/\D/g, '') : null;
+      const isFrontRule = rule.title.toLowerCase().includes('front');
+      const freehubGoal = rule.option_values.Freehub ? rule.option_values.Freehub.toLowerCase() : null;
+
+      // 1. Filter variants to those that match the Spoke Count
+      let candidates = vData.variants.filter(v => v.public_title.includes(spokeNum));
+
+      // 2. Narrow down by Position (Front vs Rear)
+      candidates = candidates.filter(v => {
         const title = v.public_title.toLowerCase();
-        
-        // 1. Spoke Check (Finds "28" regardless of "h", "Hole", or "Spoke")
-        const spokeNum = rule.option_values["Spoke Count"] ? rule.option_values["Spoke Count"].replace(/\D/g, '') : null;
-        const spokeMatch = spokeNum ? title.includes(spokeNum) : true;
-
-        // 2. Color Check (Only checks if color is present in vendor title)
-        const colorMatch = rule.option_values.Color ? title.includes(rule.option_values.Color.toLowerCase()) : true;
-
-        // 3. Freehub Check (Critical for Rear Hubs)
-        const freehubGoal = rule.option_values.Freehub ? rule.option_values.Freehub.toLowerCase() : null;
-        const freehubMatch = freehubGoal ? title.includes(freehubGoal) : true;
-
-        // 4. Position Check
-        const isFront = rule.title.toLowerCase().includes('front') && title.includes('front');
-        const isRear = rule.title.toLowerCase().includes('rear') && (title.includes('rear') || title.includes('hg') || title.includes('xd') || title.includes('ms'));
-
-        return spokeMatch && colorMatch && freehubMatch && (isFront || isRear);
+        if (isFrontRule) return title.includes('front');
+        // If it's a Rear rule, it should have "rear" OR a freehub name
+        return title.includes('rear') || title.includes('xd') || title.includes('hg') || title.includes('ms') || title.includes('microspline');
       });
 
-      if (variant) {
+      // 3. If it's a Rear hub and we specified a Freehub, find that specific one
+      let finalVariant = null;
+      if (!isFrontRule && freehubGoal) {
+        finalVariant = candidates.find(v => v.public_title.toLowerCase().includes(freehubGoal));
+      } else {
+        // For Front hubs or if no specific freehub is requested, take the first match
+        finalVariant = candidates[0];
+      }
+
+      if (finalVariant) {
         const sResponse = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
           headers: { 'X-Shopify-Access-Token': adminToken }
         });
@@ -57,21 +60,21 @@ export default async function handler(req, res) {
 
         reports.push({
           item: rule.title,
-          vendor_price: variant.price / 100,
+          vendor_price: finalVariant.price / 100,
           loamlabs_price: parseFloat(sData.variant.price),
-          status: (variant.price / 100 == sData.variant.price) ? "MATCHED" : "PRICE MISMATCH",
-          matched_on: variant.public_title
+          status: (finalVariant.price / 100 == sData.variant.price) ? "MATCHED" : "PRICE MISMATCH",
+          matched_on: finalVariant.public_title
         });
 
         await supabase.from('watcher_rules').update({ 
-          last_price: variant.price, 
+          last_price: finalVariant.price, 
           last_run_at: new Date().toISOString() 
         }).eq('id', rule.id);
       } else {
         reports.push({ 
           item: rule.title, 
           status: "NOT FOUND", 
-          debug: `Searched for Spoke: ${rule.option_values["Spoke Count"]}, Freehub: ${rule.option_values.Freehub || 'N/A'}`
+          debug: `Spoke goal: ${spokeNum}, IsFront: ${isFrontRule}, Candidates found: ${candidates.length}`
         });
       }
     }
