@@ -53,15 +53,23 @@ export default async function handler(req, res) {
           const goalPrice = parseFloat(vendorPrice * factor).toFixed(2);
 
           const sResponse = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
-            method: 'POST',
-            headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `query($id: ID!) { productVariant(id: $id) { price compareAtPrice inventoryQuantity } }`,
-              variables: { id: `gid://shopify/ProductVariant/${rule.shopify_variant_id}` }
-            })
-          });
-          const sData = await sResponse.json();
-          const variant = sData.data.productVariant;
+          method: 'POST',
+          headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: `query($id: ID!) { 
+              productVariant(id: $id) { 
+                price 
+                compareAtPrice 
+                inventoryQuantity 
+                product { vendor } 
+              } 
+            }`,
+            variables: { id: `gid://shopify/ProductVariant/${rule.shopify_variant_id}` }
+          })
+        });
+        const sData = await sResponse.json();
+        const variant = sData.data.productVariant;
+        const officialVendor = variant?.product?.vendor; //
           if (!variant) throw new Error("Shopify variant not found");
           
           const myPrice = parseFloat(variant.price).toFixed(2);
