@@ -2,7 +2,9 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-// 1. Function to get the temporary token (The 2026 Method)
+// Helper to strip "h", "hole", etc. and just get the number (28h -> 28)
+const clean = (str) => str.toString().replace(/\D/g, '');
+
 async function getShopifyToken() {
   const response = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/oauth/access_token`, {
     method: 'POST',
@@ -19,43 +21,48 @@ async function getShopifyToken() {
 
 export default async function handler(req, res) {
   try {
-    // 2. Fetch rules from Supabase
     const { data: rules, error } = await supabase.from('watcher_rules').select('*');
     if (error) throw error;
 
-    // 3. Get our temporary Shopify key
     const adminToken = await getShopifyToken();
     const reports = [];
 
     for (const rule of rules) {
-      // 4. Scrape the Vendor (Berd)
       const vResponse = await fetch(`${rule.vendor_url}.js`);
       const vData = await vResponse.json();
 
-      const variant = vData.variants.find(v => 
-        v.public_title.includes(rule.option_values.Color) && 
-        v.public_title.includes(rule.option_values["Spoke Count"])
-      );
+      // SMARTER MATCHING:
+      const variant = vData.variants.find(v => {
+        const colorMatch = v.public_title.toLowerCase().includes(rule.option_values.Color.toLowerCase());
+        const spokeMatch = clean(v.public_title) === clean(rule.option_values["Spoke Count"]);
+        return colorMatch && spokeMatch;
+      });
 
       if (variant) {
-        // 5. Fetch YOUR current price from Shopify to compare
+        // Fetch YOUR current price from Shopify
         const sResponse = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
           headers: { 'X-Shopify-Access-Token': adminToken }
         });
         const sData = await sResponse.json();
-        const myPrice = sData.variant.price;
 
         reports.push({
           item: rule.title,
-          berd_price: variant.price / 100,
-          my_current_price: myPrice,
-          status: (variant.price / 100 == myPrice) ? "Matched" : "Price Mismatch!"
+          vendor_price: variant.price / 100,
+          loamlabs_price: parseFloat(sData.variant.price),
+          status: (variant.price / 100 == sData.variant.price) ? "PRICES MATCH" : "!!! PRICE MISMATCH !!!",
+          vendor_variant_name: variant.public_title
         });
 
-        // 6. Update Supabase memory
-        await supabase.from('watcher_rules')
-          .update({ last_price: variant.price, last_run_at: new Date() })
-          .eq('id', rule.id);
+        await supabase.from('watcher_rules').update({ 
+          last_price: variant.price, 
+          last_run_at: new Date().toISOString() 
+        }).eq('id', rule.id);
+
+      } else {
+        reports.push({ 
+          item: rule.title, 
+          status: "FAILED: Could not find variant matching " + rule.option_values.Color + " and " + rule.option_values["Spoke Count"] 
+        });
       }
     }
     res.status(200).json(reports);
