@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, Image as ImageIcon, Loader2, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, Image as ImageIcon, Loader2, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function BrandingCenter() {
   const [vendors, setVendors] = useState([]);
   const [savedLogos, setSavedLogos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(null); 
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const auth = localStorage.getItem('loam_ops_auth');
@@ -14,16 +15,33 @@ export default function BrandingCenter() {
   }, []);
 
   const fetchData = async (auth) => {
+    setLoading(true);
+    setError(null);
     try {
+      // 1. Fetch Vendors from Shopify
       const vRes = await fetch('/api/search-products?query='); 
+      if (!vRes.ok) throw new Error("Could not reach Shopify API");
       const vData = await vRes.json();
-      const uniqueVendors = [...new Set(vData.map(p => p.node.vendor))].sort();
+      
+      // Safety check: Is the data in the format we expect?
+      const productNodes = Array.isArray(vData) ? vData : vData.edges ? vData.edges : [];
+      if (productNodes.length === 0) throw new Error("No vendors found in catalog.");
+
+      const uniqueVendors = [...new Set(productNodes.map(p => {
+          const item = p.node || p;
+          return item.vendor;
+      }))].filter(Boolean).sort();
+      
       setVendors(uniqueVendors);
 
+      // 2. Fetch Logos from Supabase
       const lRes = await fetch('/api/get-logos', { headers: { 'x-dashboard-auth': auth } });
       const lData = await lRes.json();
       setSavedLogos(lData.savedLogos || []);
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+        console.error(e);
+        setError(e.message);
+    }
     setLoading(false);
   };
 
@@ -49,7 +67,21 @@ export default function BrandingCenter() {
     setTimeout(() => setSaving(null), 1000);
   };
 
-  if (loading) return <div className="min-h-screen bg-white flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
+  if (loading) return <div className="min-h-screen bg-white flex items-center justify-center flex-col gap-4">
+    <Loader2 className="animate-spin text-zinc-900" size={40} />
+    <span className="font-black uppercase italic text-xs tracking-widest animate-pulse">Scanning Shopify Catalog...</span>
+  </div>;
+
+  if (error) return <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-12">
+    <div className="bg-white p-12 rounded-[3rem] shadow-2xl border border-red-100 text-center max-w-md">
+        <AlertTriangle className="mx-auto text-red-500 mb-6" size={60} />
+        <h2 className="text-2xl font-black uppercase italic mb-4">Discovery Error</h2>
+        <p className="text-zinc-500 text-sm mb-8">{error}</p>
+        <button onClick={() => fetchData(localStorage.getItem('loam_ops_auth'))} className="bg-black text-white px-8 py-4 rounded-2xl font-black uppercase italic flex items-center gap-3 mx-auto hover:scale-105 transition-all">
+            <RefreshCw size={18} /> Try Again
+        </button>
+    </div>
+  </div>;
 
   return (
     <div className="min-h-screen bg-zinc-50 p-12 font-sans">
