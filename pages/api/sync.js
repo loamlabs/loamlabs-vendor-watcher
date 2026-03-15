@@ -69,72 +69,70 @@ export default async function handler(req, res) {
         });
         const sData = await sResponse.json();
         const variant = sData.data.productVariant;
-        const officialVendor = variant?.product?.vendor; //
-          if (!variant) throw new Error("Shopify variant not found");
+        const officialVendor = variant?.product?.vendor; 
+
+        if (!variant) throw new Error("Shopify variant not found");
           
-          const myPrice = parseFloat(variant.price).toFixed(2);
-          const myComparePrice = variant.compareAtPrice ? parseFloat(variant.compareAtPrice).toFixed(2) : null;
+        const myPrice = parseFloat(variant.price).toFixed(2);
+        const myComparePrice = variant.compareAtPrice ? parseFloat(variant.compareAtPrice).toFixed(2) : null;
 
-          let needsUpdate = false;
-          let updatePayload = { id: rule.shopify_variant_id };
-          let reasons = [];
-          let marginAlert = false;
+        let needsUpdate = false;
+        let updatePayload = { id: rule.shopify_variant_id };
+        let reasons = [];
+        let marginAlert = false;
 
-          const priceDropPercent = (myPrice - goalPrice) / myPrice;
-          if (priceDropPercent > (rule.price_drop_threshold || 0.20)) {
-             marginAlert = true;
-             reasons.push(`MARGIN ALERT: ${Math.round(priceDropPercent * 100)}% drop detected.`);
-          }
-
-          if (goalPrice !== myPrice && !marginAlert) {
-            updatePayload.price = goalPrice;
-            if (myComparePrice && parseFloat(myComparePrice) > parseFloat(myPrice)) {
-              const gap = parseFloat(myComparePrice) - parseFloat(myPrice);
-              updatePayload.compare_at_price = (parseFloat(goalPrice) + gap).toFixed(2);
-            }
-            reasons.push(`Sync $${myPrice} to $${goalPrice}`);
-            needsUpdate = true;
-          }
-
-          if (needsUpdate && rule.auto_update === true && !marginAlert) {
-            await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
-              method: 'PUT',
-              headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ variant: updatePayload })
-            });
-            updatedCount++;
-          } else if (needsUpdate || marginAlert) {
-            attentionCount++;
-            if (marginAlert) await supabase.from('watcher_rules').update({ needs_review: true, review_reason: reasons[0] }).eq('id', rule.id);
-          }
-
-          await supabase.from('watcher_rules').update({ 
-            last_price: Math.round(vendorPrice * 100), 
-            last_availability: vendorAvailable,
-            last_run_at: new Date().toISOString(),
-            last_log: marginAlert ? reasons[0] : `Matched $${vendorPrice}. Goal $${goalPrice}. ${needsUpdate ? 'Shopify updated.' : 'In sync.'}`
-          }).eq('id', rule.id);
+        const priceDropPercent = (myPrice - goalPrice) / myPrice;
+        if (priceDropPercent > (rule.price_drop_threshold || 0.20)) {
+           marginAlert = true;
+           reasons.push(`MARGIN ALERT: ${Math.round(priceDropPercent * 100)}% drop detected.`);
         }
-// --- DATA HEALING & FINAL SYNC LOG ---
+
+        if (goalPrice !== myPrice && !marginAlert) {
+          updatePayload.price = goalPrice;
+          if (myComparePrice && parseFloat(myComparePrice) > parseFloat(myPrice)) {
+            const gap = parseFloat(myComparePrice) - parseFloat(myPrice);
+            updatePayload.compare_at_price = (parseFloat(goalPrice) + gap).toFixed(2);
+          }
+          reasons.push(`Sync $${myPrice} to $${goalPrice}`);
+          needsUpdate = true;
+        }
+
+        if (needsUpdate && rule.auto_update === true && !marginAlert) {
+          await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
+            method: 'PUT',
+            headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ variant: updatePayload })
+          });
+          updatedCount++;
+        } else if (needsUpdate || marginAlert) {
+          attentionCount++;
+          if (marginAlert) await supabase.from('watcher_rules').update({ needs_review: true, review_reason: reasons[0] }).eq('id', rule.id);
+        }
+
+        // --- CONSOLIDATED DB UPDATE (DATA HEALING & LOGGING) ---
         const dbUpdates = { 
           last_price: Math.round(vendorPrice * 100), 
           last_availability: vendorAvailable,
           last_run_at: new Date().toISOString(),
-          last_log: marginAlert ? reasons[0] : `Matched $${vendorPrice}. Goal $${goalPrice}. Status: ${needsUpdate ? 'Shopify updated.' : 'In sync.'}`
+          last_log: marginAlert ? reasons[0] : `Matched $${vendorPrice}. Goal $${goalPrice}. ${needsUpdate ? 'Shopify updated.' : 'In sync.'}`
         };
 
-        // If the database column is empty, fill it with the official Shopify name
+        // Auto-Heal: If database is missing vendor, add the official name from Shopify
         if (!rule.vendor_name && officialVendor) {
-            dbUpdates.vendor_name = officialVendor;
-            console.log(`Auto-Healing: Added vendor "${officialVendor}" to ${rule.title}`);
+          dbUpdates.vendor_name = officialVendor;
         }
 
         await supabase.from('watcher_rules').update(dbUpdates).eq('id', rule.id);
-        // --- END OF RULE LOOP ---
-      } catch (innerErr) {
+        // -------------------------------------------------------
+
+      } // End of candidates check
+    } catch (innerErr) {
         await supabase.from('watcher_rules').update({ last_log: `Error: ${innerErr.message}` }).eq('id', rule.id);
-      }
     }
+  } // End of rules loop
+
     res.status(200).json({ updatedCount, attentionCount });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { 
+    res.status(500).json({ error: err.message }); 
+  }
 }
