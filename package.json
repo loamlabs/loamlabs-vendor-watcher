@@ -1,0 +1,8 @@
+{
+  "name": "loamlabs-vendor-watcher",
+  "version": "1.0.0",
+  "main": "api/sync.js",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  }
+}
