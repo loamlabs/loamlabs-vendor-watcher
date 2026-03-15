@@ -32,50 +32,50 @@ export default async function handler(req, res) {
       const isFrontRule = rule.title.toLowerCase().includes('front');
       const freehubGoal = rule.option_values.Freehub ? rule.option_values.Freehub.toLowerCase() : null;
 
-      // 1. Filter variants to those that match the Spoke Count
-      let candidates = vData.variants.filter(v => v.public_title.includes(spokeNum));
-
-      // 2. Narrow down by Position (Front vs Rear)
-      candidates = candidates.filter(v => {
+      // 1. Filter variants by Spoke Count and Position
+      let candidates = vData.variants.filter(v => {
         const title = v.public_title.toLowerCase();
-        if (isFrontRule) return title.includes('front');
-        // If it's a Rear rule, it should have "rear" OR a freehub name
-        return title.includes('rear') || title.includes('xd') || title.includes('hg') || title.includes('ms') || title.includes('microspline');
+        const spokeMatch = v.public_title.includes(spokeNum);
+        if (isFrontRule) return spokeMatch && title.includes('front');
+        return spokeMatch && (title.includes('rear') || title.includes('xd') || title.includes('hg') || title.includes('ms'));
       });
 
-      // 3. If it's a Rear hub and we specified a Freehub, find that specific one
-      let finalVariant = null;
-      if (!isFrontRule && freehubGoal) {
-        finalVariant = candidates.find(v => v.public_title.toLowerCase().includes(freehubGoal));
-      } else {
-        // For Front hubs or if no specific freehub is requested, take the first match
-        finalVariant = candidates[0];
-      }
+      // 2. Pricing Strategy: Find the highest price among valid candidates
+      let targetPrice = 0;
+      let matchedTitle = "";
 
-      if (finalVariant) {
+      if (candidates.length > 0) {
+        // Find the variant with the highest price
+        const highestPriceVariant = candidates.reduce((prev, current) => (prev.price > current.price) ? prev : current);
+        targetPrice = highestPriceVariant.price / 100;
+        matchedTitle = highestPriceVariant.public_title;
+
+        // 3. Fetch YOUR current price from Shopify
         const sResponse = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
           headers: { 'X-Shopify-Access-Token': adminToken }
         });
         const sData = await sResponse.json();
+        const myPrice = parseFloat(sData.variant.price);
+
+        // 4. Calculate the "Goal Price" (Vendor Price * Adjustment Factor)
+        const goalPrice = targetPrice * (rule.price_adjustment_factor || 1.0);
 
         reports.push({
           item: rule.title,
-          vendor_price: finalVariant.price / 100,
-          loamlabs_price: parseFloat(sData.variant.price),
-          status: (finalVariant.price / 100 == sData.variant.price) ? "MATCHED" : "PRICE MISMATCH",
-          matched_on: finalVariant.public_title
+          vendor_highest_price: targetPrice,
+          my_current_price: myPrice,
+          status: (goalPrice === myPrice) ? "MATCHED" : "PRICE MISMATCH",
+          details: `Highest price found on: ${matchedTitle}`
         });
 
+        // 5. Save the price to Supabase memory
         await supabase.from('watcher_rules').update({ 
-          last_price: finalVariant.price, 
+          last_price: Math.round(targetPrice * 100), 
           last_run_at: new Date().toISOString() 
         }).eq('id', rule.id);
+
       } else {
-        reports.push({ 
-          item: rule.title, 
-          status: "NOT FOUND", 
-          debug: `Spoke goal: ${spokeNum}, IsFront: ${isFrontRule}, Candidates found: ${candidates.length}`
-        });
+        reports.push({ item: rule.title, status: "NOT FOUND" });
       }
     }
     res.status(200).json(reports);
