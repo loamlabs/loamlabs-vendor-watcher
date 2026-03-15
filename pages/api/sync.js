@@ -115,6 +115,22 @@ export default async function handler(req, res) {
             last_log: marginAlert ? reasons[0] : `Matched $${vendorPrice}. Goal $${goalPrice}. ${needsUpdate ? 'Shopify updated.' : 'In sync.'}`
           }).eq('id', rule.id);
         }
+// --- DATA HEALING & FINAL SYNC LOG ---
+        const dbUpdates = { 
+          last_price: Math.round(vendorPrice * 100), 
+          last_availability: vendorAvailable,
+          last_run_at: new Date().toISOString(),
+          last_log: marginAlert ? reasons[0] : `Matched $${vendorPrice}. Goal $${goalPrice}. Status: ${needsUpdate ? 'Shopify updated.' : 'In sync.'}`
+        };
+
+        // If the database column is empty, fill it with the official Shopify name
+        if (!rule.vendor_name && officialVendor) {
+            dbUpdates.vendor_name = officialVendor;
+            console.log(`Auto-Healing: Added vendor "${officialVendor}" to ${rule.title}`);
+        }
+
+        await supabase.from('watcher_rules').update(dbUpdates).eq('id', rule.id);
+        // --- END OF RULE LOOP ---
       } catch (innerErr) {
         await supabase.from('watcher_rules').update({ last_log: `Error: ${innerErr.message}` }).eq('id', rule.id);
       }
