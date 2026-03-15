@@ -43,96 +43,93 @@ export default async function handler(req, res) {
       });
 
       if (candidates.length > 0) {
-        // 1. VENDOR DATA
         const highestPriceVariant = candidates.reduce((prev, current) => (prev.price > current.price) ? prev : current);
         const vendorPrice = highestPriceVariant.price / 100;
         const vendorAvailable = highestPriceVariant.available;
         const goalPrice = (vendorPrice * (rule.price_adjustment_factor || 1.0)).toFixed(2);
 
-        // 2. SHOPIFY DATA (GraphQL used to get Product-level Metafields)
         const sResponse = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
           method: 'POST',
           headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            query: `query($id: ID!) { 
-              productVariant(id: $id) { 
-                price 
-                inventoryPolicy 
-                inventoryQuantity 
-                product { 
-                  outOfStockAction: metafield(namespace: "custom", key: "out_of_stock_action") { value } 
-                } 
-              } 
-            }`,
+            query: `query($id: ID!) { productVariant(id: $id) { price inventoryPolicy inventoryQuantity product { outOfStockAction: metafield(namespace: "custom", key: "out_of_stock_action") { value } } } }`,
             variables: { id: `gid://shopify/ProductVariant/${rule.shopify_variant_id}` }
           })
         });
         const sData = await sResponse.json();
         const variant = sData.data.productVariant;
+        
         const myPrice = parseFloat(variant.price).toFixed(2);
-        const myPolicy = variant.inventoryPolicy; // 'CONTINUE' or 'DENY'
+        const myPolicy = variant.inventoryPolicy;
         const myQty = variant.inventoryQuantity;
         const outOfStockAction = variant.product.outOfStockAction?.value || 'Make Unavailable (Track Inventory)';
 
-        // 3. LOGIC DETERMINATION
         let needsUpdate = false;
         let updatePayload = { id: rule.shopify_variant_id };
 
-        // Price Logic
+        // 1. PRICE SYNC
         if (goalPrice !== myPrice) {
           updatePayload.price = goalPrice;
           needsUpdate = true;
         }
 
-        // Availability Logic (BTI ALIGNED)
+        // 2. AVAILABILITY SYNC (Physical-First Logic)
         if (!vendorAvailable) {
-           if (outOfStockAction === 'Make Unavailable (Track Inventory)') {
-              if (myPolicy !== 'DENY' || myQty > 0) {
-                updatePayload.inventory_policy = 'deny';
-                updatePayload.inventory_quantity = 0;
-                needsUpdate = true;
-              }
-           } else {
-              // Switch to Special Order -> Policy must be CONTINUE
-              if (myPolicy !== 'CONTINUE') {
-                updatePayload.inventory_policy = 'continue';
-                needsUpdate = true;
-              }
-           }
+          // Vendor is OS. Check if LoamLabs is ALSO OS.
+          if (myQty <= 0) {
+             if (outOfStockAction === 'Make Unavailable (Track Inventory)') {
+                if (myPolicy !== 'DENY') {
+                  updatePayload.inventory_policy = 'deny';
+                  needsUpdate = true;
+                }
+             } else {
+                // Keep selling (Special Order)
+                if (myPolicy !== 'CONTINUE') {
+                  updatePayload.inventory_policy = 'continue';
+                  needsUpdate = true;
+                }
+             }
+          }
+          // Note: If myQty > 0, we do nothing and keep selling local stock.
         } else {
-          // Vendor is In Stock -> Ensure we can sell it
+          // Vendor is In Stock -> Always allow selling (Special Order mode)
           if (myPolicy !== 'CONTINUE') {
             updatePayload.inventory_policy = 'continue';
             needsUpdate = true;
           }
         }
 
-        // 4. EXECUTION
+        // 3. EXECUTE & REPORT
         if (needsUpdate && rule.auto_update === true) {
           await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
             method: 'PUT',
             headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
             body: JSON.stringify({ variant: updatePayload })
           });
-          updated.push({ title: rule.title, reason: needsUpdate ? "Price/Stock Sync" : "" });
+          updated.push({ title: rule.title, change: updatePayload.price ? "Price" : "Availability" });
         } else if (needsUpdate) {
           attention.push({ title: rule.title });
         } else {
           inSync.push({ title: rule.title });
         }
 
-        await supabase.from('watcher_rules').update({ last_price: Math.round(vendorPrice * 100), last_run_at: new Date() }).eq('id', rule.id);
+        // 4. Update Supabase Memory
+        await supabase.from('watcher_rules').update({ 
+          last_price: Math.round(vendorPrice * 100), 
+          last_availability: vendorAvailable,
+          last_run_at: new Date() 
+        }).eq('id', rule.id);
       }
     }
 
     if (updated.length > 0 || attention.length > 0) {
-      const updatedHtml = updated.map(i => `<li>✅ <b>UPDATED:</b> ${i.title}</li>`).join('');
-      const attentionHtml = attention.map(i => `<li>⚠️ <b>MISMATCH:</b> ${i.title}</li>`).join('');
+      const updatedHtml = updated.map(i => `<li>✅ <b>Sync:</b> ${i.title} (${i.change})</li>`).join('');
+      const attentionHtml = attention.map(i => `<li>⚠️ <b>Mismatch:</b> ${i.title}</li>`).join('');
       await resend.emails.send({
         from: 'Watcher <system@loamlabsusa.com>',
         to: process.env.REPORT_EMAIL,
-        subject: `Vendor Watcher Report: ${updated.length} Syncs`,
-        html: `<div style="font-family:sans-serif;"><h2>Report</h2><ul>${updatedHtml}${attentionHtml}</ul></div>`
+        subject: `Vendor Report: ${updated.length} Syncs`,
+        html: `<h3>Report</h3><ul>${updatedHtml}${attentionHtml}</ul>`
       });
     }
 
