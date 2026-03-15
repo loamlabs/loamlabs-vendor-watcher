@@ -1,5 +1,3 @@
-const cleanNum = (str) => str ? str.toString().replace(/\D/g, '') : '';
-
 async function getShopifyToken() {
   const response = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/oauth/access_token`, {
     method: 'POST',
@@ -10,9 +8,7 @@ async function getShopifyToken() {
       grant_type: 'client_credentials'
     })
   });
-  if (!response.ok) {
-    throw new Error(`Shopify Auth Failed: ${response.status}`);
-  }
+  if (!response.ok) throw new Error(`Auth Failed: ${response.status}`);
   const data = await response.json();
   return data.access_token;
 }
@@ -22,49 +18,63 @@ export default async function handler(req, res) {
 
   try {
     const adminToken = await getShopifyToken();
-    
-    // If query is empty, we don't send a search filter, which returns all products.
-    const searchTerm = query ? `title:*${query}*` : "";
+    let allProducts = [];
+    let hasNextPage = true;
+    let cursor = null;
 
-    const response = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
-      method: 'POST',
-      headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: `query($q: String) {
-          products(first: 250, query: $q) {
-            edges {
-              node {
-                id
-                title
-                vendor
-                variants(first: 50) {
-                  edges {
-                    node {
-                      id
-                      title
-                      price
+    // --- RECURSIVE PAGINATION LOOP ---
+    // This keeps running until every product in the shop has been scanned
+    while (hasNextPage) {
+      const response = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
+        method: 'POST',
+        headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `query($q: String, $after: String) {
+            products(first: 250, query: $q, after: $after) {
+              pageInfo { hasNextPage }
+              edges {
+                cursor
+                node {
+                  id
+                  title
+                  vendor
+                  variants(first: 1) {
+                    edges {
+                      node {
+                        id
+                        price
+                      }
                     }
                   }
                 }
               }
             }
+          }`,
+          variables: { 
+            // Fix: If no query, we pass null to return everything
+            q: query ? `title:*${query}*` : null, 
+            after: cursor 
           }
-        }`,
-        variables: { q: searchTerm }
-      })
-    });
+        })
+      });
 
-    const data = await response.json();
+      const data = await response.json();
+      if (data.errors) throw new Error(data.errors[0].message);
 
-    if (data.errors) {
-      return res.status(500).json({ error: data.errors[0].message });
+      const pageProducts = data.data.products.edges;
+      allProducts = [...allProducts, ...pageProducts];
+      
+      hasNextPage = data.data.products.pageInfo.hasNextPage;
+      if (hasNextPage) {
+        cursor = pageProducts[pageProducts.length - 1].cursor;
+      }
     }
 
-    // Return the edges directly as the app expects
-    res.status(200).json(data.data.products.edges);
-    
+    console.log(`Success: Scanned ${allProducts.length} products.`);
+    res.status(200).json(allProducts);
+
   } catch (err) {
-    console.error("Discovery Engine Error:", err.message);
+    console.error("Discovery Error:", err.message);
     res.status(500).json({ error: err.message });
   }
 }
