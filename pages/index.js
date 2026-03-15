@@ -86,6 +86,7 @@ export default function OpsDashboard() {
         <nav className="space-y-2 flex-grow">
           <SidebarLink icon={<Package size={18}/>} label="Vendor Watcher" active={activeTab === 'vendors'} onClick={() => setActiveTab('vendors')} />
           <SidebarLink icon={<ShieldCheck size={18}/>} label="Shop Health" active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} />
+    <SidebarLink icon={<ImageIcon size={18}/>} label="Vendor Branding" active={false} onClick={() => window.location.href = '/logos'} />
         </nav>
       </aside>
 
