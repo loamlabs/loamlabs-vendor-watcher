@@ -19,6 +19,10 @@ async function getShopifyToken() {
 }
 
 export default async function handler(req, res) {
+  const authHeader = req.headers['x-loam-secret'];
+  if (authHeader !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized Handshake' });
+  }
   try {
     const { data: rules, error } = await supabase.from('watcher_rules').select('*');
     if (error) throw error;
