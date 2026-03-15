@@ -6,9 +6,10 @@ export default async function handler(req, res) {
   if (req.headers['x-dashboard-auth'] !== process.env.DASHBOARD_PASSWORD) return res.status(401).json({ error: 'Unauthorized' });
 
   const { name, logo_url } = req.body;
+  if (!name) return res.status(400).json({ error: 'Vendor name is required' });
+
   try {
-    // PRIMARY FIX: Using upsert with onConflict 'name' to ensure it overwrites correctly
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('vendor_logos')
       .upsert(
         { name, logo_url, updated_at: new Date() }, 
@@ -18,6 +19,7 @@ export default async function handler(req, res) {
     if (error) throw error;
     res.status(200).json({ success: true });
   } catch (err) {
+    console.error("Supabase Error:", err.message);
     res.status(500).json({ error: err.message });
   }
 }
