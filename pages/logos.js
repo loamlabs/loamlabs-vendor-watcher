@@ -18,19 +18,27 @@ export default function BrandingCenter() {
     setLoading(true);
     setError(null);
     try {
+      // 1. Fetch Vendors from Shopify
       const vRes = await fetch('/api/search-products?query='); 
-      if (!vRes.ok) throw new Error("Could not reach Shopify API");
       const vData = await vRes.json();
       
-      const productNodes = vData || [];
-      const uniqueVendors = [...new Set(productNodes.map(p => {
+      if (vData.error) throw new Error(vData.error);
+      
+      // Shopify discovery: Handle various possible array formats
+      const rawNodes = Array.isArray(vData) ? vData : vData.edges ? vData.edges : [];
+      
+      if (rawNodes.length === 0) {
+          throw new Error("Shopify returned 0 products. Check your private app credentials.");
+      }
+
+      const uniqueVendors = [...new Set(rawNodes.map(p => {
           const item = p.node || p;
           return item.vendor;
       }))].filter(Boolean).sort();
       
-      if (uniqueVendors.length === 0) throw new Error("No vendors found.");
       setVendors(uniqueVendors);
 
+      // 2. Fetch Logos from Supabase
       const lRes = await fetch('/api/get-logos', { headers: { 'x-dashboard-auth': auth } });
       const lData = await lRes.json();
       setSavedLogos(lData.savedLogos || []);
@@ -62,25 +70,31 @@ export default function BrandingCenter() {
     setTimeout(() => setSaving(null), 1000);
   };
 
-  if (loading) return <div className="min-h-screen bg-white flex items-center justify-center flex-col gap-4">
-    <Loader2 className="animate-spin text-zinc-900" size={40} />
-    <span className="font-black uppercase italic text-xs tracking-widest animate-pulse tracking-widest">Discovery Phase...</span>
-  </div>;
-
-  if (error) return <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-12">
-    <div className="bg-white p-12 rounded-[3rem] shadow-2xl border border-red-100 text-center max-w-md">
-        <AlertTriangle className="mx-auto text-red-500 mb-6" size={60} />
-        <h2 className="text-2xl font-black uppercase italic mb-4 tracking-tighter">Connection Offline</h2>
-        <p className="text-zinc-500 text-xs mb-8">{error}</p>
-        <button onClick={() => fetchData(localStorage.getItem('loam_ops_auth'))} className="bg-black text-white px-8 py-4 rounded-2xl font-black uppercase italic flex items-center gap-3 mx-auto hover:scale-105 transition-all">
-            <RefreshCw size={18} /> Retry Discovery
-        </button>
+  if (loading) return (
+    <div className="min-h-screen bg-white flex items-center justify-center flex-col gap-4">
+        <Loader2 className="animate-spin text-zinc-900" size={40} />
+        <span className="font-black uppercase italic text-[10px] tracking-widest animate-pulse">Syncing Shopify Catalog...</span>
     </div>
-  </div>;
+  );
+
+  if (error) return (
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-12 font-sans">
+        <div className="bg-white p-12 rounded-[3rem] shadow-2xl border border-red-100 text-center max-w-md">
+            <AlertTriangle className="mx-auto text-red-500 mb-6" size={60} />
+            <h2 className="text-2xl font-black uppercase italic mb-4 tracking-tighter">Discovery Offline</h2>
+            <div className="bg-red-50 p-4 rounded-2xl mb-8 border border-red-100">
+                <p className="text-red-800 text-[10px] font-mono leading-relaxed">{error}</p>
+            </div>
+            <button onClick={() => fetchData(localStorage.getItem('loam_ops_auth'))} className="bg-black text-white px-8 py-4 rounded-2xl font-black uppercase italic flex items-center gap-3 mx-auto hover:scale-105 transition-all shadow-xl">
+                <RefreshCw size={18} /> Retry Sync
+            </button>
+        </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-zinc-50 p-12 font-sans">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto text-zinc-900">
         <div className="flex items-center justify-between mb-12">
           <button onClick={() => window.location.href = '/'} className="flex items-center gap-2 text-zinc-400 hover:text-black font-black uppercase text-[10px] tracking-widest transition-all">
             <ChevronLeft size={16} /> Back to Dashboard
