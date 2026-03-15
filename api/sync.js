@@ -19,16 +19,22 @@ async function getShopifyToken() {
 }
 
 export default async function handler(req, res) {
+  // Security Handshake
   const authHeader = req.headers['x-loam-secret'];
   if (authHeader !== process.env.CRON_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized Handshake' });
+    return res.status(401).json({ error: 'Unauthorized' });
   }
+
   try {
     const { data: rules, error } = await supabase.from('watcher_rules').select('*');
     if (error) throw error;
 
     const adminToken = await getShopifyToken();
-    const reports = [];
+    
+    // Categorized Groups for the Email
+    let updated = [];
+    let attention = [];
+    let inSync = [];
 
     for (const rule of rules) {
       const vResponse = await fetch(`${rule.vendor_url}.js`);
@@ -54,40 +60,61 @@ export default async function handler(req, res) {
         const sData = await sResponse.json();
         const myCurrentPrice = parseFloat(sData.variant.price).toFixed(2);
 
-        let actionTaken = "Checked";
+        const itemResult = { 
+          title: rule.title, 
+          vendor: vendorPrice, 
+          mine: myCurrentPrice, 
+          goal: goalPrice,
+          matched_on: highestPriceVariant.public_title 
+        };
+
         if (goalPrice !== myCurrentPrice) {
           if (rule.auto_update === true) {
+            // EXECUTE UPDATE
             await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
               method: 'PUT',
               headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
               body: JSON.stringify({ variant: { id: rule.shopify_variant_id, price: goalPrice } })
             });
-            actionTaken = `UPDATED TO $${goalPrice}`;
+            updated.push(itemResult);
           } else {
-            actionTaken = `MISMATCH (Goal: $${goalPrice})`;
+            attention.push(itemResult);
           }
-        } else { actionTaken = "In Sync"; }
+        } else {
+          inSync.push(itemResult);
+        }
 
-        reports.push({ item: rule.title, vendor: vendorPrice, mine: myCurrentPrice, action: actionTaken });
-        await supabase.from('watcher_rules').update({ last_price: Math.round(vendorPrice * 100), last_run_at: new Date() }).eq('id', rule.id);
+        // Update Supabase memory
+        await supabase.from('watcher_rules').update({ 
+          last_price: Math.round(vendorPrice * 100), 
+          last_run_at: new Date() 
+        }).eq('id', rule.id);
       }
     }
 
-    // DIAGNOSTIC EMAIL SEND
-    let emailStatus = "Not Sent";
-    try {
-      const emailHtml = reports.map(r => `<li><b>${r.item}</b>: Vendor: $${r.vendor} | Mine: $${r.mine} | <b>${r.action}</b></li>`).join('');
-      const emailResponse = await resend.emails.send({
-        from: 'onboarding@resend.dev', // Using the Resend test address to bypass domain blocks
+    // ONLY SEND EMAIL IF THERE ARE UPDATES OR MISMATCHES
+    if (updated.length > 0 || attention.length > 0) {
+      const updatedHtml = updated.map(i => `<li style="color:green;">✅ <b>UPDATED:</b> ${i.title} - Now $${i.goal}</li>`).join('');
+      const attentionHtml = attention.map(i => `<li style="color:red;">⚠️ <b>MISMATCH:</b> ${i.title} - Vendor: $${i.vendor} | Mine: $${i.mine}</li>`).join('');
+      const syncHtml = inSync.map(i => `<li style="color:gray;">Verified: ${i.title} ($${i.mine})</li>`).join('');
+
+      await resend.emails.send({
+        from: 'Watcher <system@loamlabsusa.com>',
         to: process.env.REPORT_EMAIL,
-        subject: `TEST: Vendor Price Report - ${new Date().toLocaleDateString()}`,
-        html: `<h3>LoamLabs Vendor Watcher Report</h3><ul>${emailHtml}</ul>`
+        subject: `Vendor Price Report: ${updated.length} Update(s), ${attention.length} Mismatch(es)`,
+        html: `
+          <div style="font-family:sans-serif;">
+            <h2>LoamLabs Vendor Watcher Report</h2>
+            ${updated.length > 0 ? `<h3>🚀 Automated Updates</h3><ul>${updatedHtml}</ul>` : ''}
+            ${attention.length > 0 ? `<h3>⚠️ Manual Attention Required</h3><ul>${attentionHtml}</ul>` : ''}
+            <hr>
+            <h3>✅ Items In Sync</h3>
+            <ul>${syncHtml}</ul>
+          </div>
+        `
       });
-      emailStatus = emailResponse.error ? `Error: ${emailResponse.error.message}` : "Sent Successfully";
-    } catch (emailErr) {
-      emailStatus = `Crash: ${emailErr.message}`;
     }
 
-    res.status(200).json({ reports, email_status: emailStatus });
+    res.status(200).json({ updated, attention, inSync });
   } catch (err) { res.status(500).json({ error: err.message }); }
 }
