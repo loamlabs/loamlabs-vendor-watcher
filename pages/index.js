@@ -37,15 +37,13 @@ export default function OpsDashboard() {
         const logoData = await logoRes.json();
         setVendorLogos(logoData.savedLogos || []);
         setIsAuthorized(true); 
-      } else { 
-        localStorage.removeItem('loam_ops_auth');
       }
     } catch (e) { console.error(e); }
     setLoading(false);
   };
 
   const deleteRule = async (id) => {
-    if (!confirm("Remove this item from the Registry?")) return;
+    if (!confirm("⚠️ PERMANENT ACTION: Remove this item from the Registry?")) return;
     await fetch('/api/delete-rule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
@@ -89,6 +87,7 @@ export default function OpsDashboard() {
   };
 
   const visibleVendorNames = ['All', ...new Set(rules.map(r => r.vendor_name).filter(name => {
+    if (!name) return false;
     const logo = vendorLogos.find(l => l.name === name);
     return logo ? !logo.is_hidden : true;
   }))];
@@ -111,9 +110,10 @@ export default function OpsDashboard() {
 
   return (
     <div className="flex min-h-screen bg-zinc-50 font-sans text-zinc-900">
-      <aside className="w-64 bg-black text-zinc-400 p-6 hidden md:flex flex-col border-r border-zinc-800 fixed h-full">
+      <aside className="w-64 bg-black text-zinc-400 p-6 hidden md:flex flex-col border-r border-zinc-800 fixed h-full z-20">
         <div className="mb-12">
-          <img src="/logo.png" alt="LoamLabs" className="h-10 mb-4 object-contain invert opacity-90" />
+          {/* LOGO FIX: Removed invert since your logo is already white */}
+          <img src="/logo.png" alt="LoamLabs" className="h-10 mb-4 object-contain opacity-100" />
           <div className="font-black italic text-xl text-white tracking-tighter uppercase">Ops Dashboard</div>
         </div>
         
@@ -145,7 +145,7 @@ export default function OpsDashboard() {
           </div>
         </div>
 
-        <div className="flex gap-3 mb-8 overflow-x-auto pb-4 no-scrollbar">
+        <div className="flex gap-3 mb-8 overflow-x-auto pb-4 no-scrollbar min-h-[50px]">
           {visibleVendorNames.map(v => {
             const logo = vendorLogos.find(l => l.name === v);
             return (
@@ -159,8 +159,8 @@ export default function OpsDashboard() {
 
         <div className="bg-white rounded-[2rem] shadow-sm border border-zinc-200 overflow-hidden text-sm">
           <table className="w-full text-left">
-            <thead className="bg-zinc-100 border-b text-[10px] uppercase font-black text-zinc-500 tracking-widest"><tr className="p-6">
-              <th className="p-6 text-xs italic tracking-tighter">Registry Item</th>
+            <thead className="bg-zinc-100 border-b text-[10px] uppercase font-black text-zinc-500 tracking-widest font-mono"><tr className="p-6">
+              <th className="p-6 italic tracking-tighter">Registry Item</th>
               <th className="p-6 text-center">Status</th>
               <th className="p-6">Memory</th>
               <th className="p-6 text-right">Auto-Sync / Delete</th>
@@ -170,7 +170,7 @@ export default function OpsDashboard() {
                 <tr key={rule.id} className={`${rule.needs_review ? 'bg-red-50' : 'hover:bg-zinc-50'} transition-colors group`}>
                   <td className="p-6"><div className="font-bold text-zinc-900 text-base">{rule.title}</div><div className="text-[10px] text-zinc-400 font-mono mt-1 truncate max-w-sm">{rule.vendor_url}</div></td>
                   <td className="p-6 text-center">
-                    {rule.needs_review ? <span className="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-pulse uppercase tracking-tighter">Review Required</span> : rule.last_availability ? <span className="bg-green-100 text-green-700 text-[9px] font-black px-3 py-1 rounded-full uppercase italic">Active</span> : <span className="bg-zinc-200 text-zinc-600 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter">Out of Stock</span>}
+                    {rule.needs_review ? <span className="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-pulse uppercase tracking-tighter">Review Required</span> : rule.last_availability ? <span className="bg-green-100 text-green-700 text-[9px] font-black px-3 py-1 rounded-full uppercase italic font-black">Active</span> : <span className="bg-zinc-200 text-zinc-600 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter">Out of Stock</span>}
                   </td>
                   <td className="p-6 font-mono font-bold text-lg text-zinc-700">${(rule.last_price / 100).toFixed(2)}</td>
                   <td className="p-6 flex justify-end items-center gap-6">
@@ -182,17 +182,16 @@ export default function OpsDashboard() {
             </tbody>
           </table>
         </div>
-        
-        {/* ADD MODAL (Remains similar but ensures vendor_name is captured) */}
+
         {showAddModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden text-sm">
                <div className="p-8 border-b flex justify-between items-center bg-zinc-50"><h3 className="text-2xl font-black tracking-tighter italic uppercase">Registry Enrollment</h3><button onClick={() => setShowAddModal(false)}><X size={24}/></button></div>
                <div className="p-10 space-y-8 max-h-[80vh] overflow-y-auto no-scrollbar">
-                  <div><label className="text-[10px] font-black uppercase text-zinc-400 mb-3 block tracking-widest font-black italic">1. Search Catalog</label><div className="flex gap-3"><input type="text" placeholder="Product Name..." className="flex-grow p-5 bg-zinc-100 rounded-2xl outline-none font-bold" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && searchShopify()} /><button onClick={searchShopify} className="bg-zinc-950 text-white p-5 rounded-2xl hover:bg-black"><Search size={24}/></button></div></div>
-                  {searchResults.length > 0 && <div className="max-h-48 overflow-auto border-2 border-zinc-100 rounded-2xl divide-y">{searchResults.map(({ node: p }) => (<button key={p.id} onClick={() => { setSelectedProduct(p); setSelectedVariants([]); }} className={`w-full text-left p-4 hover:bg-zinc-50 flex justify-between items-center ${selectedProduct?.id === p.id ? 'bg-zinc-100 font-bold' : ''}`}><span>{p.title}</span><span className="text-[10px] font-black bg-zinc-200 px-2 py-1 rounded text-zinc-500 uppercase">{p.vendor}</span></button>))}</div>}
-                  {selectedProduct && <div className="bg-zinc-50 p-8 rounded-[1.5rem] border-2 border-zinc-100"><label className="text-[10px] font-black uppercase text-zinc-400 mb-4 block tracking-widest text-center italic">Pick Variants</label><div className="grid grid-cols-2 gap-2">{selectedProduct.variants.edges.map(({ node: v }) => (<button key={v.id} onClick={() => { const exists = selectedVariants.find(sv => sv.id === v.id); if (exists) setSelectedVariants(selectedVariants.filter(sv => sv.id !== v.id)); else setSelectedVariants([...selectedVariants, v]); }} className={`p-3 rounded-xl border-2 text-xs font-black transition-all ${selectedVariants.find(sv => sv.id === v.id) ? 'bg-black text-white border-black shadow-lg' : 'bg-white text-zinc-400 border-zinc-200 hover:border-zinc-400'}`}>{v.title}</button>))}</div></div>}
-                  <div><label className="text-[10px] font-black uppercase text-zinc-400 mb-3 block tracking-widest italic text-center">3. Meta</label><input type="text" placeholder="Vendor Product URL" className="w-full p-5 bg-zinc-100 rounded-2xl mb-3 outline-none focus:ring-2 focus:ring-black font-mono text-xs" value={vendorUrl} onChange={(e) => setVendorUrl(e.target.value)} /><input type="text" placeholder="Freehub Keyword (Optional)" className="w-full p-5 bg-zinc-100 rounded-2xl outline-none focus:ring-2 focus:ring-black" value={freehubKeyword} onChange={(e) => setFreehubKeyword(e.target.value)} /></div>
+                  <div><label className="text-[10px] font-black uppercase text-zinc-400 mb-3 block tracking-widest font-black italic">1. Search Catalog</label><div className="flex gap-3"><input type="text" placeholder="Product Name..." className="flex-grow p-5 bg-zinc-100 rounded-2xl outline-none font-bold shadow-inner" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && searchShopify()} /><button onClick={searchShopify} className="bg-zinc-950 text-white p-5 rounded-2xl hover:bg-black"><Search size={24}/></button></div></div>
+                  {searchResults.length > 0 && <div className="max-h-48 overflow-auto border-2 border-zinc-100 rounded-2xl divide-y shadow-sm">{searchResults.map(({ node: p }) => (<button key={p.id} onClick={() => { setSelectedProduct(p); setSelectedVariants([]); }} className={`w-full text-left p-4 hover:bg-zinc-50 flex justify-between items-center ${selectedProduct?.id === p.id ? 'bg-zinc-100 font-bold' : ''}`}><span>{p.title}</span><span className="text-[10px] font-black bg-zinc-200 px-2 py-1 rounded text-zinc-500 uppercase">{p.vendor}</span></button>))}</div>}
+                  {selectedProduct && <div className="bg-zinc-50 p-8 rounded-[1.5rem] border-2 border-zinc-100"><label className="text-[10px] font-black uppercase text-zinc-400 mb-4 block tracking-widest text-center italic">Pick Variants</label><div className="grid grid-cols-2 gap-2">{selectedProduct.variants.edges.map(({ node: v }) => (<button key={v.id} onClick={() => { const exists = selectedVariants.find(sv => sv.id === v.id); if (exists) setSelectedVariants(selectedVariants.filter(sv => sv.id !== v.id)); else setSelectedVariants([...selectedVariants, v]); }} className={`p-3 rounded-xl border-2 text-xs font-black transition-all ${selectedVariants.find(sv => sv.id === v.id) ? 'bg-black text-white border-black shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-200 hover:border-zinc-400'}`}>{v.title}</button>))}</div></div>}
+                  <div><label className="text-[10px] font-black uppercase text-zinc-400 mb-3 block tracking-widest italic text-center font-black">3. Meta</label><input type="text" placeholder="Vendor Product URL" className="w-full p-5 bg-zinc-100 rounded-2xl mb-3 outline-none focus:ring-2 focus:ring-black font-mono text-xs shadow-inner" value={vendorUrl} onChange={(e) => setVendorUrl(e.target.value)} /><input type="text" placeholder="Freehub Keyword (Optional)" className="w-full p-5 bg-zinc-100 rounded-2xl outline-none focus:ring-2 focus:ring-black font-bold shadow-inner" value={freehubKeyword} onChange={(e) => setFreehubKeyword(e.target.value)} /></div>
                   <button onClick={handleSave} disabled={!selectedVariants.length || !vendorUrl} className="w-full bg-black text-white font-black p-6 rounded-[1.5rem] hover:bg-zinc-800 disabled:opacity-10 transition-all uppercase tracking-widest shadow-2xl text-lg italic tracking-widest">Create rules</button>
                </div>
             </div>
@@ -204,5 +203,5 @@ export default function OpsDashboard() {
 }
 
 function SidebarLink({ icon, label, active, onClick }) {
-  return (<button onClick={onClick} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-black text-xs uppercase tracking-tight ${active ? 'bg-white text-black shadow-xl' : 'hover:bg-zinc-900 text-zinc-600'}`}>{icon} {label}</button>);
+  return (<button onClick={onClick} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-black text-xs uppercase tracking-tight ${active ? 'bg-white text-black shadow-xl scale-[1.03]' : 'hover:bg-zinc-900 text-zinc-600'}`}>{icon} {label}</button>);
 }
