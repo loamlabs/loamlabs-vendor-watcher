@@ -105,14 +105,11 @@ export default function OpsDashboard() {
   };
 
   // --- REFINED VENDOR BUTTON LOGIC ---
-  const visibleVendorNames = ['All', ...new Set(rules.map(r => {
-      // If vendor_name is missing, extract the first word from the title as a fallback
-      return r.vendor_name || r.title.split(' ')[0];
-  }).filter(Boolean))].sort();
+  const visibleVendorNames = ['All', ...new Set(rules.map(r => r.vendor_name).filter(Boolean))].sort();
 
   const filteredRules = filterVendor === 'All' 
     ? rules 
-    : rules.filter(r => (r.vendor_name || r.title).toLowerCase().includes(filterVendor.toLowerCase()));
+    : rules.filter(r => r.vendor_name === filterVendor);
 
   if (!isAuthorized) {
     return (
