@@ -7,7 +7,14 @@ export default async function handler(req, res) {
 
   const { name, logo_url } = req.body;
   try {
-    const { data, error } = await supabase.from('vendor_logos').upsert({ name, logo_url }, { onConflict: 'name' });
+    // PRIMARY FIX: Using upsert with onConflict 'name' to ensure it overwrites correctly
+    const { data, error } = await supabase
+      .from('vendor_logos')
+      .upsert(
+        { name, logo_url, updated_at: new Date() }, 
+        { onConflict: 'name' }
+      );
+      
     if (error) throw error;
     res.status(200).json({ success: true });
   } catch (err) {
