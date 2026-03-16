@@ -9,9 +9,9 @@ export default function OpsDashboard() {
   const [password, setPassword] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [selectedVendors, setSelectedVendors] = useState([]);
+  const [selectedVendors, setSelectedVendors] = useState([]); 
   const [registrySearch, setRegistrySearch] = useState(''); 
-  const [syncFilter, setSyncFilter] = useState('all'); // 'all', 'on', 'off'
+  const [syncFilter, setSyncFilter] = useState('all'); 
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [visibleCount, setVisibleCount] = useState(50);
 
@@ -28,7 +28,7 @@ export default function OpsDashboard() {
       const res = await fetch('/api/get-rules', { headers: { 'x-dashboard-auth': auth } });
       if (res.ok) { 
         const data = await res.json();
-        setRules(data);
+        setRules(data || []);
         localStorage.setItem('loam_ops_auth', auth);
         const logoRes = await fetch('/api/get-logos', { headers: { 'x-dashboard-auth': auth } });
         const logoData = await logoRes.json();
@@ -45,7 +45,7 @@ export default function OpsDashboard() {
       const res = await fetch('/api/update-rule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
-        body: JSON.stringify({ id, updates: { ...updates, price_adjustment_factor: parseFloat(updates.price_adjustment_factor) } })
+        body: JSON.stringify({ id, updates })
       });
       if (res.ok) {
         setEditingRule(null);
@@ -119,7 +119,7 @@ export default function OpsDashboard() {
         </nav>
         <div className="relative mt-auto border-t border-zinc-800 pt-6">
            {showUserMenu && (
-             <div className="absolute bottom-full left-0 w-full mb-2 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-2">
+             <div className="absolute bottom-full left-0 w-full mb-2 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden">
                 <button onClick={() => { localStorage.removeItem('loam_ops_auth'); window.location.reload(); }} className="w-full p-4 flex items-center gap-3 text-red-500 hover:bg-red-500/10 font-bold text-xs uppercase transition-all"><LogOut size={16}/> End Session</button>
              </div>
            )}
@@ -140,18 +140,15 @@ export default function OpsDashboard() {
                 <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1">Found {filteredRules.length} items</div>
               </div>
               <div className="flex items-center gap-3">
-                {/* --- SYNC TOGGLE GROUP --- */}
                 <div className="bg-zinc-100 p-1 rounded-xl flex items-center">
                     <button onClick={() => setSyncFilter('all')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${syncFilter === 'all' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}>All</button>
                     <button onClick={() => setSyncFilter('on')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase flex items-center gap-2 transition-all ${syncFilter === 'on' ? 'bg-black text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}><Zap size={10}/> On</button>
                     <button onClick={() => setSyncFilter('off')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase flex items-center gap-2 transition-all ${syncFilter === 'off' ? 'bg-zinc-300 text-zinc-700 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}><ZapOff size={10}/> Off</button>
                 </div>
-
                 <div className="relative">
                     <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
                     <input type="text" placeholder="Quick search..." className="bg-zinc-100 p-3 pl-12 rounded-xl outline-none focus:ring-2 focus:ring-black border-2 border-transparent transition-all font-bold text-xs w-64" value={registrySearch} onChange={(e) => { setRegistrySearch(e.target.value); setVisibleCount(50); }} />
                 </div>
-                <button onClick={async () => { if(!confirm("Scan Shopify for new items?")) return; setLoading(true); await fetch('/api/import-catalog', { method: 'POST', headers: { 'x-dashboard-auth': password }}); fetchRules(); setLoading(false); }} className="bg-zinc-100 text-zinc-900 p-3 px-6 rounded-xl font-bold flex items-center gap-2 hover:bg-zinc-200 transition-all shadow-sm text-xs"><RefreshCcw size={14} className={loading ? "animate-spin" : ""} /> Import</button>
                 <button onClick={() => fetchRules()} className="bg-white border-2 border-zinc-200 p-3 px-4 rounded-xl hover:border-black transition-all shadow-sm"><RefreshCcw size={14} className={loading ? "animate-spin" : ""} /></button>
               </div>
             </div>
@@ -216,26 +213,22 @@ export default function OpsDashboard() {
             </div>
           </>
         ) : (
-          /* --- SHOP HEALTH VIEW --- */
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
              <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic mb-2">Shop Health</h1>
              <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest mb-12">Automated Data Audit & Integrity Engine</p>
-             
              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
                 <HealthCard title="Missing URLs" count={rules.filter(r => !r.vendor_url).length} subtitle="Items requiring configuration" icon={<AlertCircle className="text-red-500"/>}/>
                 <HealthCard title="Missing Metafields" count="--" subtitle="Items lacking engineering data" icon={<Info className="text-blue-500"/>}/>
                 <HealthCard title="Sync Conflicts" count={rules.filter(r => r.needs_review).length} subtitle="Margin safety violations" icon={<RefreshCcw className="text-orange-500"/>}/>
              </div>
-
              <div className="bg-white p-20 rounded-[3rem] border-2 border-dashed border-zinc-200 text-center">
                 <ShieldCheck size={60} className="mx-auto text-zinc-200 mb-6"/>
                 <h3 className="text-xl font-black uppercase italic">Data Audit in Progress</h3>
-                <p className="text-zinc-400 text-sm max-w-xs mx-auto mt-2">Integrating Section 4.11 from Master Notes. Reporting on Negative Inventory and missing specs coming next.</p>
+                <p className="text-zinc-400 text-sm max-w-xs mx-auto mt-2">Integrating Section 4.11 from Master Notes. Reporting on Negative Inventory coming next.</p>
              </div>
           </div>
         )}
 
-        {/* --- EDIT MODAL --- */}
         {editingRule && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden text-sm border border-zinc-800 animate-in fade-in zoom-in-95">
