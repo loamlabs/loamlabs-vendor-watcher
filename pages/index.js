@@ -9,7 +9,7 @@ export default function OpsDashboard() {
   const [password, setPassword] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [selectedVendors, setSelectedVendors] = useState([]);
+  const [selectedVendors, setSelectedVendors] = useState([]); 
   const [registrySearch, setRegistrySearch] = useState(''); 
   const [syncFilter, setSyncFilter] = useState('all'); 
   const [showUserMenu, setShowUserMenu] = useState(false);
