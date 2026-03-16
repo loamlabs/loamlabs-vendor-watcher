@@ -104,18 +104,14 @@ export default function OpsDashboard() {
     fetchRules();
   };
 
-  // --- VENDOR BUTTON LOGIC ---
+  // --- REFINED VENDOR BUTTON LOGIC ---
   const visibleVendorNames = ['All', ...new Set(rules.map(r => {
-    // If we have the official name, use it. Otherwise, grab the first word of the title (e.g. "Berd")
     return r.vendor_name || r.title.split(' ')[0];
   }).filter(Boolean))].sort();
 
   const filteredRules = filterVendor === 'All' 
     ? rules 
-    : rules.filter(r => {
-        const vendor = (r.vendor_name || r.title.split(' ')[0]).toLowerCase();
-        return vendor === filterVendor.toLowerCase();
-      });
+    : rules.filter(r => (r.vendor_name || r.title.split(' ')[0]).toLowerCase() === filterVendor.toLowerCase());
 
   if (!isAuthorized) {
     return (
@@ -138,13 +134,11 @@ export default function OpsDashboard() {
           <img src="/logo.png" alt="LoamLabs" className="h-10 mb-4 object-contain opacity-100" />
           <div className="font-black italic text-xl text-white tracking-tighter uppercase">Ops Dashboard</div>
         </div>
-        
         <nav className="space-y-1 flex-grow">
           <SidebarLink icon={<Package size={18}/>} label="Vendor Watcher" active={activeTab === 'vendors'} onClick={() => setActiveTab('vendors')} />
           <SidebarLink icon={<ShieldCheck size={18}/>} label="Shop Health" active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} />
           <SidebarLink icon={<ImageIcon size={18}/>} label="Branding" active={false} onClick={() => window.location.href = '/logos'} />
         </nav>
-
         <div className="relative mt-auto border-t border-zinc-800 pt-6">
            {showUserMenu && (
              <div className="absolute bottom-full left-0 w-full mb-2 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-2">
@@ -159,28 +153,28 @@ export default function OpsDashboard() {
       </aside>
 
       <main className="flex-grow ml-64 p-6 md:p-12 overflow-auto min-h-screen">
-        <div className="flex gap-2">
-  <button 
-    onClick={async () => {
-      if(!confirm("Import all products from Shopify into the Registry? (Duplicates will be skipped)")) return;
-      setLoading(true);
-      const res = await fetch('/api/import-catalog', { headers: { 'x-dashboard-auth': password }});
-      if(res.ok) fetchRules();
-      setLoading(false);
-    }} 
-    className="bg-zinc-100 text-zinc-900 p-3 px-6 rounded-xl font-bold flex items-center gap-2 hover:bg-zinc-200 transition-all shadow-sm"
-  >
-    <RefreshCcw size={18} className={loading ? "animate-spin" : ""} /> Import Catalog
-  </button>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Registry</h1>
+          <div className="flex gap-2">
+            <button 
+              onClick={async () => {
+                if(!confirm("Import shop catalog? (Duplicates and excluded tags will be skipped)")) return;
+                setLoading(true);
+                await fetch('/api/import-catalog', { headers: { 'x-dashboard-auth': password }});
+                fetchRules();
+                setLoading(false);
+              }} 
+              className="bg-zinc-100 text-zinc-900 p-3 px-6 rounded-xl font-bold flex items-center gap-2 hover:bg-zinc-200 transition-all shadow-sm"
+            >
+              <RefreshCcw size={18} className={loading ? "animate-spin" : ""} /> Import Shop
+            </button>
+            <button onClick={() => setShowAddModal(true)} className="bg-black text-white p-3 px-6 rounded-xl font-bold flex items-center gap-2 shadow-xl hover:bg-zinc-800 transition-all"><Plus size={18} /> Add Component</button>
+            <button onClick={() => fetchRules()} className="bg-white border-2 border-zinc-200 p-3 px-4 rounded-xl hover:border-black transition-all shadow-sm"><RefreshCcw size={18} className={loading ? "animate-spin" : ""} /></button>
+          </div>
+        </div>
 
-  <button onClick={() => setShowAddModal(true)} className="bg-black text-white p-3 px-6 rounded-xl font-bold flex items-center gap-2 shadow-xl hover:bg-zinc-800 transition-all">
-    <Plus size={18} /> Add Component
-  </button>
-  
-  {/* ... (Keep your existing Refresh icon button here) */}
-</div>
+        <div className="flex gap-3 mb-8 overflow-x-auto pb-4 no-scrollbar min-h-[50px]">
           {visibleVendorNames.map(v => {
-            // Case-insensitive search for logos
             const logo = vendorLogos.find(l => l.name.toLowerCase() === v.toLowerCase());
             return (
               <button key={v} onClick={() => setFilterVendor(v)} className={`flex items-center gap-3 px-5 py-2 rounded-full border-2 transition-all whitespace-nowrap ${filterVendor === v ? 'bg-black text-white border-black shadow-lg scale-105 font-black' : 'bg-white text-zinc-500 border-zinc-100 hover:border-zinc-300 font-bold'}`}>
@@ -251,7 +245,7 @@ export default function OpsDashboard() {
 
         {editingRule && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden text-sm border border-zinc-800 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden text-sm border border-zinc-800 animate-in fade-in zoom-in-95">
               <div className="p-6 border-b flex justify-between items-center bg-zinc-50">
                 <h3 className="text-xl font-black uppercase italic tracking-tighter">Edit Rule: {editingRule.title}</h3>
                 <button onClick={() => setEditingRule(null)} className="hover:rotate-90 transition-all"><X size={20}/></button>
