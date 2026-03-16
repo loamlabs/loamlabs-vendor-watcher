@@ -136,16 +136,18 @@ export default async function handler(req, res) {
             last_run_at: new Date().toISOString(),
             last_log: marginAlert ? "Margin Review Required" : `Matched $${vendorPrice}. Goal $${goalPrice}. ${needsUpdate ? 'Shopify updated.' : 'In sync.'}`
           }).eq('id', rule.id);
-        }
+        } // This closes the 'if (candidates.length > 0)' block
       } catch (innerErr) {
         console.error(`Error on rule ${rule.id}:`, innerErr.message);
         await supabase.from('watcher_rules').update({ last_log: `Error: ${innerErr.message}` }).eq('id', rule.id);
       }
-    } // End of candidates check
-    } catch (innerErr) {
-        await supabase.from('watcher_rules').update({ last_log: `Error: ${innerErr.message}` }).eq('id', rule.id);
-    }
-  } // End of rules loop
+    } // This closes the 'for (const rule of rules)' loop
+
+    res.status(200).json({ updatedCount, attentionCount });
+  } catch (err) { 
+    res.status(500).json({ error: err.message }); 
+  }
+} // End of rules loop
 
     res.status(200).json({ updatedCount, attentionCount });
   } catch (err) { 
