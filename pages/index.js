@@ -9,7 +9,7 @@ export default function OpsDashboard() {
   const [password, setPassword] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [selectedVendors, setSelectedVendors] = useState([]); 
+  const [filterVendor, setFilterVendor] = useState('All');
   const [registrySearch, setRegistrySearch] = useState(''); 
   const [syncFilter, setSyncFilter] = useState('all'); 
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -74,16 +74,10 @@ export default function OpsDashboard() {
     fetchRules();
   };
   
-  const toggleVendor = (name) => {
-    setSelectedVendors(prev => 
-      prev.includes(name) ? prev.filter(v => v !== name) : [...prev, name]
-    );
-  };
-
-  const visibleVendorNames = [...new Set(rules.map(r => r.vendor_name).filter(Boolean))].sort();
+  const visibleVendorNames = ['All', ...new Set(rules.map(r => r.vendor_name).filter(Boolean))].sort();
 
   const filteredRules = rules.filter(r => {
-    const matchesVendor = selectedVendors.length === 0 || selectedVendors.includes(r.vendor_name);
+    const matchesVendor = filterVendor === 'All' || r.vendor_name === filterVendor;
     const matchesSearch = r.title.toLowerCase().includes(registrySearch.toLowerCase());
     const matchesSync = syncFilter === 'all' ? true : syncFilter === 'on' ? r.auto_update : !r.auto_update;
     return matchesVendor && matchesSearch && matchesSync;
@@ -119,7 +113,7 @@ export default function OpsDashboard() {
         </nav>
         <div className="relative mt-auto border-t border-zinc-800 pt-6">
            {showUserMenu && (
-             <div className="absolute bottom-full left-0 w-full mb-2 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden">
+             <div className="absolute bottom-full left-0 w-full mb-2 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-2">
                 <button onClick={() => { localStorage.removeItem('loam_ops_auth'); window.location.reload(); }} className="w-full p-4 flex items-center gap-3 text-red-500 hover:bg-red-500/10 font-bold text-xs uppercase transition-all"><LogOut size={16}/> End Session</button>
              </div>
            )}
@@ -149,29 +143,21 @@ export default function OpsDashboard() {
                     <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
                     <input type="text" placeholder="Quick search..." className="bg-zinc-100 p-3 pl-12 rounded-xl outline-none focus:ring-2 focus:ring-black border-2 border-transparent transition-all font-bold text-xs w-64" value={registrySearch} onChange={(e) => { setRegistrySearch(e.target.value); setVisibleCount(50); }} />
                 </div>
-                <button onClick={async () => { if(!confirm("Scan Shopify for new items?")) return; setLoading(true); await fetch('/api/import-catalog', { method: 'POST', headers: { 'x-dashboard-auth': password }}); fetchRules(); setLoading(false); }} className="bg-zinc-100 text-zinc-900 p-3 px-6 rounded-xl font-bold flex items-center gap-2 hover:bg-zinc-200 transition-all shadow-sm text-xs"><RefreshCcw size={14} className={loading ? "animate-spin" : ""} /> Import</button>
                 <button onClick={() => fetchRules()} className="bg-white border-2 border-zinc-200 p-3 px-4 rounded-xl hover:border-black transition-all shadow-sm"><RefreshCcw size={14} className={loading ? "animate-spin" : ""} /></button>
               </div>
             </div>
 
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Filter by Vendor (Multi-select)</label>
-                {selectedVendors.length > 0 && <button onClick={() => setSelectedVendors([])} className="text-[10px] font-black uppercase text-red-500 hover:text-red-700 transition-all underline underline-offset-4">Clear Filters</button>}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {visibleVendorNames.map(v => {
-                  const logo = vendorLogos.find(l => l.name.toLowerCase() === v.toLowerCase());
-                  const isActive = selectedVendors.includes(v);
-                  return (
-                    <button key={v} onClick={() => { toggleVendor(v); setVisibleCount(50); }} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 transition-all ${isActive ? 'border-green-500 bg-green-50 text-green-900 shadow-sm scale-[1.02]' : 'bg-white text-zinc-500 border-zinc-100 hover:border-zinc-300'}`}>
-                      {logo?.logo_url && <img src={logo.logo_url} className="h-3 w-auto object-contain grayscale-[0.5]" alt="" />}
-                      <span className="text-[10px] font-bold uppercase tracking-tight">{v}</span>
-                      <div className={`w-2 h-2 rounded-full border ${isActive ? 'bg-green-500 border-green-600' : 'bg-zinc-100 border-zinc-200'}`}></div>
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="flex gap-3 mb-12 overflow-x-auto pb-6 no-scrollbar min-h-[70px] items-center">
+              {visibleVendorNames.map(v => {
+                const logo = vendorLogos.find(l => l.name.toLowerCase() === v.toLowerCase());
+                const isSelected = filterVendor === v;
+                return (
+                  <button key={v} onClick={() => { setFilterVendor(v); setVisibleCount(50); }} className={`flex items-center gap-3 px-6 py-3 rounded-2xl border-2 transition-all whitespace-nowrap h-12 ${isSelected ? 'border-green-500 shadow-lg scale-105 bg-white' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}>
+                    {logo?.logo_url ? <img src={logo.logo_url} className="h-5 w-auto object-contain" alt="" /> : <span className={`text-[10px] uppercase tracking-widest font-black ${isSelected ? 'text-black' : 'text-zinc-400'}`}>{v}</span>}
+                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="bg-white rounded-[2rem] shadow-sm border border-zinc-200 overflow-hidden text-sm">
