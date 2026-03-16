@@ -9,8 +9,8 @@ export default function OpsDashboard() {
   const [password, setPassword] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [selectedVendors, setSelectedVendors] = useState([]); // Array for multi-select
-  const [registrySearch, setRegistrySearch] = useState(''); // New: Local Registry Search
+  const [selectedVendors, setSelectedVendors] = useState([]); // NEW: Multi-select array
+  const [registrySearch, setRegistrySearch] = useState(''); 
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -105,12 +105,17 @@ export default function OpsDashboard() {
     fetchRules();
   };
 
-  // --- REFINED VENDOR BUTTON LOGIC ---
-  const visibleVendorNames = ['All', ...new Set(rules.map(r => r.vendor_name).filter(Boolean))].sort();
+  // --- LOGIC: VENDORS & FILTERING ---
+  const toggleVendor = (name) => {
+    setSelectedVendors(prev => 
+      prev.includes(name) ? prev.filter(v => v !== name) : [...prev, name]
+    );
+  };
 
-  // --- FILTERING & SEARCHING ---
+  const visibleVendorNames = [...new Set(rules.map(r => r.vendor_name).filter(Boolean))].sort();
+
   const filteredRules = rules.filter(r => {
-    const matchesVendor = filterVendor === 'All' || r.vendor_name === filterVendor;
+    const matchesVendor = selectedVendors.length === 0 || selectedVendors.includes(r.vendor_name);
     const matchesSearch = r.title.toLowerCase().includes(registrySearch.toLowerCase());
     return matchesVendor && matchesSearch;
   });
@@ -188,33 +193,40 @@ export default function OpsDashboard() {
           </div>
         </div>
 
-        <div className="flex gap-3 mb-12 overflow-x-auto pb-6 no-scrollbar min-h-[70px] items-center">
-          {visibleVendorNames.map(v => {
-            // Case-Insensitive Matching for Logos
-            const logo = vendorLogos.find(l => l.name.toLowerCase() === v.toLowerCase());
-            const isSelected = filterVendor === v;
-            
-            return (
-              <button 
-                key={v} 
-                onClick={() => setFilterVendor(v)} 
-                className={`flex items-center gap-3 px-6 py-3 rounded-2xl border-2 transition-all whitespace-nowrap h-12 ${
-                  isSelected 
-                    ? 'border-green-500 shadow-lg scale-105 bg-white' 
-                    : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'
-                }`}
-              >
-                {logo?.logo_url ? (
-                  <img src={logo.logo_url} className="h-5 w-auto object-contain" alt="" />
-                ) : (
-                  <span className={`text-[10px] uppercase tracking-widest font-black ${isSelected ? 'text-black' : 'text-zinc-400'}`}>
+        {/* --- MULTI-SELECT VENDOR CLOUD --- */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Filter by Vendor (Multi-select)</label>
+            {selectedVendors.length > 0 && (
+              <button onClick={() => setSelectedVendors([])} className="text-[10px] font-black uppercase text-red-500 hover:text-red-700 transition-all underline underline-offset-4">Clear Filters</button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {visibleVendorNames.map(v => {
+              const logo = vendorLogos.find(l => l.name.toLowerCase() === v.toLowerCase());
+              const isActive = selectedVendors.includes(v);
+              
+              return (
+                <button 
+                  key={v} 
+                  onClick={() => toggleVendor(v)} 
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 transition-all ${
+                    isActive 
+                      ? 'border-green-500 bg-green-50 text-green-900 shadow-sm scale-[1.02]' 
+                      : 'bg-white text-zinc-500 border-zinc-100 hover:border-zinc-300'
+                  }`}
+                >
+                  {logo?.logo_url ? (
+                    <img src={logo.logo_url} className="h-3 w-auto object-contain grayscale-[0.5]" alt="" />
+                  ) : null}
+                  <span className="text-[10px] font-bold uppercase tracking-tight">
                     {v}
                   </span>
-                )}
-                {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>}
-              </button>
-            );
-          })}
+                  <div className={`w-2 h-2 rounded-full border ${isActive ? 'bg-green-500 border-green-600' : 'bg-zinc-100 border-zinc-200'}`}></div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="bg-white rounded-[2rem] shadow-sm border border-zinc-200 overflow-hidden text-sm">
