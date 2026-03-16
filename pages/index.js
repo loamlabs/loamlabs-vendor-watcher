@@ -159,15 +159,26 @@ export default function OpsDashboard() {
       </aside>
 
       <main className="flex-grow ml-64 p-6 md:p-12 overflow-auto min-h-screen">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Registry</h1>
-          <div className="flex gap-2">
-            <button onClick={() => setShowAddModal(true)} className="bg-black text-white p-3 px-6 rounded-xl font-bold flex items-center gap-2 shadow-xl hover:bg-zinc-800 transition-all"><Plus size={18} /> Add Component</button>
-            <button onClick={() => fetchRules()} className="bg-white border-2 border-zinc-200 p-3 px-4 rounded-xl hover:border-black transition-all shadow-sm"><RefreshCcw size={18} className={loading ? "animate-spin" : ""} /></button>
-          </div>
-        </div>
+        <div className="flex gap-2">
+  <button 
+    onClick={async () => {
+      if(!confirm("Import all products from Shopify into the Registry? (Duplicates will be skipped)")) return;
+      setLoading(true);
+      const res = await fetch('/api/import-catalog', { headers: { 'x-dashboard-auth': password }});
+      if(res.ok) fetchRules();
+      setLoading(false);
+    }} 
+    className="bg-zinc-100 text-zinc-900 p-3 px-6 rounded-xl font-bold flex items-center gap-2 hover:bg-zinc-200 transition-all shadow-sm"
+  >
+    <RefreshCcw size={18} className={loading ? "animate-spin" : ""} /> Import Catalog
+  </button>
 
-        <div className="flex gap-3 mb-8 overflow-x-auto pb-4 no-scrollbar min-h-[50px]">
+  <button onClick={() => setShowAddModal(true)} className="bg-black text-white p-3 px-6 rounded-xl font-bold flex items-center gap-2 shadow-xl hover:bg-zinc-800 transition-all">
+    <Plus size={18} /> Add Component
+  </button>
+  
+  {/* ... (Keep your existing Refresh icon button here) */}
+</div>
           {visibleVendorNames.map(v => {
             // Case-insensitive search for logos
             const logo = vendorLogos.find(l => l.name.toLowerCase() === v.toLowerCase());
