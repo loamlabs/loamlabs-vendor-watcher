@@ -18,6 +18,8 @@ async function getShopifyToken() {
 }
 
 export default async function handler(req, res) {
+  // FORCE POST to prevent 304 caching
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   if (req.headers['x-dashboard-auth'] !== process.env.DASHBOARD_PASSWORD) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
@@ -25,6 +27,8 @@ export default async function handler(req, res) {
     let hasNextPage = true;
     let cursor = null;
     let importedTotal = 0;
+
+    console.log("--- INITIALIZING MASS IMPORT ---");
 
     while (hasNextPage) {
       const response = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
@@ -45,10 +49,12 @@ export default async function handler(req, res) {
       });
 
       const data = await response.json();
-      const products = data.data.products.edges;
+      const products = data.data?.products?.edges || [];
+
+      if (products.length === 0) break;
 
       const filtered = products.filter(edge => {
-        const tags = edge.node.tags.map(t => t.toLowerCase());
+        const tags = (edge.node.tags || []).map(t => t.toLowerCase());
         return !tags.some(tag => EXCLUDED_TAGS.includes(tag));
       });
 
@@ -62,17 +68,20 @@ export default async function handler(req, res) {
           site_type: 'SHOPIFY'
         }));
 
-        await supabase.from('watcher_rules').upsert(batch, { onConflict: 'shopify_product_id' });
+        const { error: upsertError } = await supabase.from('watcher_rules').upsert(batch, { onConflict: 'shopify_product_id' });
+        if (upsertError) throw upsertError;
+        
         importedTotal += batch.length;
+        console.log(`Batch processed. Total imported: ${importedTotal}`);
       }
       
       hasNextPage = data.data.products.pageInfo.hasNextPage;
       if (hasNextPage) cursor = products[products.length - 1].cursor;
-      else break;
     }
 
     res.status(200).json({ success: true, count: importedTotal });
   } catch (err) {
+    console.error("Import Error:", err.message);
     res.status(500).json({ error: err.message });
   }
 }
