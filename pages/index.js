@@ -9,7 +9,7 @@ export default function OpsDashboard() {
   const [password, setPassword] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [filterVendor, setFilterVendor] = useState('All');
+  const [selectedVendors, setSelectedVendors] = useState([]); // Array for multi-select
   const [registrySearch, setRegistrySearch] = useState(''); // New: Local Registry Search
   const [showUserMenu, setShowUserMenu] = useState(false);
 
