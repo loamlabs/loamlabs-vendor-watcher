@@ -1,24 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-
-const EXCLUDED_TAGS = ['addon', 'component:freehub', 'component:spoke', 'component:valvestem', 'component:nipple', 'tires', 'rotor', 'tubeless-tape', 'forgebond', 'coloring-kit', 'wheelbuildingtools', 'fillmore-capkit', 'apparel', 'loamlabs10', 'assembly-service'];
-
-async function getShopifyToken() {
-  const response = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/oauth/access_token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: process.env.SHOPIFY_CLIENT_ID,
-      client_secret: process.env.SHOPIFY_CLIENT_SECRET,
-      grant_type: 'client_credentials'
-    })
-  });
-  const data = await response.json();
-  return data.access_token;
-}
-
 export default async function handler(req, res) {
-  // FORCE POST to prevent 304 caching
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   if (req.headers['x-dashboard-auth'] !== process.env.DASHBOARD_PASSWORD) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -28,7 +8,7 @@ export default async function handler(req, res) {
     let cursor = null;
     let importedTotal = 0;
 
-    console.log("--- INITIALIZING MASS IMPORT ---");
+    console.log("--- STARTING SMART VARIANT IMPORT ---");
 
     while (hasNextPage) {
       const response = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
@@ -40,7 +20,18 @@ export default async function handler(req, res) {
               pageInfo { hasNextPage } 
               edges { 
                 cursor 
-                node { id title vendor tags variants(first: 1) { edges { node { id } } } } 
+                node { 
+                  id title vendor tags 
+                  variants(first: 50) { 
+                    edges { 
+                      node { 
+                        id 
+                        title 
+                        selectedOptions { name value } 
+                      } 
+                    } 
+                  } 
+                } 
               } 
             } 
           }`,
@@ -50,7 +41,6 @@ export default async function handler(req, res) {
 
       const data = await response.json();
       const products = data.data?.products?.edges || [];
-
       if (products.length === 0) break;
 
       const filtered = products.filter(edge => {
@@ -59,20 +49,37 @@ export default async function handler(req, res) {
       });
 
       if (filtered.length > 0) {
-        const batch = filtered.map(p => ({
-          shopify_product_id: p.node.id.split('/').pop(),
-          shopify_variant_id: p.node.variants.edges[0]?.node.id.split('/').pop(),
-          title: p.node.title,
-          vendor_name: p.node.vendor,
-          auto_update: false,
-          site_type: 'SHOPIFY'
-        }));
+        let variantBatch = [];
 
-        const { error: upsertError } = await supabase.from('watcher_rules').upsert(batch, { onConflict: 'shopify_product_id' });
+        for (const p of filtered) {
+          for (const v of p.node.variants.edges) {
+            
+            // AUTOMATIC OPTION MAPPING
+            // Converts [{name: "Spoke Count", value: "28h"}] into {"Spoke Count": "28h"}
+            const mappedOptions = {};
+            v.node.selectedOptions.forEach(opt => {
+              mappedOptions[opt.name] = opt.value;
+            });
+
+            variantBatch.push({
+              shopify_product_id: p.node.id.split('/').pop(),
+              shopify_variant_id: v.node.id.split('/').pop(),
+              title: `${p.node.title} - ${v.node.title}`,
+              vendor_name: p.node.vendor,
+              auto_update: false,
+              site_type: 'SHOPIFY',
+              option_values: mappedOptions, // <-- Now fully populated
+              price_adjustment_factor: 1.1111 
+            });
+          }
+        }
+
+        // Sync to Supabase
+        const { error: upsertError } = await supabase.from('watcher_rules').upsert(variantBatch, { onConflict: 'shopify_variant_id' });
         if (upsertError) throw upsertError;
         
-        importedTotal += batch.length;
-        console.log(`Batch processed. Total imported: ${importedTotal}`);
+        importedTotal += variantBatch.length;
+        console.log(`Processed batch. Registry now has ${importedTotal} variants.`);
       }
       
       hasNextPage = data.data.products.pageInfo.hasNextPage;
