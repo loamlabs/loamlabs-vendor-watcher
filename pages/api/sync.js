@@ -16,6 +16,7 @@ async function getShopifyToken() {
 }
 
 export default async function handler(req, res) {
+  // 1. Unified Security Handshake
   const authHeader = req.headers['x-loam-secret'] || req.headers['x-dashboard-auth'];
   if (authHeader !== process.env.CRON_SECRET && authHeader !== process.env.DASHBOARD_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -34,22 +35,27 @@ export default async function handler(req, res) {
       try {
         const vResponse = await fetch(`${rule.vendor_url}.js`);
         const vData = await vResponse.json();
+        
         const spokeGoal = cleanNum(rule.option_values["Spoke Count"]);
         const isFrontRule = rule.title.toLowerCase().includes('front');
-        const vTitleCleanup = (t) => t.toLowerCase().replace(/×/g, 'x').replace(/\s+/g, ' ').trim();
+        const clean = (t) => t.toLowerCase().replace(/×/g, 'x').replace(/\s+/g, ' ').trim();
 
+        // 2. DIAGNOSTIC MATCHING ENGINE
         let candidates = vData.variants.filter(v => {
-          const vTitle = vTitleCleanup(v.public_title);
+          const vTitle = clean(v.public_title);
+          const ruleTitle = clean(rule.title);
+          
           const hasSpoke = vTitle.includes(`${spokeGoal} spoke`) || vTitle.includes(`${spokeGoal}h`) || vTitle.includes(`${spokeGoal} hole`);
           if (!hasSpoke) return false;
-          if (isFrontRule) return vTitle.includes('front');
-          const is157 = vTitle.includes('157') || vTitle.includes('super');
-          const is142 = vTitle.includes('142') || vTitle.includes('road') || vTitle.includes('gravel');
-          const is148 = vTitle.includes('148') || (vTitle.includes('boost') && !is157 && !is142);
-          if (rule.title.includes('157')) return is157;
-          if (rule.title.includes('142')) return is142;
-          if (rule.title.includes('148')) return is148;
-          return vTitle.includes('rear') || vTitle.includes('xd') || vTitle.includes('hg') || vTitle.includes('ms');
+          
+          if (isFrontRule && !vTitle.includes('front')) return false;
+          if (!isFrontRule && !(vTitle.includes('rear') || vTitle.includes('xd') || vTitle.includes('hg') || vTitle.includes('ms'))) return false;
+
+          // Axle Standard Lock (Fixes 142 vs 148 vs 157)
+          const axleMatch = ['100', '110', '142', '148', '157'].find(size => ruleTitle.includes(size));
+          if (axleMatch && !vTitle.includes(axleMatch)) return false;
+
+          return true;
         });
 
         if (candidates.length > 0) {
@@ -57,54 +63,78 @@ export default async function handler(req, res) {
           const vendorPrice = winner.price / 100;
           const goalPrice = parseFloat(vendorPrice * (rule.price_adjustment_factor || 1.1111)).toFixed(2);
 
-          // FIXED GID FORMATTING:
+          // 3. SHOPIFY DATA (Preserving Sale Gap)
           const variantGid = `gid://shopify/ProductVariant/${rule.shopify_variant_id}`;
           const sResponse = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
             method: 'POST', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              query: `query($id: ID!) { productVariant(id: $id) { price compareAtPrice inventoryQuantity product { vendor } } }`,
+              query: `query($id: ID!) { productVariant(id: $id) { price compareAtPrice product { vendor } } }`,
               variables: { id: variantGid }
             })
           });
           const sData = await sResponse.json();
           const variant = sData.data?.productVariant;
-          
           if (!variant) throw new Error("Shopify ID not found");
 
           const myPrice = parseFloat(variant.price).toFixed(2);
+          const myCompare = variant.compareAtPrice ? parseFloat(variant.compareAtPrice).toFixed(2) : null;
           const isDiff = Number(goalPrice) !== Number(myPrice);
 
-          if (isDiff && rule.auto_update === true) {
-            await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
-              method: 'PUT', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ variant: { id: rule.shopify_variant_id, price: goalPrice } })
-            });
-            updated.push({ title: rule.title, reason: `$${myPrice} -> $${goalPrice}` });
-          } else if (isDiff) {
-            attention.push({ title: rule.title, reason: `Mismatch: $${goalPrice}` });
-          } else { inSync.push({ title: rule.title }); }
+          let updatePayload = { id: rule.shopify_variant_id, price: goalPrice };
+          let changeReason = "";
 
+          if (isDiff && !rule.needs_review) {
+            // SALE PRESERVATION LOGIC
+            if (myCompare && Number(myCompare) > Number(myPrice)) {
+              const gap = Number(myCompare) - Number(myPrice);
+              updatePayload.compare_at_price = (Number(goalPrice) + gap).toFixed(2);
+              changeReason = `$${myPrice} -> $${goalPrice} (Sale Gap Preserved)`;
+            } else {
+              changeReason = `$${myPrice} -> $${goalPrice}`;
+            }
+
+            if (rule.auto_update === true) {
+              await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
+                method: 'PUT', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ variant: updatePayload })
+              });
+              updated.push({ title: rule.title, reason: changeReason });
+            } else {
+              attention.push({ title: rule.title, reason: `Manual Sync Required: ${changeReason}` });
+            }
+          } else {
+            inSync.push({ title: rule.title });
+          }
+
+          // 4. PERSISTENCE UPDATE
           await supabase.from('watcher_rules').update({ 
             last_price: Math.round(vendorPrice * 100), 
             last_availability: winner.available,
             last_run_at: new Date().toISOString(),
-            last_log: `Matched: ${winner.public_title}. Goal: $${goalPrice}.`
+            last_log: `Matched: "${winner.public_title}".`
           }).eq('id', rule.id);
+
         } else {
-          await supabase.from('watcher_rules').update({ last_log: `FAILED: No Berd variants matched Spoke goal.` }).eq('id', rule.id);
+          // 5. DIAGNOSTIC LOG (Writes to your Dashboard)
+          const vendorOptions = vData.variants.slice(0, 2).map(v => v.public_title).join(', ');
+          await supabase.from('watcher_rules').update({ 
+            last_log: `FAILED: Found 0 matches for ${spokeGoal}h. Vendor uses: ${vendorOptions}` 
+          }).eq('id', rule.id);
         }
       } catch (err) { console.error(`Error on ${rule.title}:`, err.message); }
     }
 
+    // 6. GATED REPORTING
     if (updated.length > 0 || attention.length > 0) {
       const updatedHtml = updated.map(i => `<li style="color:green;">🚀 <b>UPDATED:</b> ${i.title}<br><small>${i.reason}</small></li>`).join('');
       const attentionHtml = attention.map(i => `<li style="color:red;">⚠️ <b>ALERT:</b> ${i.title}<br><small>${i.reason}</small></li>`).join('');
       await resend.emails.send({
         from: 'Watcher <system@loamlabsusa.com>', to: process.env.REPORT_EMAIL,
-        subject: `Vendor Watcher Report: ${updated.length} Updates`,
+        subject: `Vendor Watcher: ${updated.length} Updates, ${attention.length} Alerts`,
         html: `<div style="font-family:sans-serif;"><h2>Shop Sync Report</h2><ul>${updatedHtml}${attentionHtml}</ul></div>`
       });
     }
+
     res.status(200).json({ updated: updated.length, attention: attention.length });
   } catch (err) { res.status(500).json({ error: err.message }); }
 }
