@@ -156,36 +156,25 @@ export default function OpsDashboard() {
         {activeTab === 'vendors' ? (
           <>
             <div className="flex items-center justify-between mb-8">
-              <div>
-                <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Registry</h1>
-                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1">Found {filteredRules.length} items</div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="bg-zinc-100 p-1 rounded-xl flex items-center">
-                    <button onClick={() => setSyncFilter('all')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${syncFilter === 'all' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}>All</button>
-                    <button onClick={() => setSyncFilter('on')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase flex items-center gap-2 transition-all ${syncFilter === 'on' ? 'bg-black text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}><Zap size={10}/> On</button>
-                    <button onClick={() => setSyncFilter('off')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase flex items-center gap-2 transition-all ${syncFilter === 'off' ? 'bg-zinc-300 text-zinc-700 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}><ZapOff size={10}/> Off</button>
-                </div>
-                <div className="relative">
-                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
-                    <input type="text" placeholder="Quick search..." className="bg-zinc-100 p-3 pl-12 rounded-xl outline-none focus:ring-2 focus:ring-black border-2 border-transparent transition-all font-bold text-xs w-64" value={registrySearch} onChange={(e) => { setRegistrySearch(e.target.value); setVisibleCount(50); }} />
-                </div>
-                <button onClick={() => fetchRules()} className="bg-white borde{/* --- AUTO IMPORT BUTTON --- */}
-    <button 
-      onClick={handleAutoImport} 
-      disabled={loading}
-      className="bg-zinc-200 text-zinc-800 p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-zinc-300 transition-all disabled:opacity-50 shadow-sm"
-    >
-      {loading ? <Loader2 className="animate-spin" size={14} /> : <Package size={14} />} 
-      Auto Import Catalog
-    </button>
+          <div>
+            <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Registry</h1>
+            <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1">Found {filteredRules.length} items</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleAutoImport} 
+              disabled={loading}
+              className="bg-zinc-200 text-zinc-800 p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-zinc-300 transition-all disabled:opacity-50 shadow-sm"
+            >
+              {loading ? <Loader2 className="animate-spin" size={14} /> : <Package size={14} />} 
+              Auto Import Catalog
+            </button>
 
-    {/* --- REFRESH BUTTON --- */}
-    <button onClick={() => fetchRules()} className="bg-white border-2 border-zinc-200 p-3 px-4 rounded-xl hover:border-black transition-all shadow-sm">
-        <RefreshCcw size={14} className={loading ? "animate-spin" : ""} />
-    </button>r-2 border-zinc-200 p-3 px-4 rounded-xl hover:border-black transition-all shadow-sm"><RefreshCcw size={14} className={loading ? "animate-spin" : ""} /></button>
-              </div>
-            </div>
+            <button onClick={() => fetchRules()} className="bg-white border-2 border-zinc-200 p-3 px-4 rounded-xl hover:border-black transition-all shadow-sm">
+              <RefreshCcw size={14} className={loading ? "animate-spin" : ""} />
+            </button>
+          </div>
+        </div>
 
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
