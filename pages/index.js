@@ -178,11 +178,13 @@ export default function OpsDashboard() {
         
         {activeTab === 'vendors' ? (
           <>
-            {/* --- REPLACED HEADER SECTION --- */}
+            {/* --- REGISTRY HEADER --- */}
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Registry</h1>
-                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1">Found {filteredRules.length} items</div>
+                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1">
+                  Found {filteredRules.length} items
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <button onClick={handleAutoImport} disabled={loading} className="bg-zinc-200 text-zinc-800 p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-zinc-300 transition-all disabled:opacity-50 shadow-sm">
@@ -190,37 +192,42 @@ export default function OpsDashboard() {
                 </button>
 
                 <button onClick={runManualSync} disabled={loading} className="bg-orange-500 text-white p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-orange-600 transition-all shadow-lg">
-                  {loading ? <Loader2 className="animate-spin" size={14} /> : <RefreshCcw size={14} />} Run Live Sync
+                  <RefreshCcw size={14} className={loading ? "animate-spin" : ""} /> Run Live Sync
                 </button>
 
-                <button onClick={() => fetchRules()} className="bg-white border-2 border-zinc-200 p-3 px-4 rounded-xl hover:border-black transition-all shadow-sm">
+                <button onClick={() => fetchRules()} className="bg-white border-2 border-zinc-200 p-3 px-4 rounded-xl hover:border-black transition-all shadow-sm text-zinc-400">
                   <RefreshCcw size={14} className={loading ? "animate-spin" : ""} />
                 </button>
               </div>
             </div>
 
-            <div className="mb-8">
+            {/* --- VENDOR FILTER BAR --- */}
+            <div className="mb-10">
               <div className="flex items-center justify-between mb-4">
                 <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Filter by Vendor</label>
-                {selectedVendors.length > 0 && <button onClick={() => setSelectedVendors([])} className="text-[10px] font-black uppercase text-red-500 hover:text-red-700 transition-all underline underline-offset-4">Clear Filters</button>}
+                {selectedVendors.length > 0 && (
+                  <button onClick={() => setSelectedVendors([])} className="text-[10px] font-black uppercase text-red-500 hover:text-red-700 transition-all underline underline-offset-4">
+                    Clear Filters
+                  </button>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
-                {/* --- ADDED "ALL" BUTTON --- */}
+                {/* Fixed "All" Button */}
                 <button 
                   onClick={() => setSelectedVendors([])} 
-                  className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all ${selectedVendors.length === 0 ? 'bg-black text-white border-black shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
+                  className={`px-5 py-2 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${selectedVendors.length === 0 ? 'bg-black text-white border-black shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
                 >
                   All Vendors
                 </button>
-
+                
+                {/* Dynamically Generated Brand Buttons */}
                 {visibleVendorNames.map(v => {
                   const logo = vendorLogos.find(l => l.name.toLowerCase() === v.toLowerCase());
                   const isActive = selectedVendors.includes(v);
                   return (
-                    <button key={v} onClick={() => { toggleVendor(v); setVisibleCount(50); }} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 transition-all ${isActive ? 'border-green-500 bg-green-50 text-green-900 shadow-sm scale-[1.02]' : 'bg-white text-zinc-500 border-zinc-100 hover:border-zinc-300'}`}>
-                      {logo?.logo_url && <img src={logo.logo_url} className="h-3 w-auto object-contain grayscale-[0.5]" alt="" />}
-                      <span className="text-[10px] font-bold uppercase tracking-tight">{v}</span>
-                      <div className={`w-2 h-2 rounded-full border ${isActive ? 'bg-green-500 border-green-600' : 'bg-zinc-100 border-zinc-200'}`}></div>
+                    <button key={v} onClick={() => { toggleVendor(v); setVisibleCount(50); }} className={`flex items-center gap-3 px-4 py-2 rounded-xl border-2 transition-all whitespace-nowrap ${isActive ? 'bg-zinc-900 text-white border-zinc-900 shadow-lg scale-105' : 'bg-white text-zinc-500 border-zinc-100 hover:border-zinc-300'}`}>
+                      {logo?.logo_url && <img src={logo.logo_url} className="h-3 w-auto object-contain" alt="" />}
+                      <span className="text-[10px] font-black uppercase tracking-tight">{v}</span>
                     </button>
                   );
                 })}
