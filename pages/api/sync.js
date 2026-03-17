@@ -41,38 +41,47 @@ export default async function handler(req, res) {
         const spokeGoal = cleanNum(rule.option_values["Spoke Count"]);
         const isFrontRule = rule.title.toLowerCase().includes('front');
 
+        // --- DEEP SCAN MATCHING LOGIC ---
         let candidates = [];
-        
+        const spokeGoal = cleanNum(rule.option_values["Spoke Count"]);
+        const isFrontRule = rule.title.toLowerCase().includes('front');
+        const vTitleCleanup = (t) => t.toLowerCase().replace(/×/g, 'x').replace(/\s+/g, ' ');
+
         switch (rule.vendor_name?.toLowerCase()) {
           case 'berd':
             candidates = vData.variants.filter(v => {
-              const vTitle = v.public_title.toLowerCase().replace('×', 'x');
-              const ruleTitle = rule.title.toLowerCase().replace('×', 'x');
+              const vTitle = vTitleCleanup(v.public_title);
+              const ruleTitle = vTitleCleanup(rule.title);
+              
+              // 1. Spoke Match (Checks "28 Spoke", "28h", "28 Hole")
               const hasSpokeCount = vTitle.includes(`${spokeGoal} spoke`) || vTitle.includes(`${spokeGoal}h`) || vTitle.includes(`${spokeGoal} hole`);
-              
               if (!hasSpokeCount) return false;
-              if (isFrontRule) return vTitle.includes('front');
-              
-              const is157 = vTitle.includes('157') || vTitle.includes('super');
-              const is142 = vTitle.includes('142') || vTitle.includes('road') || vTitle.includes('gravel');
-              const is148 = vTitle.includes('148') || (vTitle.includes('boost') && !is157);
 
-              if (ruleTitle.includes('157') || ruleTitle.toLowerCase().includes('super')) return is157;
-              if (ruleTitle.includes('142')) return is142;
-              if (ruleTitle.includes('148')) return is148;
+              // 2. Position Match
+              if (isFrontRule && !vTitle.includes('front')) return false;
+              if (!isFrontRule && !(vTitle.includes('rear') || vTitle.includes('xd') || vTitle.includes('hg') || vTitle.includes('ms'))) return false;
 
-              return vTitle.includes('rear');
+              // 3. Axle Standard Lock
+              const axleMatch = ['100', '110', '142', '148', '157'].find(size => ruleTitle.includes(size));
+              if (axleMatch && !vTitle.includes(axleMatch)) return false;
+
+              return true;
             });
             break;
 
           default:
             candidates = vData.variants.filter(v => {
-              const vTitle = v.public_title.toLowerCase();
-              const spokeMatch = vTitle.includes(`${spokeGoal} spoke`) || vTitle.includes(`${spokeGoal}h`) || vTitle.includes(`${spokeGoal} hole`);
-              if (isFrontRule) return spokeMatch && vTitle.includes('front');
-              return spokeMatch && (vTitle.includes('rear') || vTitle.includes('xd') || vTitle.includes('hg') || vTitle.includes('ms'));
+              const vTitle = vTitleCleanup(v.public_title);
+              return vTitle.includes(spokeGoal) && (isFrontRule ? vTitle.includes('front') : true);
             });
         }
+
+        // --- DEBUG LOGGING ---
+        const debugSummary = candidates.length > 0 
+          ? `Found ${candidates.length} matches. Winner: ${candidates[0].public_title}`
+          : `FAILED: Found 0 matches among ${vData.variants.length} Berd variants. Goal: ${spokeGoal}h position matches.`;
+        
+        console.log(`[DEBUG] ${rule.title}: ${debugSummary}`);
 
         if (candidates.length > 0) {
           const highestPriceVariant = candidates.reduce((prev, current) => (prev.price > current.price) ? prev : current);
