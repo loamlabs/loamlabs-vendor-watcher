@@ -79,17 +79,14 @@ export default function OpsDashboard() {
     setLoading(true);
     try {
       const res = await fetch('/api/import-catalog', { 
-  method: 'POST',
-  headers: { 'x-dashboard-auth': password } 
-});
-      
+        method: 'POST',
+        headers: { 'x-dashboard-auth': password } 
+      });
       const data = await res.json();
-      
       if (res.ok) {
         alert(`Success: Enrolled ${data.count} variants.`);
         fetchRules(password); 
       } else {
-        // This will show you the ACTUAL error from the server (e.g. "Shopify Token Error")
         alert("Import failed: " + (data.error || "Check Vercel Logs"));
       }
     } catch (e) {
@@ -103,13 +100,15 @@ export default function OpsDashboard() {
     setLoading(true);
     try {
       const res = await fetch('/api/sync', { 
-        headers: { 'x-loam-secret': 'Property70Repeat' } // Manually providing the secret for the button
+        headers: { 'x-loam-secret': 'Property70Repeat' } 
       });
       if (res.ok) {
         alert("Sync Complete!");
         fetchRules(password);
+      } else {
+        alert("Sync triggered, but returned an error. Check Vercel logs.");
       }
-    } catch (e) { alert("Sync failed."); }
+    } catch (e) { alert("Sync failed to connect."); }
     setLoading(false);
   };
   
@@ -179,7 +178,7 @@ export default function OpsDashboard() {
             <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1">Found {filteredRules.length} items</div>
           </div>
          <div className="flex items-center gap-3">
-            <button onClick={handleAutoImport} disabled={loading} className="bg-zinc-200 text-zinc-800 p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-zinc-300 transition-all shadow-sm">
+            <button onClick={handleAutoImport} disabled={loading} className="bg-zinc-200 text-zinc-800 p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-zinc-300 transition-all disabled:opacity-50 shadow-sm">
               {loading ? <Loader2 className="animate-spin" size={14} /> : <Package size={14} />} Auto Import
             </button>
 
@@ -188,7 +187,7 @@ export default function OpsDashboard() {
             </button>
 
             <button onClick={() => fetchRules()} className="bg-white border-2 border-zinc-200 p-3 px-4 rounded-xl hover:border-black transition-all shadow-sm">
-              <RefreshCcw size={14} />
+                <RefreshCcw size={14} className={loading ? "animate-spin" : ""} />
             </button>
           </div>
 
