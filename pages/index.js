@@ -100,13 +100,14 @@ export default function OpsDashboard() {
     setLoading(true);
     try {
       const res = await fetch('/api/sync', { 
-        headers: { 'x-loam-secret': 'Property70Repeat' } 
+        // Use the password you used to log in to the dashboard
+        headers: { 'x-dashboard-auth': password } 
       });
       if (res.ok) {
         alert("Sync Complete!");
         fetchRules(password);
       } else {
-        alert("Sync triggered, but returned an error. Check Vercel logs.");
+        alert("Sync failed. Error code: " + res.status);
       }
     } catch (e) { alert("Sync failed to connect."); }
     setLoading(false);
