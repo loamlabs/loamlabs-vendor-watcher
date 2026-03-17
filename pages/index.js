@@ -97,6 +97,21 @@ export default function OpsDashboard() {
     }
     setLoading(false);
   };
+
+  const runManualSync = async () => {
+    if (!confirm("Run live price sync now? This will check all vendors and update Shopify.")) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/sync', { 
+        headers: { 'x-loam-secret': 'Property70Repeat' } // Manually providing the secret for the button
+      });
+      if (res.ok) {
+        alert("Sync Complete!");
+        fetchRules(password);
+      }
+    } catch (e) { alert("Sync failed."); }
+    setLoading(false);
+  };
   
   const toggleVendor = (name) => {
     setSelectedVendors(prev => 
@@ -163,21 +178,19 @@ export default function OpsDashboard() {
             <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Registry</h1>
             <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1">Found {filteredRules.length} items</div>
           </div>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={handleAutoImport} 
-              disabled={loading}
-              className="bg-zinc-200 text-zinc-800 p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-zinc-300 transition-all disabled:opacity-50 shadow-sm"
-            >
-              {loading ? <Loader2 className="animate-spin" size={14} /> : <Package size={14} />} 
-              Auto Import Catalog
+         <div className="flex items-center gap-3">
+            <button onClick={handleAutoImport} disabled={loading} className="bg-zinc-200 text-zinc-800 p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-zinc-300 transition-all shadow-sm">
+              {loading ? <Loader2 className="animate-spin" size={14} /> : <Package size={14} />} Auto Import
+            </button>
+
+            <button onClick={runManualSync} disabled={loading} className="bg-orange-500 text-white p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-orange-600 transition-all shadow-lg">
+              <RefreshCcw size={14} className={loading ? "animate-spin" : ""} /> Run Live Sync
             </button>
 
             <button onClick={() => fetchRules()} className="bg-white border-2 border-zinc-200 p-3 px-4 rounded-xl hover:border-black transition-all shadow-sm">
-              <RefreshCcw size={14} className={loading ? "animate-spin" : ""} />
+              <RefreshCcw size={14} />
             </button>
           </div>
-        </div>
 
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
@@ -274,7 +287,14 @@ export default function OpsDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="text-[10px] font-black uppercase text-zinc-400 mb-2 block tracking-widest italic">Price Adjustment</label>
-                        <input type="number" step="0.0001" className="w-full p-4 bg-zinc-100 rounded-xl font-bold outline-none border-2 border-transparent focus:border-black transition-all" value={editingRule.price_adjustment_factor || 1.1111} onChange={(e) => setEditingRule({...editingRule, price_adjustment_factor: e.target.value})} />
+                        <input 
+      type="number" 
+      step="0.0001" 
+      className="w-full p-4 bg-zinc-100 rounded-xl font-bold outline-none border-2 border-transparent focus:border-black transition-all" 
+      value={editingRule.price_adjustment_factor ?? ''} 
+      placeholder="1.0"
+      onChange={(e) => setEditingRule({...editingRule, price_adjustment_factor: e.target.value === '' ? null : e.target.value})} 
+    />
                     </div>
                     <div>
                         <label className="text-[10px] font-black uppercase text-zinc-400 mb-2 block tracking-widest italic">Safety Threshold</label>
