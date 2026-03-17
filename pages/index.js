@@ -87,7 +87,7 @@ export default function OpsDashboard() {
         alert(`Success: Enrolled ${data.count} variants.`);
         fetchRules(password); 
       } else {
-        alert("Import failed: " + data.error);
+        alert("Import failed: " + (data.error || "Unknown Error"));
       }
     } catch (e) {
       alert("System Error during import");
