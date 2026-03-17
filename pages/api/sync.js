@@ -141,13 +141,22 @@ export default async function handler(req, res) {
     if (updated.length > 0 || attention.length > 0) {
       const updatedHtml = updated.map(i => `<li style="color:green;">🚀 <b>UPDATED:</b> ${i.title}<br><small>${i.reason}</small></li>`).join('');
       const attentionHtml = attention.map(i => `<li style="color:red;">⚠️ <b>ALERT:</b> ${i.title}<br><small>${i.reason}</small></li>`).join('');
-      await resend.emails.send({
-        from: 'Watcher <system@loamlabsusa.com>', to: process.env.REPORT_EMAIL,
-        subject: `Vendor Watcher Report: ${updated.length} Updates`,
-        html: `<div style="font-family:sans-serif;"><h2>Shop Sync Report</h2>${updatedHtml}${attentionHtml}</div>`
-      });
+      
+      try {
+        await resend.emails.send({
+          from: 'Watcher <system@loamlabsusa.com>',
+          to: process.env.REPORT_EMAIL,
+          subject: `Vendor Watcher Report: ${updated.length} Updates`,
+          html: `<div style="font-family:sans-serif;"><h2>Shop Sync Report</h2><ul>${updatedHtml}${attentionHtml}</ul></div>`
+        });
+      } catch (emailErr) {
+        console.error("Email failed to send:", emailErr.message);
+      }
     }
 
     res.status(200).json({ updated: updated.length, attention: attention.length });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error("Main Handler Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
 }
