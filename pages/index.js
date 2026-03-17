@@ -75,16 +75,30 @@ export default function OpsDashboard() {
   };
 
   const handleAutoImport = async () => {
-    if (!confirm("This will scan Shopify and add all variants to the Registry. Continue?")) return;
+    const input = prompt("Enter specific Vendor Name to import, type 'ALL' for a full scan, or type 'RESET_FACTORS' to reset all existing items to 1.0 adjustment factor:");
+    if (!input) return;
+
     setLoading(true);
     try {
+      const isReset = input === 'RESET_FACTORS';
+      const isAll = input.toUpperCase() === 'ALL';
+      const payload = {
+        resetFactors: isReset,
+        vendor: (!isAll && !isReset) ? input : null
+      };
+
       const res = await fetch('/api/import-catalog', { 
         method: 'POST',
-        headers: { 'x-dashboard-auth': password } 
+        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (res.ok) {
-        alert(`Success: Enrolled ${data.count} variants.`);
+        if (isReset) {
+            alert(`Success: Reset adjustment factors to 1.0 for all items.`);
+        } else {
+            alert(`Success: Enrolled ${data.count} variants.`);
+        }
         fetchRules(password); 
       } else {
         alert("Import failed: " + (data.error || "Check Vercel Logs"));
@@ -276,7 +290,7 @@ export default function OpsDashboard() {
             <div className="bg-white rounded-[2rem] shadow-sm border border-zinc-200 overflow-hidden text-sm">
               <table className="w-full text-left">
                 <thead className="bg-zinc-100 border-b text-[10px] uppercase font-black text-zinc-500 tracking-widest font-mono">
-                  <tr><th className="p-6 italic tracking-tighter">Registry Item</th><th className="p-6 text-center">Status</th><th className="p-6">Memory</th><th className="p-6 text-right">Auto-Sync / Actions</th></tr>
+                  <tr><th className="p-6 italic tracking-tighter">Registry Item</th><th className="p-6 text-center">Status</th><th className="p-6">Memory (Base)</th><th className="p-6">Adjusted Price</th><th className="p-6 text-right">Auto-Sync / Actions</th></tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
                   {paginatedRules.map((rule) => {
@@ -294,7 +308,12 @@ export default function OpsDashboard() {
                         <td className="p-6 text-center">
                           {rule.needs_review ? <span className="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-pulse uppercase tracking-tighter">Review Required</span> : rule.last_availability ? <span className="bg-green-100 text-green-700 text-[9px] font-black px-3 py-1 rounded-full uppercase italic font-black">Active</span> : <span className="bg-zinc-200 text-zinc-600 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter">Out of Stock</span>}
                         </td>
-                        <td className="p-6 font-mono font-bold text-lg text-zinc-700">${(rule.last_price / 100).toFixed(2)}</td>
+                        <td className="p-6 font-mono font-bold text-lg text-zinc-700">
+                          {rule.last_price ? `$${(rule.last_price / 100).toFixed(2)}` : '--'}
+                        </td>
+                        <td className="p-6 font-mono font-bold text-lg text-blue-600">
+                          {rule.last_price ? `$${((rule.last_price / 100) * (rule.price_adjustment_factor || 1.0)).toFixed(2)}` : '--'}
+                        </td>
                         <td className="p-6 flex justify-end items-center gap-4">
                           <button onClick={() => toggleAutoSync(rule.id, rule.auto_update)} className={`w-12 h-6 rounded-full p-1 flex items-center transition-all ${rule.auto_update ? 'bg-black justify-end shadow-inner' : 'bg-zinc-300 justify-start'}`}><div className="w-4 h-4 bg-white rounded-full shadow-md"></div></button>
                           <button onClick={() => setEditingRule(rule)} className="bg-zinc-100 hover:bg-black hover:text-white text-zinc-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase transition-all">Edit</button>

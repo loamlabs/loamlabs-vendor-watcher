@@ -22,7 +22,14 @@ export default async function handler(req, res) {
   if (req.headers['x-dashboard-auth'] !== process.env.DASHBOARD_PASSWORD) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
+    if (req.body?.resetFactors) {
+      const { error } = await supabase.from('watcher_rules').update({ price_adjustment_factor: 1.0 }).neq('title', 'XXX');
+      if (error) throw error;
+      return res.status(200).json({ success: true, count: 'all' });
+    }
+
     const adminToken = await getShopifyToken();
+    const vendorFilter = req.body?.vendor;
     let hasNextPage = true;
     let cursor = null;
     let importedTotal = 0;
@@ -59,6 +66,7 @@ export default async function handler(req, res) {
       const filtered = products.filter(edge => {
         const tags = (edge.node.tags || []).map(t => t.toLowerCase());
         const vendor = edge.node.vendor?.toLowerCase() || '';
+        if (vendorFilter && vendor !== vendorFilter.toLowerCase()) return false;
         return !tags.some(tag => EXCLUDED_TAGS.includes(tag)) && vendor !== 'your own component';
       });
 
@@ -83,7 +91,7 @@ export default async function handler(req, res) {
                 auto_update: false,
                 site_type: 'SHOPIFY',
                 option_values: mappedOptions,
-                price_adjustment_factor: 1.1111 
+                price_adjustment_factor: 1.0  
               });
             }
           }
