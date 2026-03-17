@@ -16,11 +16,13 @@ async function getShopifyToken() {
 }
 
 export default async function handler(req, res) {
-  const authHeader = req.headers['x-loam-secret'];
-  if (authHeader !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  const authHeader = req.headers['x-loam-secret'] || req.headers['x-dashboard-auth'];
+  const isValidCron = authHeader === process.env.CRON_SECRET;
+  const isValidDash = authHeader === process.env.DASHBOARD_PASSWORD;
 
-  try {
-    const { data: rules, error } = await supabase.from('watcher_rules').select('*');
+  if (!isValidCron && !isValidDash) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
     if (error) throw error;
 
     const adminToken = await getShopifyToken();
@@ -40,8 +42,10 @@ export default async function handler(req, res) {
         switch (rule.vendor_name?.toLowerCase()) {
           case 'berd':
             candidates = vData.variants.filter(v => {
-              const vTitle = v.public_title.toLowerCase();
+              const vTitle = v.public_title.toLowerCase().replace('×', 'x'); // Fixes multiplication sign
+              const ruleTitle = rule.title.toLowerCase().replace('×', 'x');
               const hasSpokeCount = vTitle.includes(`${spokeGoal} spoke`) || vTitle.includes(`${spokeGoal}h`) || vTitle.includes(`${spokeGoal} hole`);
+              
               if (!hasSpokeCount) return false;
               if (isFrontRule) return vTitle.includes('front');
               
@@ -49,13 +53,13 @@ export default async function handler(req, res) {
               const is142 = vTitle.includes('142') || vTitle.includes('road') || vTitle.includes('gravel');
               const is148 = vTitle.includes('148') || (vTitle.includes('boost') && !is157);
 
-              if (rule.title.includes('157') || rule.title.toLowerCase().includes('super')) return is157;
-              if (rule.title.includes('142')) return is142;
-              if (rule.title.includes('148')) return is148;
+              if (ruleTitle.includes('157') || ruleTitle.includes('super')) return is157;
+              if (ruleTitle.includes('142')) return is142;
+              if (ruleTitle.includes('148')) return is148;
+
               return vTitle.includes('rear');
             });
             break;
-
           default:
             candidates = vData.variants.filter(v => {
               const vTitle = v.public_title.toLowerCase();
