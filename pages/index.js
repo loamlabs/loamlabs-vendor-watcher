@@ -125,7 +125,7 @@ export default function OpsDashboard() {
     const matchesSearch = r.title.toLowerCase().includes(registrySearch.toLowerCase());
     const matchesSync = syncFilter === 'all' ? true : syncFilter === 'on' ? r.auto_update : !r.auto_update;
     return matchesVendor && matchesSearch && matchesSync;
-  });
+  }).sort((a, b) => a.vendor_name?.localeCompare(b.vendor_name) || a.title.localeCompare(b.title));
 
   const paginatedRules = filteredRules.slice(0, visibleCount);
 
@@ -172,31 +172,36 @@ export default function OpsDashboard() {
         
         {activeTab === 'vendors' ? (
           <>
+            {/* --- REPLACED HEADER SECTION --- */}
             <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Registry</h1>
-            <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1">Found {filteredRules.length} items</div>
-          </div>
-         <div className="flex items-center gap-3">
-            <button onClick={handleAutoImport} disabled={loading} className="bg-zinc-200 text-zinc-800 p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-zinc-300 transition-all disabled:opacity-50 shadow-sm">
-              {loading ? <Loader2 className="animate-spin" size={14} /> : <Package size={14} />} Auto Import
-            </button>
+              <div>
+                <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Registry</h1>
+                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1">Found {filteredRules.length} items</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={handleAutoImport} disabled={loading} className="bg-zinc-200 text-zinc-800 p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-zinc-300 transition-all disabled:opacity-50 shadow-sm">
+                  {loading ? <Loader2 className="animate-spin" size={14} /> : <Package size={14} />} Auto Import
+                </button>
 
-            <button onClick={runManualSync} disabled={loading} className="bg-orange-500 text-white p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-orange-600 transition-all shadow-lg">
-              <RefreshCcw size={14} className={loading ? "animate-spin" : ""} /> Run Live Sync
-            </button>
+                <button onClick={runManualSync} disabled={loading} className="bg-orange-500 text-white p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-orange-600 transition-all shadow-lg">
+                  {loading ? <Loader2 className="animate-spin" size={14} /> : <RefreshCcw size={14} />} Run Live Sync
+                </button>
 
-            <button onClick={() => fetchRules()} className="bg-white border-2 border-zinc-200 p-3 px-4 rounded-xl hover:border-black transition-all shadow-sm">
-                <RefreshCcw size={14} className={loading ? "animate-spin" : ""} />
-            </button>
-          </div>
+                <button onClick={() => fetchRules()} className="bg-white border-2 border-zinc-200 p-3 px-4 rounded-xl hover:border-black transition-all shadow-sm">
+                  <RefreshCcw size={14} className={loading ? "animate-spin" : ""} />
+                </button>
+              </div>
+            </div>
 
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
-                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Filter by Vendor (Multi-select)</label>
+                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Filter by Vendor</label>
                 {selectedVendors.length > 0 && <button onClick={() => setSelectedVendors([])} className="text-[10px] font-black uppercase text-red-500 hover:text-red-700 transition-all underline underline-offset-4">Clear Filters</button>}
               </div>
               <div className="flex flex-wrap gap-2">
+                {/* --- ADDED "ALL" BUTTON --- */}
+                <button onClick={() => setSelectedVendors([])} className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all ${selectedVendors.length === 0 ? 'bg-black text-white border-black' : 'bg-white text-zinc-400 border-zinc-100'}`}>All</button>
+                
                 {visibleVendorNames.map(v => {
                   const logo = vendorLogos.find(l => l.name.toLowerCase() === v.toLowerCase());
                   const isActive = selectedVendors.includes(v);
