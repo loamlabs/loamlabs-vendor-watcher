@@ -124,12 +124,16 @@ export default function OpsDashboard() {
 
   // 2. Sorting: Alphabetical by Vendor, then by Product Title
   const filteredRules = rules.filter(r => {
-    // If "All Vendors" is active (selectedVendors is empty), show EVERYTHING
-    const matchesVendor = selectedVendors.length === 0 || selectedVendors.includes(r.vendor_name);
-    const matchesSearch = r.title.toLowerCase().includes(registrySearch.toLowerCase());
+    const normalize = (str) => (str || "").toLowerCase().replace(/×/g, 'x').trim();
+    const matchesVendor = selectedVendors.length === 0 || 
+      selectedVendors.some(v => normalize(v) === normalize(r.vendor_name));
+    const matchesSearch = normalize(r.title).includes(normalize(registrySearch));
     const matchesSync = syncFilter === 'all' ? true : syncFilter === 'on' ? r.auto_update : !r.auto_update;
     return matchesVendor && matchesSearch && matchesSync;
-  }).sort((a, b) => (a.vendor_name || "").localeCompare(b.vendor_name || "") || a.title.localeCompare(b.title));
+  }).sort((a, b) => {
+    const vendorSort = (a.vendor_name || "").localeCompare(b.vendor_name || "");
+    return vendorSort !== 0 ? vendorSort : a.title.localeCompare(b.title);
+  });
 
   const paginatedRules = filteredRules.slice(0, visibleCount);
 
@@ -209,14 +213,14 @@ export default function OpsDashboard() {
                   </button>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {/* Fixed "All" Button */}
-                <button 
-                  onClick={() => setSelectedVendors([])} 
-                  className={`px-5 py-2 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${selectedVendors.length === 0 ? 'bg-black text-white border-black shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
-                >
-                  All Vendors
-                </button>
+              <div className="flex flex-wrap gap-2 mb-8">
+          <button 
+            onClick={() => setSelectedVendors([])} 
+            className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all ${selectedVendors.length === 0 ? 'bg-black text-white border-black shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
+          >
+            All Vendors
+          </button>
+          {visibleVendorNames.map(v => {
                 
                 {/* Dynamically Generated Brand Buttons */}
                 {visibleVendorNames.map(v => {
