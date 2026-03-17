@@ -121,16 +121,21 @@ export default function OpsDashboard() {
 
   const visibleVendorNames = [...new Set(rules.map(r => r.vendor_name).filter(Boolean))].sort();
 
-  // --- SORTED FILTERED RULES ---
+  // --- ROBUST FILTERING & ALPHABETIZING ---
   const filteredRules = rules.filter(r => {
-    const matchesVendor = selectedVendors.length === 0 || selectedVendors.includes(r.vendor_name);
+    // 1. Vendor Match (Case-insensitive + Trimmed)
+    const matchesVendor = selectedVendors.length === 0 || 
+      selectedVendors.some(v => v.toLowerCase().trim() === (r.vendor_name || "").toLowerCase().trim());
+    
+    // 2. Search Match
     const matchesSearch = r.title.toLowerCase().includes(registrySearch.toLowerCase());
+    
+    // 3. Sync Toggle Match
     const matchesSync = syncFilter === 'all' ? true : syncFilter === 'on' ? r.auto_update : !r.auto_update;
+    
     return matchesVendor && matchesSearch && matchesSync;
   }).sort((a, b) => {
-    // Sort primarily by Vendor Name, secondarily by Product Title
-    const vendorSort = (a.vendor_name || "").localeCompare(b.vendor_name || "");
-    if (vendorSort !== 0) return vendorSort;
+    // Sort primarily by Title (so 24h and 28h stay together)
     return a.title.localeCompare(b.title);
   });
 
