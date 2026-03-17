@@ -30,17 +30,19 @@ export default async function handler(req, res) {
 
     const adminToken = await getShopifyToken();
     const vendorFilter = req.body?.vendor;
+    const productIdFilter = req.body?.productId;
     let hasNextPage = true;
     let cursor = null;
     let importedTotal = 0;
 
     while (hasNextPage) {
+      const queryArg = productIdFilter ? `id:${productIdFilter}` : `status:active`;
       const response = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
         method: 'POST',
         headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `query($after: String) { 
-            products(first: 50, after: $after) { 
+          query: `query($after: String, $query: String) { 
+            products(first: 50, after: $after, query: $query) { 
               pageInfo { hasNextPage } 
               edges { 
                 cursor 
@@ -55,7 +57,7 @@ export default async function handler(req, res) {
               } 
             } 
           }`,
-          variables: { after: cursor }
+          variables: { after: cursor, query: queryArg }
         })
       });
 

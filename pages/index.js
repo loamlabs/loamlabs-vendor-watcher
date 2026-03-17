@@ -75,16 +75,17 @@ export default function OpsDashboard() {
   };
 
   const handleAutoImport = async () => {
-    const input = prompt("Enter specific Vendor Name to import, type 'ALL' for a full scan, or type 'RESET_FACTORS' to reset all existing items to 1.0 adjustment factor:");
+    const input = prompt("Enter Vendor Name ('Berd'), a specific Shopify Product ID ('7615286575192'), or 'ALL' for a full scan:");
     if (!input) return;
 
     setLoading(true);
     try {
-      const isReset = input === 'RESET_FACTORS';
       const isAll = input.toUpperCase() === 'ALL';
+      const isProductId = /^\d+$/.test(input.trim());
+      
       const payload = {
-        resetFactors: isReset,
-        vendor: (!isAll && !isReset) ? input : null
+        vendor: (!isAll && !isProductId) ? input.trim() : null,
+        productId: isProductId ? input.trim() : null
       };
 
       const res = await fetch('/api/import-catalog', { 
@@ -94,11 +95,7 @@ export default function OpsDashboard() {
       });
       const data = await res.json();
       if (res.ok) {
-        if (isReset) {
-            alert(`Success: Reset adjustment factors to 1.0 for all items.`);
-        } else {
-            alert(`Success: Enrolled ${data.count} variants.`);
-        }
+        alert(`Success: Enrolled ${data.count} variants.`);
         fetchRules(password); 
       } else {
         alert("Import failed: " + (data.error || "Check Vercel Logs"));
@@ -296,7 +293,7 @@ export default function OpsDashboard() {
                   {paginatedRules.map((rule) => {
                     const isMissingUrl = !rule.vendor_url;
                     return (
-                      <tr key={rule.id} className={`${rule.needs_review ? 'bg-red-100' : isMissingUrl ? 'bg-red-50/50' : 'hover:bg-zinc-50'} transition-colors group`}>
+                      <tr key={rule.id} className={`${rule.needs_review ? 'bg-red-500/20 shadow-inner' : isMissingUrl ? 'bg-red-50/50' : 'hover:bg-zinc-50'} transition-colors group`}>
                         <td className="p-6">
                           <div className="flex items-center gap-2"><div className="font-bold text-zinc-900 text-base">{rule.title}</div>
                           {rule.last_log && <div className="group relative"><Info size={14} className="text-zinc-300 hover:text-black transition-colors cursor-help" /><div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 bg-black text-white text-[10px] p-3 rounded-xl z-50 shadow-2xl font-mono leading-relaxed border border-zinc-800"><div className="text-zinc-500 mb-1 uppercase font-black font-sans tracking-widest">System Log:</div>{rule.last_log}</div></div>}</div>
