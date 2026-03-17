@@ -78,19 +78,22 @@ export default function OpsDashboard() {
     if (!confirm("This will scan Shopify and add all variants to the Registry. Continue?")) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/Import-catalogue', { 
+      const res = await fetch('/api/import-catalogue', { // Changed to lowercase
         method: 'POST',
         headers: { 'x-dashboard-auth': password } 
       });
+      
       const data = await res.json();
+      
       if (res.ok) {
         alert(`Success: Enrolled ${data.count} variants.`);
         fetchRules(password); 
       } else {
-        alert("Import failed: " + (data.error || "Unknown Error"));
+        // This will show you the ACTUAL error from the server (e.g. "Shopify Token Error")
+        alert("Import failed: " + (data.error || "Check Vercel Logs"));
       }
     } catch (e) {
-      alert("System Error during import");
+      alert("Network Error: Could not reach the server.");
     }
     setLoading(false);
   };
