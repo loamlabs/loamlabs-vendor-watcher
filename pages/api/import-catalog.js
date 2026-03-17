@@ -27,8 +27,6 @@ export default async function handler(req, res) {
     let cursor = null;
     let importedTotal = 0;
 
-    console.log("--- STARTING FULL VARIANT IMPORT ---");
-
     while (hasNextPage) {
       const response = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
         method: 'POST',
@@ -41,8 +39,10 @@ export default async function handler(req, res) {
                 cursor 
                 node { 
                   id title vendor tags 
-                  variants(first: 50) { 
-                    edges { node { id title selectedOptions { name value } } } 
+                  variants(first: 100) { 
+                    edges { 
+                      node { id title selectedOptions { name value } } 
+                    } 
                   } 
                 } 
               } 
@@ -65,26 +65,42 @@ export default async function handler(req, res) {
       if (filtered.length > 0) {
         let variantBatch = [];
         for (const p of filtered) {
-          for (const v of p.node.variants.edges) {
-            const mappedOptions = {};
-            v.node.selectedOptions.forEach(opt => { mappedOptions[opt.name] = opt.value; });
+          
+          // --- COLOR-BLIND GROUPING LOGIC ---
+          const seenTechnicalSpecs = new Set();
 
-            variantBatch.push({
-              shopify_product_id: p.node.id.split('/').pop(),
-              shopify_variant_id: v.node.id.split('/').pop(),
-              title: `${p.node.title} - ${v.node.title}`,
-              vendor_name: p.node.vendor,
-              auto_update: false,
-              site_type: 'SHOPIFY',
-              option_values: mappedOptions,
-              price_adjustment_factor: 1.1111 
-            });
+          for (const v of p.node.variants.edges) {
+            // Create a key based on Spoke Count but IGNORE Color
+            // If the hub has "28h" and "Black", the key is just "28h"
+            const spokeCountValue = v.node.selectedOptions.find(opt => opt.name.toLowerCase().includes('spoke'))?.value || 'Standard';
+            const technicalKey = `${p.node.id}-${spokeCountValue}`;
+
+            // If we haven't added this specific hole count for this hub yet, add it
+            if (!seenTechnicalSpecs.has(technicalKey)) {
+              seenTechnicalSpecs.add(technicalKey);
+
+              const mappedOptions = {};
+              v.node.selectedOptions.forEach(opt => { mappedOptions[opt.name] = opt.value; });
+
+              variantBatch.push({
+                shopify_product_id: p.node.id.split('/').pop(),
+                shopify_variant_id: v.node.id.split('/').pop(),
+                title: `${p.node.title} (${spokeCountValue})`,
+                vendor_name: p.node.vendor,
+                auto_update: false,
+                site_type: 'SHOPIFY',
+                option_values: mappedOptions,
+                price_adjustment_factor: 1.1111 
+              });
+            }
           }
         }
-        // UPSERT using the variant ID as the conflict target
-        const { error: upsertError } = await supabase.from('watcher_rules').upsert(variantBatch, { onConflict: 'shopify_variant_id' });
-        if (upsertError) throw upsertError;
-        importedTotal += variantBatch.length;
+        
+        if (variantBatch.length > 0) {
+          const { error: upsertError } = await supabase.from('watcher_rules').upsert(variantBatch, { onConflict: 'shopify_variant_id' });
+          if (upsertError) throw upsertError;
+          importedTotal += variantBatch.length;
+        }
       }
       
       hasNextPage = data.data.products.pageInfo.hasNextPage;
@@ -93,7 +109,6 @@ export default async function handler(req, res) {
 
     res.status(200).json({ success: true, count: importedTotal });
   } catch (err) {
-    console.error("Import Error:", err.message);
     res.status(500).json({ error: err.message });
   }
 }
