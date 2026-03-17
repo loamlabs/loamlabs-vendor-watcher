@@ -35,7 +35,7 @@ export default async function handler(req, res) {
         headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: `query($after: String) { 
-            products(first: 250, after: $after) { 
+            products(first: 50, after: $after) { 
               pageInfo { hasNextPage } 
               edges { 
                 cursor 
@@ -58,8 +58,7 @@ export default async function handler(req, res) {
 
       const filtered = products.filter(edge => {
         const tags = (edge.node.tags || []).map(t => t.toLowerCase());
-        const vendor = edge.node.vendor.toLowerCase();
-        // Skip excluded tags and the "Your Own Component" placeholder
+        const vendor = edge.node.vendor?.toLowerCase() || '';
         return !tags.some(tag => EXCLUDED_TAGS.includes(tag)) && vendor !== 'your own component';
       });
 
@@ -82,6 +81,7 @@ export default async function handler(req, res) {
             });
           }
         }
+        // UPSERT using the variant ID as the conflict target
         const { error: upsertError } = await supabase.from('watcher_rules').upsert(variantBatch, { onConflict: 'shopify_variant_id' });
         if (upsertError) throw upsertError;
         importedTotal += variantBatch.length;
@@ -93,6 +93,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({ success: true, count: importedTotal });
   } catch (err) {
+    console.error("Import Error:", err.message);
     res.status(500).json({ error: err.message });
   }
 }
