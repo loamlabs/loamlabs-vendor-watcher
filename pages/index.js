@@ -124,15 +124,12 @@ export default function OpsDashboard() {
 
   // 2. Sorting: Alphabetical by Vendor, then by Product Title
   const filteredRules = rules.filter(r => {
+    // If "All Vendors" is active (selectedVendors is empty), show EVERYTHING
     const matchesVendor = selectedVendors.length === 0 || selectedVendors.includes(r.vendor_name);
     const matchesSearch = r.title.toLowerCase().includes(registrySearch.toLowerCase());
     const matchesSync = syncFilter === 'all' ? true : syncFilter === 'on' ? r.auto_update : !r.auto_update;
     return matchesVendor && matchesSearch && matchesSync;
-  }).sort((a, b) => {
-    const vendorSort = (a.vendor_name || "").localeCompare(b.vendor_name || "");
-    if (vendorSort !== 0) return vendorSort;
-    return a.title.localeCompare(b.title);
-  });
+  }).sort((a, b) => (a.vendor_name || "").localeCompare(b.vendor_name || "") || a.title.localeCompare(b.title));
 
   const paginatedRules = filteredRules.slice(0, visibleCount);
 
