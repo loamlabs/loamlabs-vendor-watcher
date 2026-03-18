@@ -293,7 +293,7 @@ export default function OpsDashboard() {
                   {paginatedRules.map((rule) => {
                     const isMissingUrl = !rule.vendor_url;
                     return (
-                      <tr key={rule.id} className={`${rule.needs_review ? 'bg-red-500/20 shadow-inner' : isMissingUrl ? 'bg-red-50/50' : rule.bti_part_number ? 'bg-blue-50/70 hover:bg-blue-100' : 'hover:bg-zinc-50'} transition-colors group`}>
+                      <tr key={rule.id} className={`${rule.needs_review ? 'bg-red-500/20 shadow-inner' : rule.bti_part_number ? 'bg-blue-50/70 hover:bg-blue-100' : isMissingUrl ? 'bg-red-50/50' : 'hover:bg-zinc-50'} transition-colors group`}>
                         <td className="p-6">
                           <div className="flex items-center gap-2"><div className="font-bold text-zinc-900 text-base">{rule.title}</div>
                           {rule.last_log && <div className="group relative"><Info size={14} className="text-zinc-300 hover:text-black transition-colors cursor-help" /><div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 bg-black text-white text-[10px] p-3 rounded-xl z-50 shadow-2xl font-mono leading-relaxed border border-zinc-800"><div className="text-zinc-500 mb-1 uppercase font-black font-sans tracking-widest">System Log:</div>{rule.last_log}</div></div>}</div>
