@@ -14,6 +14,7 @@ export default function OpsDashboard() {
   const [syncFilter, setSyncFilter] = useState('all'); 
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [visibleCount, setVisibleCount] = useState(50);
+  const [selectedRules, setSelectedRules] = useState([]);
 
   useEffect(() => {
     const savedPass = localStorage.getItem('loam_ops_auth');
@@ -72,6 +73,34 @@ export default function OpsDashboard() {
       body: JSON.stringify({ id, updates: { auto_update: !currentState } })
     });
     fetchRules();
+  };
+
+  const bulkSetAutoSync = async (state) => {
+    setLoading(true);
+    try {
+      await Promise.all(selectedRules.map(id => fetch('/api/update-rule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
+        body: JSON.stringify({ id, updates: { auto_update: state } })
+      })));
+      fetchRules();
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  };
+
+  const bulkDelete = async () => {
+    if (!confirm(`⚠️ PERMANENT ACTION: Delete ${selectedRules.length} items from the Registry?`)) return;
+    setLoading(true);
+    try {
+      await Promise.all(selectedRules.map(id => fetch('/api/delete-rule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
+        body: JSON.stringify({ id })
+      })));
+      setSelectedRules([]);
+      fetchRules();
+    } catch(e) { console.error(e); }
+    setLoading(false);
   };
 
   const handleAutoImport = async () => {
@@ -284,19 +313,57 @@ export default function OpsDashboard() {
               </div>
             </div>
 
+
+            {selectedRules.length > 0 && (
+              <div className="bg-black text-white p-4 rounded-[1.5rem] mb-6 flex items-center justify-between shadow-2xl animate-in slide-in-from-bottom-4 border border-zinc-800">
+                <div className="font-bold text-sm tracking-widest uppercase italic border-r border-zinc-800 pr-6 mr-4 flex-shrink-0">
+                  {selectedRules.length} Selected
+                </div>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <button onClick={() => bulkSetAutoSync(true)} className="flex items-center gap-2 text-[10px] font-black uppercase text-green-400 hover:text-green-300 transition-colors bg-green-950/30 px-3 py-2 rounded-xl"><Zap size={14} /> Enable Auto-Sync</button>
+                  <button onClick={() => bulkSetAutoSync(false)} className="flex items-center gap-2 text-[10px] font-black uppercase text-zinc-400 hover:text-white transition-colors bg-zinc-900 px-3 py-2 rounded-xl"><ZapOff size={14} /> Disable Auto-Sync</button>
+                  <div className="w-px h-6 bg-zinc-800 hidden sm:block"></div>
+                  <button onClick={bulkDelete} className="flex items-center gap-2 text-[10px] font-black uppercase text-red-500 hover:text-red-400 transition-colors bg-red-950/30 px-3 py-2 rounded-xl"><Trash2 size={14} /> Delete Selected</button>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white rounded-[2rem] shadow-sm border border-zinc-200 overflow-hidden text-sm">
               <table className="w-full text-left">
                 <thead className="bg-zinc-100 border-b text-[10px] uppercase font-black text-zinc-500 tracking-widest font-mono">
-                  <tr><th className="p-6 italic tracking-tighter">Registry Item</th><th className="p-6 text-center">Status</th><th className="p-6">Memory (Base)</th><th className="p-6">Adjusted Price</th><th className="p-6 text-right">Auto-Sync / Actions</th></tr>
+                  <tr>
+                    <th className="p-6 pr-0 w-4">
+                      <input type="checkbox" className="w-4 h-4 rounded text-black focus:ring-black cursor-pointer" onChange={(e) => {
+                        if (e.target.checked) setSelectedRules(paginatedRules.map(r => r.id));
+                        else setSelectedRules([]);
+                      }} checked={selectedRules.length === paginatedRules.length && paginatedRules.length > 0} />
+                    </th>
+                    <th className="p-6 italic tracking-tighter">Registry Item</th>
+                    <th className="p-6 text-center">Status</th>
+                    <th className="p-6">Memory (Base)</th>
+                    <th className="p-6">Adjusted Price</th>
+                    <th className="p-6">Current (Shopify)</th>
+                    <th className="p-6 text-right">Auto-Sync / Actions</th>
+                  </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
                   {paginatedRules.map((rule) => {
                     const isMissingUrl = !rule.vendor_url;
+                    const expectedPriceText = rule.last_price ? ((rule.last_price / 100) * (rule.price_adjustment_factor || 1.0)).toFixed(2) : '--';
+                    const shopifyPriceText = rule.current_shopify_price ? (rule.current_shopify_price / 100).toFixed(2) : '--';
+                    const priceMismatch = expectedPriceText !== '--' && shopifyPriceText !== '--' && expectedPriceText !== shopifyPriceText;
+
                     return (
-                      <tr key={rule.id} className={`${rule.needs_review ? 'bg-red-500/20 shadow-inner' : rule.bti_part_number ? 'bg-blue-50/70 hover:bg-blue-100' : isMissingUrl ? 'bg-red-50/50' : 'hover:bg-zinc-50'} transition-colors group`}>
+                      <tr key={rule.id} className={`${rule.needs_review ? 'bg-red-500/20 shadow-inner' : rule.bti_part_number ? 'bg-blue-50/70 hover:bg-blue-100' : isMissingUrl ? 'bg-red-50/50' : selectedRules.includes(rule.id) ? 'bg-zinc-100 shadow-inner' : 'hover:bg-zinc-50'} transition-colors group cursor-pointer`} onClick={(e) => { if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') { setSelectedRules(prev => prev.includes(rule.id) ? prev.filter(id => id !== rule.id) : [...prev, rule.id]); }}}>
+                        <td className="p-6 pr-0" onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" className="w-4 h-4 rounded text-black focus:ring-black cursor-pointer pointer-events-auto" checked={selectedRules.includes(rule.id)} onChange={() => {
+                            if (selectedRules.includes(rule.id)) setSelectedRules(prev => prev.filter(id => id !== rule.id));
+                            else setSelectedRules(prev => [...prev, rule.id]);
+                          }} />
+                        </td>
                         <td className="p-6">
                           <div className="flex items-center gap-2"><div className="font-bold text-zinc-900 text-base">{rule.title}</div>
-                          {rule.last_log && <div className="group relative"><Info size={14} className="text-zinc-300 hover:text-black transition-colors cursor-help" /><div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 bg-black text-white text-[10px] p-3 rounded-xl z-50 shadow-2xl font-mono leading-relaxed border border-zinc-800"><div className="text-zinc-500 mb-1 uppercase font-black font-sans tracking-widest">System Log:</div>{rule.last_log}</div></div>}</div>
+                          {rule.last_log && <div className="group/log relative pointer-events-auto"><Info size={14} className="text-zinc-300 hover:text-black transition-colors cursor-help" /><div className="absolute left-0 bottom-full mb-2 hidden group-hover/log:block w-64 bg-black text-white text-[10px] p-3 rounded-xl z-50 shadow-2xl font-mono leading-relaxed border border-zinc-800"><div className="text-zinc-500 mb-1 uppercase font-black font-sans tracking-widest">System Log:</div>{rule.last_log}</div></div>}</div>
                           <div className="text-[10px] text-zinc-400 font-mono mt-1 truncate max-w-sm flex items-center gap-2">
                              {isMissingUrl && <AlertCircle size={10} className="text-red-400"/>}
                              {rule.vendor_url || 'No URL mapped - Action Required'}
@@ -309,9 +376,17 @@ export default function OpsDashboard() {
                           {rule.last_price ? `$${(rule.last_price / 100).toFixed(2)}` : '--'}
                         </td>
                         <td className="p-6 font-mono font-bold text-lg text-blue-600">
-                          {rule.last_price ? `$${((rule.last_price / 100) * (rule.price_adjustment_factor || 1.0)).toFixed(2)}` : '--'}
+                          {expectedPriceText !== '--' ? `$${expectedPriceText}` : '--'}
                         </td>
-                        <td className="p-6 flex justify-end items-center gap-4">
+                        <td className="p-6 font-mono font-bold text-lg">
+                          {shopifyPriceText !== '--' ? (
+                            <div className={priceMismatch ? "text-red-700 bg-red-50 inline-flex items-center gap-2 px-3 py-1 rounded-lg border border-red-200 shadow-sm" : "text-zinc-600 px-3 py-1"}>
+                               ${shopifyPriceText}
+                               {priceMismatch && <AlertCircle size={14}/>}
+                            </div>
+                          ) : '--'}
+                        </td>
+                        <td className="p-6 flex justify-end items-center gap-4 pointer-events-auto" onClick={e => e.stopPropagation()}>
                           <button onClick={() => toggleAutoSync(rule.id, rule.auto_update)} className={`w-12 h-6 rounded-full p-1 flex items-center transition-all ${rule.auto_update ? 'bg-black justify-end shadow-inner' : 'bg-zinc-300 justify-start'}`}><div className="w-4 h-4 bg-white rounded-full shadow-md"></div></button>
                           <button onClick={() => setEditingRule(rule)} className="bg-zinc-100 hover:bg-black hover:text-white text-zinc-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase transition-all">Edit</button>
                           <button onClick={() => deleteRule(rule.id)} className="text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={18} /></button>

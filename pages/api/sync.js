@@ -200,15 +200,33 @@ export default async function handler(req, res) {
           }
           const goalPrice = parseFloat(goalPriceNum).toFixed(2);
 
-          // 45-Day New Normal Timer Logic
+          // 45-Day New Normal Timer Logic & Drastic Sale
           let newPriceLastChangedAt = rule.price_last_changed_at || null;
           if (rule.last_price !== winner.price) {
             newPriceLastChangedAt = new Date().toISOString();
+            if (isDeepSale) {
+               attention.push({ title: rule.title, reason: `Drastic Sale Detected: Vendor Price dropped to $${vendorPrice.toFixed(2)}!` });
+            }
           } else if (newPriceLastChangedAt && isDeepSale) {
             const daysPersistent = (new Date() - new Date(newPriceLastChangedAt)) / (1000 * 60 * 60 * 24);
-            if (daysPersistent >= 45) {
-               attention.push({ title: rule.title, reason: `Sale Price persistent for ${Math.floor(daysPersistent)} days: Confirm as New MSRP?` });
+            if (Math.floor(daysPersistent) === 45) {
+               attention.push({ title: rule.title, reason: `Sale Price persistent for 45 days: Confirm as New MSRP?` });
             }
+          }
+
+          // Out-of-Stock Stopwatch
+          let newOutOfStockSince = rule.out_of_stock_since || null;
+          if (!winner.available) {
+             if (!newOutOfStockSince) {
+                newOutOfStockSince = new Date().toISOString();
+             } else {
+                const daysOOS = (new Date() - new Date(newOutOfStockSince)) / (1000 * 60 * 60 * 24);
+                if (Math.floor(daysOOS) === 90 || Math.floor(daysOOS) === 91 || Math.floor(daysOOS) === 92) {
+                   attention.push({ title: rule.title, reason: `Out of Stock for 3 Months. Discontinued or Backorder?` });
+                }
+             }
+          } else {
+             newOutOfStockSince = null;
           }
 
           const variantGid = `gid://shopify/ProductVariant/${rule.shopify_variant_id}`;
@@ -255,7 +273,9 @@ export default async function handler(req, res) {
             last_availability: winner.available,
             last_run_at: new Date().toISOString(),
             last_log: `Matched: "${winner.public_title}".`,
-            price_last_changed_at: newPriceLastChangedAt
+            price_last_changed_at: newPriceLastChangedAt,
+            out_of_stock_since: newOutOfStockSince,
+            current_shopify_price: Math.round(Number(myPrice) * 100)
           }).eq('id', rule.id);
 
         } else {
