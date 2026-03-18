@@ -50,7 +50,12 @@ export default async function handler(req, res) {
                   id title vendor tags 
                   variants(first: 100) { 
                     edges { 
-                      node { id title selectedOptions { name value } } 
+                      node { 
+                        id 
+                        title 
+                        selectedOptions { name value } 
+                        metafield(namespace: "custom", key: "bti_part_number") { value }
+                      } 
                     } 
                   } 
                 } 
@@ -93,7 +98,8 @@ export default async function handler(req, res) {
                 auto_update: false,
                 site_type: 'SHOPIFY',
                 option_values: mappedOptions,
-                price_adjustment_factor: 1.0  
+                price_adjustment_factor: 1.0,
+                bti_part_number: v.node.metafield?.value || null
               });
             }
           }
