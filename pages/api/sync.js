@@ -82,45 +82,41 @@ export default async function handler(req, res) {
         const isHub = ruleTitle.includes('hub');
         const isRim = ruleTitle.includes('rim');
         const isE13Wheelset = rule.vendor_name === 'e*thirteen' && ruleTitle.includes('wheels');
-
         if (isE13Wheelset) {
-            const frontTokens = [];
-            const rearTokens = [];
+            // e*thirteen wheelset URLs only list Rear wheel variants (e.g. "Rear / 29\" / 148x12mm Boost").
+            // We match purely on the "Rear Rim and Hub Size" option value.
+            // Variants with a front wheel selected get the same rear base price (no separate front URL exists).
+            let rearSizeValue = null;
             for (const [optName, optValue] of Object.entries(parsedOptions)) {
-                if (!optValue) continue;
-                if (optName.toLowerCase().includes('front')) frontTokens.push(...optValue.toLowerCase().replace(/["']/g, '').split(/[\s/x\-+\,]+/));
-                if (optName.toLowerCase().includes('rear')) rearTokens.push(...optValue.toLowerCase().replace(/["']/g, '').split(/[\s/x\-+\,]+/));
+                if (optName.toLowerCase().includes('rear') && optValue) {
+                    rearSizeValue = optValue.toLowerCase().replace(/[\"']/g, '').trim();
+                    break;
+                }
             }
 
-            const getE13WheelMatch = (typeTokens, matchTypeStr) => {
-                if (typeTokens.length === 0) return null;
-                const matches = vData.variants.filter(v => {
-                    const vTitle = normalize(v.public_title).replace(/["']/g, '');
-                    if (!vTitle.includes(matchTypeStr)) return false;
-                    for (let t of typeTokens) {
-                        if (['29','27.5','15','12','110','148','157','boost'].includes(t) && !vTitle.includes(t)) {
-                            return false;
-                        }
-                    }
+            if (rearSizeValue) {
+                // Extract wheel size: "27.5" or "29"
+                const sizeMatch = rearSizeValue.match(/(27\.5|29)/);
+                // Extract axle width: "148" or "157"
+                const axleMatch = rearSizeValue.match(/(148|157)/);
+                // Extract boost type: "superboost" or "boost"
+                const isSuperboost = rearSizeValue.includes('superboost') || rearSizeValue.includes('157');
+
+                const rearCandidates = vData.variants.filter(v => {
+                    const vt = normalize(v.public_title).replace(/[\"']/g, '');
+                    if (!vt.includes('rear')) return false;
+                    if (sizeMatch && !vt.includes(sizeMatch[1])) return false;
+                    if (axleMatch && !vt.includes(axleMatch[1])) return false;
+                    // Validate superboost/boost alignment
+                    if (isSuperboost && !vt.includes('superboost') && !vt.includes('157')) return false;
+                    if (!isSuperboost && (vt.includes('superboost') || vt.includes('157'))) return false;
                     return true;
                 });
-                return matches.length > 0 ? matches[0] : null;
-            };
 
-            const frontMatch = getE13WheelMatch(frontTokens, 'front');
-            const rearMatch = getE13WheelMatch(rearTokens, 'rear');
-
-            const requiresFront = frontTokens.length > 0 && !frontTokens.includes('none');
-            const requiresRear = rearTokens.length > 0 && !rearTokens.includes('none');
-
-            if ((requiresFront && !frontMatch) || (requiresRear && !rearMatch)) {
-                winner = null; 
-            } else if (requiresFront && requiresRear) {
-                winner = { price: frontMatch.price + rearMatch.price, available: frontMatch.available && rearMatch.available };
-            } else if (requiresRear) {
-                winner = { price: rearMatch.price, available: rearMatch.available };
-            } else if (requiresFront) {
-                winner = { price: frontMatch.price, available: frontMatch.available };
+                if (rearCandidates.length > 0) {
+                    const best = rearCandidates.reduce((a, b) => (a.price > b.price ? a : b));
+                    winner = { price: best.price, available: best.available };
+                }
             }
 
         } else {
