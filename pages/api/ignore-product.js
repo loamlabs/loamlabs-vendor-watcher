@@ -21,43 +21,22 @@ export default async function handler(req, res) {
     for (const pid of uniqueIds) {
       const productGid = `gid://shopify/Product/${pid}`;
       
-      // Fetch current tags
-      const currentRes = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
+      const IGNORE_TAG = "watcher-ignore";
+      const updateRes = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
         method: 'POST',
         headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `query($id: ID!) { product(id: $id) { tags } }`,
-          variables: { id: productGid }
+          query: `mutation tagsAdd($id: ID!, $tags: [String!]!) { tagsAdd(id: $id, tags: $tags) { node { id } userErrors { field message } } }`,
+          variables: { id: productGid, tags: [IGNORE_TAG] }
         })
       });
       
-      const currentData = await currentRes.json();
-      if (!currentData.data?.product) continue;
-      
-      let tags = currentData.data.product.tags || [];
-      const IGNORE_TAG = "watcher-ignore";
-      
-      if (!tags.includes(IGNORE_TAG)) {
-        tags.push(IGNORE_TAG);
-        
-        // Push mutated tags
-        const tagsString = tags.join(', ');
-        const updateRes = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
-          method: 'POST',
-          headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: `mutation productUpdate($input: ProductInput!) { productUpdate(input: $input) { product { id } userErrors { field message } } }`,
-            variables: { input: { id: productGid, tags: tagsString } }
-          })
-        });
-        
-        const updateData = await updateRes.json();
-        if (updateData.errors) {
-            console.error("Shopify GraphQL Root Error:", updateData.errors);
-        }
-        if (updateData.data?.productUpdate?.userErrors?.length > 0) {
-           console.error("Shopify Mutate Error:", updateData.data.productUpdate.userErrors);
-        }
+      const updateData = await updateRes.json();
+      if (updateData.errors) {
+          console.error("Shopify GraphQL Root Error:", updateData.errors);
+      }
+      if (updateData.data?.tagsAdd?.userErrors?.length > 0) {
+         console.error("Shopify Mutate Error:", updateData.data.tagsAdd.userErrors);
       }
     }
 
