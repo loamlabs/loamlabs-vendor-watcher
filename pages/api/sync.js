@@ -129,9 +129,10 @@ export default async function handler(req, res) {
                 const spokeCount = parsedOptions["Spoke Count"] ? parsedOptions["Spoke Count"].toLowerCase() : null;
                 if (spokeCount && !vTitle.includes(spokeCount)) return false;
 
-                if (ruleTitle.includes('dh') && !vTitle.includes('dh')) return false;
-                if (ruleTitle.includes('en') && !vTitle.includes('en')) return false;
-                if (ruleTitle.includes('gr') && !vTitle.includes('gr')) return false;
+                // Only require DH/EN/GR if the vendor actually specifies it in the variant title
+                if (ruleTitle.includes('dh') && vTitle.includes('dh') === false && (vTitle.includes('en') || vTitle.includes('gr'))) return false;
+                if (ruleTitle.includes('en') && vTitle.includes('en') === false && (vTitle.includes('dh') || vTitle.includes('gr'))) return false;
+                if (ruleTitle.includes('gr') && vTitle.includes('gr') === false && (vTitle.includes('dh') || vTitle.includes('en'))) return false;
              }
 
              // HUB LOGIC
@@ -154,7 +155,8 @@ export default async function handler(req, res) {
                 if (ruleTitle.includes('superboost') && !vTitle.includes('157')) return false;
                 if (!ruleTitle.includes('superboost') && ruleTitle.includes('rear') && !vTitle.includes('148')) return false;
                 
-                if (ruleTitle.includes('sl') && !vTitle.includes('sl')) return false;
+                // E*thirteen often groups SL hubs underneath generic front hubs without appending 'SL' to the variant title.
+                // We will NOT strictly fail 'sl' if it's missing from the variant title.
              }
              return true;
           }
