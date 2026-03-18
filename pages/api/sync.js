@@ -186,7 +186,7 @@ export default async function handler(req, res) {
           const vendorPrice = winner.price / 100;
 
           // Sale Reversion & Smart Margin Safety Logic
-          const stdFactor = rule.standard_factor || 1.0;
+          const stdFactor = rule.price_adjustment_factor || 1.0;
           let goalPriceNum = vendorPrice * stdFactor;
           let isDeepSale = false;
 
