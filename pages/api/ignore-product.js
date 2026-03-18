@@ -57,7 +57,7 @@ export default async function handler(req, res) {
       }
 
       // Purge all variants of this product from Supabase to clear the dashboard
-      await supabase.from('watcher_rules').delete().eq('shopify_product_id', pid);
+      await supabase.from('watcher_rules').delete().eq('shopify_product_id', pid.toString());
     }
 
     res.status(200).json({ success: true, count: uniqueIds.length });

@@ -49,10 +49,23 @@ export default async function handler(req, res) {
     for (const rule of rules) {
       if (!rule.vendor_url) continue;
 
+      let vendorPrice;
+      const url = `${rule.vendor_url}.js`;
+      const vResponse = await fetch(url);
+      if (!vResponse.ok) {
+        console.log(`Berd endpoint returned ${vResponse.status} for ${url}, skipping...`);
+        continue;
+      }
+      const textObj = await vResponse.text();
+      let vData;
       try {
-        const vResponse = await fetch(`${rule.vendor_url}.js`);
-        const vData = await vResponse.json();
-        
+        vData = JSON.parse(textObj);
+      } catch(e) {
+        console.log(`Berd endpoint returned non-JSON payload for ${url}, skipping...`);
+        continue;
+      }
+
+      try {
         let parsedOptions = rule.option_values || {};
         if (typeof parsedOptions === 'string') {
           try { parsedOptions = JSON.parse(parsedOptions); } catch (e) {}
@@ -255,6 +268,8 @@ export default async function handler(req, res) {
               updatePayload.compare_at_price = (Number(goalPrice) + gap).toFixed(2);
               changeReason = `$${myPrice} -> $${goalPrice} (Sale Gap Preserved)`;
             } else {
+              // Phase 8: Safety Flush to prevent inverted discounts bleeding to the storefront when Base raises over Compare.
+              updatePayload.compare_at_price = goalPrice;
               changeReason = `$${myPrice} -> $${goalPrice}`;
             }
 
