@@ -41,16 +41,20 @@ export default async function handler(req, res) {
         tags.push(IGNORE_TAG);
         
         // Push mutated tags
+        const tagsString = tags.join(', ');
         const updateRes = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
           method: 'POST',
           headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             query: `mutation productUpdate($input: ProductInput!) { productUpdate(input: $input) { product { id } userErrors { field message } } }`,
-            variables: { input: { id: productGid, tags: tags } }
+            variables: { input: { id: productGid, tags: tagsString } }
           })
         });
         
         const updateData = await updateRes.json();
+        if (updateData.errors) {
+            console.error("Shopify GraphQL Root Error:", updateData.errors);
+        }
         if (updateData.data?.productUpdate?.userErrors?.length > 0) {
            console.error("Shopify Mutate Error:", updateData.data.productUpdate.userErrors);
         }

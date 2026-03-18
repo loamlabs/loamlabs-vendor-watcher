@@ -258,11 +258,12 @@ export default async function handler(req, res) {
           const myCompare = variant.compareAtPrice ? parseFloat(variant.compareAtPrice).toFixed(2) : null;
           let finalShopifyPriceNum = Number(myPrice);
           const isDiff = Number(goalPrice) !== Number(myPrice);
+          const needsCompareFix = myCompare && Number(myCompare) < Number(goalPrice);
 
           let updatePayload = { id: rule.shopify_variant_id, price: goalPrice };
           let changeReason = "";
 
-          if (isDiff && !rule.needs_review) {
+          if ((isDiff || needsCompareFix) && !rule.needs_review) {
             if (myCompare && Number(myCompare) > Number(myPrice)) {
               const gap = Number(myCompare) - Number(myPrice);
               updatePayload.compare_at_price = (Number(goalPrice) + gap).toFixed(2);
