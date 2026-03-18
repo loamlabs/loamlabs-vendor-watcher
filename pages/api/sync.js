@@ -61,18 +61,32 @@ export default async function handler(req, res) {
         const isFrontRule = rule.title.toLowerCase().includes('front');
         const normalize = (t) => String(t || "").toLowerCase().replace(/×/g, 'x').replace(/\s+/g, ' ').trim();
 
-        // 1. MATCHING ENGINE
         let candidates = vData.variants.filter(v => {
           const vTitle = normalize(v.public_title);
           const ruleTitle = normalize(rule.title);
           
-          const hasSpoke = vTitle.includes(`${spokeGoal} spoke`) || vTitle.includes(`${spokeGoal}h`) || vTitle.includes(`${spokeGoal} hole`);
-          if (!hasSpoke) return false;
-          if (isFrontRule && !vTitle.includes('front')) return false;
-          if (!isFrontRule && !(vTitle.includes('rear') || vTitle.includes('xd') || vTitle.includes('hg') || vTitle.includes('ms'))) return false;
+          for (const [optName, optValue] of Object.entries(parsedOptions)) {
+             const cleanOptVal = normalize(optValue);
+             if (cleanOptVal && !vTitle.includes(cleanOptVal)) {
+                 if (optName.toLowerCase().includes('spoke')) {
+                    const numOnly = cleanNum(optValue);
+                    if (numOnly && (vTitle.includes(`${numOnly} spoke`) || vTitle.includes(`${numOnly}h`) || vTitle.includes(`${numOnly} hole`))) {
+                        continue;
+                    }
+                 }
+                 return false;
+             }
+          }
 
-          const axleMatch = ['100', '110', '142', '148', '157'].find(size => ruleTitle.includes(size));
-          if (axleMatch && !vTitle.includes(axleMatch)) return false;
+          const isHub = ruleTitle.includes('hub');
+          if (isHub) {
+              const isFrontRule = ruleTitle.includes('front');
+              if (isFrontRule && !vTitle.includes('front')) return false;
+              if (!isFrontRule && !(vTitle.includes('rear') || vTitle.includes('xd') || vTitle.includes('hg') || vTitle.includes('ms'))) return false;
+
+              const axleMatch = ['100', '110', '142', '148', '157'].find(size => ruleTitle.includes(size));
+              if (axleMatch && !vTitle.includes(axleMatch)) return false;
+          }
 
           return true;
         });
@@ -131,7 +145,7 @@ export default async function handler(req, res) {
         } else {
           const vendorOptions = vData.variants.slice(0, 2).map(v => v.public_title).join(', ');
           await supabase.from('watcher_rules').update({ 
-            last_log: `FAILED: Found 0 matches for ${spokeGoal}h. Vendor uses: ${vendorOptions}` 
+            last_log: `FAILED: Found 0 matches for parsed options. Vendor uses: ${vendorOptions}` 
           }).eq('id', rule.id);
         }
       } catch (err) { console.error(`Error on ${rule.title}:`, err.message); }
