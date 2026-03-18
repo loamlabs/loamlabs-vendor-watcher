@@ -86,6 +86,7 @@ export default async function handler(req, res) {
             v.node.selectedOptions.forEach(opt => { mappedOptions[opt.name] = opt.value; });
 
             const isRim = p.node.title.toLowerCase().includes('rim');
+            const isWheelset = p.node.title.toLowerCase().includes('wheel');
             const spokeOptNames = Object.keys(mappedOptions).filter(k => k.toLowerCase().includes('spoke'));
             const spokeCountValue = spokeOptNames.length > 0 ? mappedOptions[spokeOptNames[0]] : 'Std';
 
@@ -106,6 +107,11 @@ export default async function handler(req, res) {
               if (colorValue) parts.push(colorValue);
               if (spokeCountValue !== 'Std') parts.push(spokeCountValue);
               
+              titleSuffix = parts.length > 0 ? `(${parts.join(' / ')})` : '';
+            } else if (isWheelset) {
+              // Extract all variants precisely
+              technicalKey = `${p.node.id}-${v.node.id}`;
+              const parts = Object.values(mappedOptions).filter(Boolean);
               titleSuffix = parts.length > 0 ? `(${parts.join(' / ')})` : '';
             }
 

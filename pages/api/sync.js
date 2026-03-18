@@ -75,127 +75,155 @@ export default async function handler(req, res) {
         const normalize = (t) => String(t || "").toLowerCase().replace(/×/g, 'x').replace(/\s+/g, ' ').trim();
 
         // 1. DYNAMIC MATCHING ENGINE (TOKENIZED)
-        let candidates = vData.variants.filter(v => {
-          const vTitle = normalize(v.public_title);
-          const ruleTitle = normalize(rule.title);
-          const isHub = ruleTitle.includes('hub');
-          const isRim = ruleTitle.includes('rim');
-          
-          if (rule.vendor_name === 'Berd') {
-            let reqTokens = [];
+        let winner = null;
+        let isDeepSale = false;
+
+        const ruleTitle = normalize(rule.title);
+        const isHub = ruleTitle.includes('hub');
+        const isRim = ruleTitle.includes('rim');
+        const isE13Wheelset = rule.vendor_name === 'e*thirteen' && ruleTitle.includes('wheels');
+
+        if (isE13Wheelset) {
+            const frontTokens = [];
+            const rearTokens = [];
             for (const [optName, optValue] of Object.entries(parsedOptions)) {
-               if (!optValue || optValue.toLowerCase() === 'default title') continue;
-               
-               // Berd skips "Color" in hub titles, avoiding false negatives
-               if (isHub && optName.toLowerCase().includes('color')) continue;
-
-               // Handle spoke count independently below
-               if (isHub && optName.toLowerCase().includes('spoke')) continue;
-
-               // Tokenize option values (e.g. "HAWK30 29" -> ["hawk30", "29"])
-               let tokens = optValue.toLowerCase().replace(/×/g, 'x').replace(/[\"\']/g, '').split(/[\s/+\-]+/).filter(t => t.length > 0);
-               reqTokens.push(...tokens);
+                if (!optValue) continue;
+                if (optName.toLowerCase().includes('front')) frontTokens.push(...optValue.toLowerCase().replace(/["']/g, '').split(/[\s/x\-+\,]+/));
+                if (optName.toLowerCase().includes('rear')) rearTokens.push(...optValue.toLowerCase().replace(/["']/g, '').split(/[\s/x\-+\,]+/));
             }
 
-            // Ensure vTitle contains all required tokens
-            const normalizedTitleForTokens = vTitle.replace(/[\"\']/g, '');
-            for (let token of reqTokens) {
-                if (!normalizedTitleForTokens.includes(token)) {
-                    return false;
-                }
-            }
-
-            if (isHub) {
-                const isFrontRule = ruleTitle.includes('front');
-                if (isFrontRule && !vTitle.includes('front')) return false;
-                if (!isFrontRule && !(vTitle.includes('rear') || vTitle.includes('xd') || vTitle.includes('hg') || vTitle.includes('ms'))) return false;
-
-                const axleMatch = ['100', '110', '142', '148', '157'].find(size => ruleTitle.includes(size));
-                if (axleMatch && !vTitle.includes(axleMatch)) return false;
-
-                // Enforce Spoke Count for hubs
-                let hasSpokeOption = false;
-                let spokeMatch = false;
-                for (const [optName, optValue] of Object.entries(parsedOptions)) {
-                    if (optName.toLowerCase().includes('spoke')) {
-                        hasSpokeOption = true;
-                        const numOnly = cleanNum(optValue);
-                        if (numOnly && (vTitle.includes(`${numOnly} spoke`) || vTitle.includes(`${numOnly}h`) || vTitle.includes(`${numOnly} hole`))) {
-                            spokeMatch = true;
+            const getE13WheelMatch = (typeTokens, matchTypeStr) => {
+                if (typeTokens.length === 0) return null;
+                const matches = vData.variants.filter(v => {
+                    const vTitle = normalize(v.public_title).replace(/["']/g, '');
+                    if (!vTitle.includes(matchTypeStr)) return false;
+                    for (let t of typeTokens) {
+                        if (['29','27.5','15','12','110','148','157','boost'].includes(t) && !vTitle.includes(t)) {
+                            return false;
                         }
                     }
-                }
-                if (hasSpokeOption && !spokeMatch) return false;
+                    return true;
+                });
+                return matches.length > 0 ? matches[0] : null;
+            };
+
+            const frontMatch = getE13WheelMatch(frontTokens, 'front');
+            const rearMatch = getE13WheelMatch(rearTokens, 'rear');
+
+            const requiresFront = frontTokens.length > 0 && !frontTokens.includes('none');
+            const requiresRear = rearTokens.length > 0 && !rearTokens.includes('none');
+
+            if ((requiresFront && !frontMatch) || (requiresRear && !rearMatch)) {
+                winner = null; 
+            } else if (requiresFront && requiresRear) {
+                winner = { price: frontMatch.price + rearMatch.price, available: frontMatch.available && rearMatch.available };
+            } else if (requiresRear) {
+                winner = { price: rearMatch.price, available: rearMatch.available };
+            } else if (requiresFront) {
+                winner = { price: frontMatch.price, available: frontMatch.available };
+            }
+
+        } else {
+          let candidates = vData.variants.filter(v => {
+            const vTitle = normalize(v.public_title);
+            
+            if (rule.vendor_name === 'Berd') {
+              let reqTokens = [];
+              for (const [optName, optValue] of Object.entries(parsedOptions)) {
+                 if (!optValue || optValue.toLowerCase() === 'default title') continue;
+                 
+                 // Berd skips "Color" in hub titles
+                 if (isHub && optName.toLowerCase().includes('color')) continue;
+                 if (isHub && optName.toLowerCase().includes('spoke')) continue;
+  
+                 let tokens = optValue.toLowerCase().replace(/×/g, 'x').replace(/[\"\']/g, '').split(/[\s/+\-]+/).filter(t => t.length > 0);
+                 reqTokens.push(...tokens);
+              }
+  
+              const normalizedTitleForTokens = vTitle.replace(/[\"\']/g, '');
+              for (let token of reqTokens) {
+                  if (!normalizedTitleForTokens.includes(token)) return false;
+              }
+  
+              if (isHub) {
+                  const isFrontRule = ruleTitle.includes('front');
+                  if (isFrontRule && !vTitle.includes('front')) return false;
+                  if (!isFrontRule && !(vTitle.includes('rear') || vTitle.includes('xd') || vTitle.includes('hg') || vTitle.includes('ms'))) return false;
+  
+                  const axleMatch = ['100', '110', '142', '148', '157'].find(size => ruleTitle.includes(size));
+                  if (axleMatch && !vTitle.includes(axleMatch)) return false;
+  
+                  let hasSpokeOption = false;
+                  let spokeMatch = false;
+                  for (const [optName, optValue] of Object.entries(parsedOptions)) {
+                      if (optName.toLowerCase().includes('spoke')) {
+                          hasSpokeOption = true;
+                          const numOnly = cleanNum(optValue);
+                          if (numOnly && (vTitle.includes(`${numOnly} spoke`) || vTitle.includes(`${numOnly}h`) || vTitle.includes(`${numOnly} hole`))) {
+                              spokeMatch = true;
+                          }
+                      }
+                  }
+                  if (hasSpokeOption && !spokeMatch) return false;
+              }
+              return true;
+            } 
+            else if (rule.vendor_name === 'e*thirteen') {
+               // RIM LOGIC
+               if (isRim) {
+                  let expectedSize = parsedOptions["Size"] ? parsedOptions["Size"].toLowerCase() : null;
+                  if (expectedSize) {
+                      if (expectedSize.includes('700c') && !vTitle.includes('700c')) expectedSize = '29';
+                      const cleanExpected = expectedSize.replace(/["'\\\\ ]/g, '');
+                      const cleanVTitle = vTitle.replace(/["' ]/g, '');
+                      const sizeString = cleanExpected.replace(/[^\d.c]/g, ''); 
+                      if (!cleanVTitle.includes(sizeString)) return false;
+                  }
+  
+                  const spokeCount = parsedOptions["Spoke Count"] ? parsedOptions["Spoke Count"].toLowerCase() : null;
+                  if (spokeCount && !vTitle.includes(spokeCount)) return false;
+  
+                  const ruleTokens = ruleTitle.split(' ');
+                  const vTokens = vTitle.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/);
+                  
+                  if (ruleTokens.includes('dh') && !vTokens.includes('dh') && (vTokens.includes('en') || vTokens.includes('gr'))) return false;
+                  if (ruleTokens.includes('en') && !vTokens.includes('en') && (vTokens.includes('dh') || vTokens.includes('gr'))) return false;
+                  if (ruleTokens.includes('gr') && !vTokens.includes('gr') && (vTokens.includes('dh') || vTokens.includes('en'))) return false;
+               }
+  
+               // HUB LOGIC
+               if (isHub) {
+                  const isFrontRule = ruleTitle.includes('front');
+                  if (isFrontRule && !vTitle.includes('front') && !vTitle.includes('15x') && !vTitle.includes('15mm') && !vTitle.includes('110x')) return false;
+                  if (!isFrontRule && !vTitle.includes('rear') && !vTitle.includes('148') && !vTitle.includes('157')) return false;
+  
+                  let expectedHoles = null;
+                  if (parsedOptions["Spoke Count"]) {
+                     expectedHoles = cleanNum(parsedOptions["Spoke Count"]);
+                  } else if (ruleTitle.includes('28h')) expectedHoles = '28';
+                  else if (ruleTitle.includes('32h')) expectedHoles = '32';
+  
+                  if (expectedHoles && !vTitle.includes(`${expectedHoles} hole`) && !vTitle.includes(`${expectedHoles}h`) && !vTitle.includes(`${expectedHoles} h`)) {
+                      return false;
+                  }
+  
+                  if (ruleTitle.includes('superboost') && !vTitle.includes('157')) return false;
+                  if (!ruleTitle.includes('superboost') && ruleTitle.includes('rear') && !vTitle.includes('148')) return false;
+                  
+                  if (!ruleTitle.includes('7spd') && !ruleTitle.includes('7 spd') && (vTitle.includes('7spd') || vTitle.includes('7 spd'))) return false;
+                  if (!ruleTitle.includes('mini') && vTitle.includes('mini')) return false;
+               }
+               return true;
             }
             return true;
-          } 
-          else if (rule.vendor_name === 'e*thirteen') {
-             // RIM LOGIC
-             if (isRim) {
-                let expectedSize = parsedOptions["Size"] ? parsedOptions["Size"].toLowerCase() : null;
-                if (expectedSize) {
-                    if (expectedSize.includes('700c') && !vTitle.includes('700c')) {
-                         expectedSize = '29';
-                    }
-                    const cleanExpected = expectedSize.replace(/["'\\\\ ]/g, '');
-                    const cleanVTitle = vTitle.replace(/["' ]/g, '');
-                    
-                    const sizeString = cleanExpected.replace(/[^\d.c]/g, ''); 
-                    
-                    if (!cleanVTitle.includes(sizeString)) {
-                        return false;
-                    }
-                }
+          });
 
-                const spokeCount = parsedOptions["Spoke Count"] ? parsedOptions["Spoke Count"].toLowerCase() : null;
-                if (spokeCount && !vTitle.includes(spokeCount)) return false;
-
-                // Only require DH/EN/GR if the vendor actually specifies it in the variant title
-                const ruleTokens = ruleTitle.split(' ');
-                const vTokens = vTitle.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/);
-                
-                if (ruleTokens.includes('dh') && !vTokens.includes('dh') && (vTokens.includes('en') || vTokens.includes('gr'))) return false;
-                if (ruleTokens.includes('en') && !vTokens.includes('en') && (vTokens.includes('dh') || vTokens.includes('gr'))) return false;
-                if (ruleTokens.includes('gr') && !vTokens.includes('gr') && (vTokens.includes('dh') || vTokens.includes('en'))) return false;
-             }
-
-             // HUB LOGIC
-             if (isHub) {
-                const isFrontRule = ruleTitle.includes('front');
-                if (isFrontRule && !vTitle.includes('front') && !vTitle.includes('15x') && !vTitle.includes('15mm') && !vTitle.includes('110x')) return false;
-                
-                if (!isFrontRule && !vTitle.includes('rear') && !vTitle.includes('148') && !vTitle.includes('157')) return false;
-
-                let expectedHoles = null;
-                if (parsedOptions["Spoke Count"]) {
-                   expectedHoles = cleanNum(parsedOptions["Spoke Count"]);
-                } else if (ruleTitle.includes('28h')) expectedHoles = '28';
-                else if (ruleTitle.includes('32h')) expectedHoles = '32';
-
-                if (expectedHoles && !vTitle.includes(`${expectedHoles} hole`) && !vTitle.includes(`${expectedHoles}h`) && !vTitle.includes(`${expectedHoles} h`)) {
-                    return false;
-                }
-
-                if (ruleTitle.includes('superboost') && !vTitle.includes('157')) return false;
-                if (!ruleTitle.includes('superboost') && ruleTitle.includes('rear') && !vTitle.includes('148')) return false;
-                
-                // Special e*thirteen hub variants (DM 7spd, Mini HG) shouldn't match standard MTB hub rules unless specified
-                if (!ruleTitle.includes('7spd') && !ruleTitle.includes('7 spd') && (vTitle.includes('7spd') || vTitle.includes('7 spd'))) return false;
-                if (!ruleTitle.includes('mini') && vTitle.includes('mini')) return false;
-
-                // E*thirteen often groups SL hubs underneath generic front hubs without appending 'SL' to the variant title.
-                // We will NOT strictly fail 'sl' if it's missing from the variant title.
-             }
-             return true;
+          if (candidates.length > 0) {
+            winner = candidates.reduce((prev, curr) => (prev.price > curr.price) ? prev : curr);
           }
+        }
 
-          // Fallback if vendor not strictly mapped yet
-          return true;
-        });
-
-
-        if (candidates.length > 0) {
-          const winner = candidates.reduce((prev, curr) => (prev.price > curr.price) ? prev : curr);
+        if (winner) {
           const vendorPrice = winner.price / 100;
 
           // Sale Reversion & Smart Margin Safety Logic
