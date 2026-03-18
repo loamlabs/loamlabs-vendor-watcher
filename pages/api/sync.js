@@ -83,39 +83,65 @@ export default async function handler(req, res) {
         const isRim = ruleTitle.includes('rim');
         const isE13Wheelset = rule.vendor_name === 'e*thirteen' && ruleTitle.includes('wheels');
         if (isE13Wheelset) {
-            // e*thirteen wheelset URLs only list Rear wheel variants (e.g. "Rear / 29\" / 148x12mm Boost").
-            // We match purely on the "Rear Rim and Hub Size" option value.
-            // Variants with a front wheel selected get the same rear base price (no separate front URL exists).
+            // e*thirteen wheelset URLs only list Rear wheel variants.
+            // Front wheels are sold on separate product pages — mapped below.
+            const FRONT_WHEEL_URL_MAP = {
+              'https://www.ethirteen.com/products/grappler-sidekick-flux-carbon-downhill-wheels': 'https://www.ethirteen.com/products/grappler-sidekick-flux-carbon-downhill-wheels-front',
+              'https://www.ethirteen.com/products/grappler-sidekick-flux-carbon-enduro-wheels': 'https://www.ethirteen.com/products/grappler-sidekick-flux-carbon-enduro-wheels-front',
+              'https://www.ethirteen.com/products/sylvan-sidekick-race-alloy-all-mountain-wheels': 'https://www.ethirteen.com/products/sylvan-sidekick-race-aluminum-all-mountain-wheels-front',
+              'https://www.ethirteen.com/products/sylvan-sidekick-race-carbon-all-mountain-wheels': 'https://www.ethirteen.com/products/sylvan-sidekick-race-carbon-all-mountain-wheels-front',
+            };
+
+            // Determine rear and front option values
             let rearSizeValue = null;
+            let frontWheelValue = null;
             for (const [optName, optValue] of Object.entries(parsedOptions)) {
-                if (optName.toLowerCase().includes('rear') && optValue) {
-                    rearSizeValue = optValue.toLowerCase().replace(/[\"']/g, '').trim();
-                    break;
-                }
+                if (!optValue) continue;
+                if (optName.toLowerCase().includes('rear')) rearSizeValue = optValue.toLowerCase().replace(/["']/g, '').trim();
+                if (optName.toLowerCase().includes('front')) frontWheelValue = optValue.toLowerCase().replace(/["']/g, '').trim();
             }
 
             if (rearSizeValue) {
-                // Extract wheel size: "27.5" or "29"
                 const sizeMatch = rearSizeValue.match(/(27\.5|29)/);
-                // Extract axle width: "148" or "157"
                 const axleMatch = rearSizeValue.match(/(148|157)/);
-                // Extract boost type: "superboost" or "boost"
                 const isSuperboost = rearSizeValue.includes('superboost') || rearSizeValue.includes('157');
 
                 const rearCandidates = vData.variants.filter(v => {
-                    const vt = normalize(v.public_title).replace(/[\"']/g, '');
+                    const vt = normalize(v.public_title).replace(/["']/g, '');
                     if (!vt.includes('rear')) return false;
                     if (sizeMatch && !vt.includes(sizeMatch[1])) return false;
                     if (axleMatch && !vt.includes(axleMatch[1])) return false;
-                    // Validate superboost/boost alignment
                     if (isSuperboost && !vt.includes('superboost') && !vt.includes('157')) return false;
                     if (!isSuperboost && (vt.includes('superboost') || vt.includes('157'))) return false;
                     return true;
                 });
 
                 if (rearCandidates.length > 0) {
-                    const best = rearCandidates.reduce((a, b) => (a.price > b.price ? a : b));
-                    winner = { price: best.price, available: best.available };
+                    const bestRear = rearCandidates.reduce((a, b) => (a.price > b.price ? a : b));
+                    let finalPrice = bestRear.price;
+                    let finalAvail = bestRear.available;
+
+                    // If front wheel is requested (and not "No Front Wheel"), add its price
+                    const hasFront = frontWheelValue && frontWheelValue !== 'no front wheel' && frontWheelValue !== 'none';
+                    if (hasFront) {
+                        const frontUrl = FRONT_WHEEL_URL_MAP[rule.vendor_url?.replace(/\/$/, '')];
+                        if (frontUrl) {
+                            try {
+                                const frontResp = await fetch(frontUrl + '.js');
+                                const frontData = await frontResp.json();
+                                if (frontData?.variants?.length > 0) {
+                                    // All front wheel options on these pages are single-variant; just take the first available one
+                                    const bestFront = frontData.variants.reduce((a, b) => (a.price > b.price ? a : b));
+                                    finalPrice += bestFront.price;
+                                    finalAvail = finalAvail && bestFront.available;
+                                }
+                            } catch (fe) {
+                                console.error(`Front wheel fetch failed for ${frontUrl}: ${fe.message}`);
+                            }
+                        }
+                    }
+
+                    winner = { price: finalPrice, available: finalAvail };
                 }
             }
 
