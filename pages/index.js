@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, Trash2, AlertCircle, Zap, ZapOff } from 'lucide-react';
+import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, Trash2, AlertCircle, Zap, ZapOff, DollarSign, Tag } from 'lucide-react';
 
 export default function OpsDashboard() {
   const [editingRule, setEditingRule] = useState(null);
@@ -116,6 +116,45 @@ export default function OpsDashboard() {
       setSelectedRules([]);
       fetchRules();
     } catch(e) { console.error(e); }
+    setLoading(false);
+  };
+
+  const bulkSetPriceAdjust = async () => {
+    const input = prompt(`Set Price Adjustment Factor for ${selectedRules.length} selected items.\n\nExamples: 0.95 = 5% discount, 0.99 = 1% discount, 1.0 = vendor MSRP\n\nEnter new factor:`);
+    if (!input) return;
+    const factor = parseFloat(input);
+    if (isNaN(factor) || factor <= 0 || factor > 2) { alert('Invalid factor. Must be between 0.01 and 2.0.'); return; }
+    if (!confirm(`Apply factor ${factor} to ${selectedRules.length} items?`)) return;
+    setLoading(true);
+    try {
+      await Promise.all(selectedRules.map(id => fetch('/api/update-rule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
+        body: JSON.stringify({ id, updates: { price_adjustment_factor: factor } })
+      })));
+      alert(`Price adjustment set to ${factor} for ${selectedRules.length} items.`);
+      fetchRules();
+    } catch(e) { console.error(e); alert('Error updating price adjustment.'); }
+    setLoading(false);
+  };
+
+  const bulkSetCompareAt = async () => {
+    if (!confirm(`Set Shopify Compare-At price to the Memory (Base) price for ${selectedRules.length} selected items?\n\nThis writes directly to your Shopify store.`)) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/bulk-compare-at', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
+        body: JSON.stringify({ ruleIds: selectedRules })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Done! ${data.updated} variants updated.${data.errors > 0 ? ` ${data.errors} errors.` : ''}`);
+        fetchRules();
+      } else {
+        alert('Failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch(e) { console.error(e); alert('Network error.'); }
     setLoading(false);
   };
 
@@ -347,6 +386,9 @@ export default function OpsDashboard() {
                 <div className="flex items-center gap-4 flex-wrap">
                   <button onClick={() => bulkSetAutoSync(true)} className="flex items-center gap-2 text-[10px] font-black uppercase text-green-400 hover:text-green-300 transition-colors bg-green-950/30 px-3 py-2 rounded-xl"><Zap size={14} /> Enable Auto-Sync</button>
                   <button onClick={() => bulkSetAutoSync(false)} className="flex items-center gap-2 text-[10px] font-black uppercase text-zinc-400 hover:text-white transition-colors bg-zinc-900 px-3 py-2 rounded-xl"><ZapOff size={14} /> Disable Auto-Sync</button>
+                  <div className="w-px h-6 bg-zinc-800 hidden sm:block"></div>
+                  <button onClick={bulkSetPriceAdjust} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors bg-blue-950/30 px-3 py-2 rounded-xl"><DollarSign size={14} /> Set Price Adjust</button>
+                  <button onClick={bulkSetCompareAt} className="flex items-center gap-2 text-[10px] font-black uppercase text-purple-400 hover:text-purple-300 transition-colors bg-purple-950/30 px-3 py-2 rounded-xl"><Tag size={14} /> Set Compare-At → Base</button>
                   <div className="w-px h-6 bg-zinc-800 hidden sm:block"></div>
                   <button onClick={bulkDelete} className="flex items-center gap-2 text-[10px] font-black uppercase text-red-500/60 hover:text-red-400 transition-colors px-3 py-2"><Trash2 size={14} /> Delete Selected</button>
                   <button onClick={bulkIgnore} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-red-400 transition-colors bg-red-600 px-3 py-2 rounded-xl animate-in zoom-in"><ShieldAlert size={14} /> Ignore & Purge Product(s)</button>
