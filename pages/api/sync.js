@@ -95,10 +95,12 @@ export default async function handler(req, res) {
             // Determine rear and front option values
             let rearSizeValue = null;
             let frontWheelValue = null;
+            let driverValue = null;
             for (const [optName, optValue] of Object.entries(parsedOptions)) {
                 if (!optValue) continue;
                 if (optName.toLowerCase().includes('rear')) rearSizeValue = optValue.toLowerCase().replace(/["']/g, '').trim();
                 if (optName.toLowerCase().includes('front')) frontWheelValue = optValue.toLowerCase().replace(/["']/g, '').trim();
+                if (optName.toLowerCase().includes('driver') || optName.toLowerCase().includes('axle')) driverValue = optValue.toLowerCase().replace(/["']/g, '').trim();
             }
 
             if (rearSizeValue) {
@@ -139,6 +141,18 @@ export default async function handler(req, res) {
                                 console.error(`Front wheel fetch failed for ${frontUrl}: ${fe.message}`);
                             }
                         }
+                    }
+
+                    
+                    // Add Driver & Axle Kit surcharge (from e*thirteen's APO option pricing)
+                    // DH wheels: 7spd cassette = $329.95, Mini HG = $179.95
+                    // AM/Enduro: XD/HG/Microspline(MS) = $179.95
+                    if (driverValue) {
+                        let driverSurcharge = 17995; // default: $179.95 for XD/HG/MS
+                        if (driverValue.includes('7p') || driverValue.includes('7sp') || driverValue.includes('cassette')) {
+                            driverSurcharge = 32995; // $329.95 for 7spd Integrated Cassette
+                        }
+                        finalPrice += driverSurcharge;
                     }
 
                     winner = { price: finalPrice, available: finalAvail };
