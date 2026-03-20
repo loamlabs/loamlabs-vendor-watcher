@@ -90,8 +90,11 @@ export default async function handler(req, res) {
             const spokeOptNames = Object.keys(mappedOptions).filter(k => k.toLowerCase().includes('spoke'));
             const spokeCountValue = spokeOptNames.length > 0 ? mappedOptions[spokeOptNames[0]] : 'Std';
 
-            let technicalKey = `${p.node.id}-${spokeCountValue}`;
-            let titleSuffix = `(${spokeCountValue})`;
+            let colorOptNames = Object.keys(mappedOptions).filter(k => k.toLowerCase().includes('color'));
+            let colorValue = colorOptNames.length > 0 ? mappedOptions[colorOptNames[0]] : '';
+
+            let technicalKey = `${p.node.id}-${spokeCountValue}-${colorValue}`;
+            let titleSuffix = colorValue && spokeCountValue !== 'Std' ? `(${spokeCountValue} / ${colorValue})` : colorValue ? `(${colorValue})` : `(${spokeCountValue})`;
 
             if (isRim) {
               const sizeOptNames = Object.keys(mappedOptions).filter(k => k.toLowerCase().includes('size'));
