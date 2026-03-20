@@ -434,7 +434,32 @@ export default function OpsDashboard() {
                         else setSelectedRules([]);
                       }} checked={selectedRules.length === paginatedRules.length && paginatedRules.length > 0} />
                     </th>
-                    <th className="p-6 italic tracking-tighter">Registry Item</th>
+                    <th className="p-6 italic tracking-tighter">
+                      <div className="flex items-center gap-2">
+                        Registry Item
+                        <div className="group/legend relative">
+                          <Info size={12} className="text-zinc-300 hover:text-zinc-600 transition-colors cursor-help" />
+                          <div className="absolute left-0 top-full mt-2 hidden group-hover/legend:block w-72 bg-black text-white text-[10px] p-4 rounded-xl z-50 shadow-2xl border border-zinc-700 leading-relaxed">
+                            <div className="text-zinc-400 mb-2 uppercase font-black tracking-widest">Row Color Legend</div>
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-red-500/30 border border-red-400"></div> Review Required — margin safety triggered</div>
+                              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-amber-200 border border-amber-400"></div> Drastic Sale — vendor price 10%+ below MSRP</div>
+                              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-blue-100 border border-blue-300"></div> BTI Linked — has a BTI part number</div>
+                              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-red-50 border border-red-200"></div> Missing URL — no vendor URL mapped</div>
+                              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-zinc-200 border border-zinc-300"></div> Selected — currently checked</div>
+                              <div className="border-t border-zinc-700 my-2"></div>
+                              <div className="text-zinc-400 mb-1 uppercase font-black tracking-widest">Status Pills</div>
+                              <div className="flex items-center gap-2"><span className="bg-green-100 text-green-700 text-[8px] px-2 py-0.5 rounded-full font-black">ACTIVE</span> Vendor shows in stock</div>
+                              <div className="flex items-center gap-2"><span className="bg-red-100 text-red-600 text-[8px] px-2 py-0.5 rounded-full font-black">OUT OF STOCK</span> Vendor shows unavailable</div>
+                              <div className="flex items-center gap-2"><span className="bg-red-600 text-white text-[8px] px-2 py-0.5 rounded-full font-black">REVIEW</span> Needs manual review</div>
+                              <div className="border-t border-zinc-700 my-2"></div>
+                              <div className="text-zinc-400 mb-1 uppercase font-black tracking-widest">Price Columns</div>
+                              <div>Current (Shopify) shows <span className="text-red-400">red</span> when it doesn't match the Adjusted Price</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </th>
                     <th className="p-6 text-center">Status</th>
                     <th className="p-6">Memory (Base)</th>
                     <th className="p-6">Adjusted Price</th>
@@ -467,7 +492,7 @@ export default function OpsDashboard() {
                           </div>
                         </td>
                         <td className="p-6 text-center">
-                          {rule.needs_review ? <span className="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-pulse uppercase tracking-tighter">Review Required</span> : rule.last_availability ? <span className="bg-green-100 text-green-700 text-[9px] font-black px-3 py-1 rounded-full uppercase italic font-black">Active</span> : <span className="bg-zinc-200 text-zinc-600 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter">Out of Stock</span>}
+                          {rule.needs_review ? <span className="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-pulse uppercase tracking-tighter">Review Required</span> : rule.last_availability ? <span className="bg-green-100 text-green-700 text-[9px] font-black px-3 py-1 rounded-full uppercase italic font-black">Active</span> : <span className="bg-red-100 text-red-600 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter">Out of Stock</span>}
                         </td>
                         <td className="p-6 font-mono font-bold text-lg text-zinc-700">
                           {rule.last_price ? `$${(rule.last_price / 100).toFixed(2)}` : '--'}
