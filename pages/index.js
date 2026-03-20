@@ -248,7 +248,8 @@ export default function OpsDashboard() {
     
     // Safety check for sync filter
     let syncMatch = true;
-    const isDeepSale = r.original_msrp && (r.original_msrp - (r.last_price / 100)) / r.original_msrp >= 0.10;
+    const filterMsrp = r.original_msrp || (r.current_compare_at_price ? r.current_compare_at_price / 100 : null);
+    const isDeepSale = filterMsrp && r.last_price && (filterMsrp - (r.last_price / 100)) / filterMsrp >= 0.10;
 
     if (syncFilter === 'on') syncMatch = r.auto_update === true;
     if (syncFilter === 'off') syncMatch = r.auto_update === false;
@@ -492,7 +493,7 @@ export default function OpsDashboard() {
                           </div>
                         </td>
                         <td className="p-6 text-center">
-                          {rule.needs_review ? <span className="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-pulse uppercase tracking-tighter">Review Required</span> : rule.last_availability ? <span className="bg-green-100 text-green-700 text-[9px] font-black px-3 py-1 rounded-full uppercase italic font-black">Active</span> : <span className="bg-red-100 text-red-600 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter">Out of Stock</span>}
+                          {rule.needs_review ? <span className="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-pulse uppercase tracking-tighter whitespace-nowrap">Review Required</span> : rule.last_availability ? <span className="bg-green-100 text-green-700 text-[9px] font-black px-3 py-1 rounded-full uppercase italic whitespace-nowrap">Active</span> : <span className="bg-red-100 text-red-600 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter whitespace-nowrap">Out of Stock</span>}
                         </td>
                         <td className="p-6 font-mono font-bold text-lg text-zinc-700">
                           {rule.last_price ? `$${(rule.last_price / 100).toFixed(2)}` : '--'}
