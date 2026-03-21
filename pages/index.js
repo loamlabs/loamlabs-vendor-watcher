@@ -254,16 +254,17 @@ export default function OpsDashboard() {
     const searchString = normalize(registrySearch);
     const searchMatch = !searchString || normalize(r.title).includes(searchString) || normalize(r.vendor_name).includes(searchString);
 
+    const vendorMatch = selectedVendors.length === 0 || 
+      selectedVendors.some(v => normalize(v) === normalize(r.vendor_name));
+
     if (activeTab === 'bti_sync') {
       let btiMatch = true;
       if (btiSyncFilter === 'has') btiMatch = !!r.bti_part_number;
       if (btiSyncFilter === 'none') btiMatch = !r.bti_part_number;
-      return searchMatch && btiMatch;
+      return searchMatch && btiMatch && vendorMatch;
     }
 
     // Default 'vendors' tab logic
-    const vendorMatch = selectedVendors.length === 0 || 
-      selectedVendors.some(v => normalize(v) === normalize(r.vendor_name));
     
     let syncMatch = true;
     if (syncFilter === 'on') syncMatch = r.auto_update === true;
