@@ -1,12 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
 
 const SHOPIFY_DOMAIN = `${process.env.SHOPIFY_SHOP_NAME}.myshopify.com`;
-const SHOPIFY_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN || process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
 
-async function shopifyQuery(query, variables = {}) {
+async function getShopifyToken() {
+  const response = await fetch(`https://${SHOPIFY_DOMAIN}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: process.env.SHOPIFY_CLIENT_ID,
+      client_secret: process.env.SHOPIFY_CLIENT_SECRET,
+      grant_type: 'client_credentials'
+    })
+  });
+  const data = await response.json();
+  return data.access_token;
+}
+
+async function shopifyQuery(query, variables = {}, token) {
   const res = await fetch(`https://${SHOPIFY_DOMAIN}/admin/api/2024-01/graphql.json`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_TOKEN },
+    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
     body: JSON.stringify({ query, variables })
   });
   return res.json();
@@ -24,6 +37,8 @@ export default async function handler(req, res) {
   const { newTitle, status, includeMedia } = options || {};
 
   try {
+    const SHOPIFY_TOKEN = await getShopifyToken();
+
     // 1. Duplicate the Product via Shopify GraphQL
     const duplicateMutation = `
       mutation productDuplicate($newTitle: String, $productId: ID!, $includeImages: Boolean, $newStatus: ProductStatus) {
@@ -39,7 +54,7 @@ export default async function handler(req, res) {
       newTitle: newTitle || undefined,
       includeImages: includeMedia ?? true,
       newStatus: status || 'ACTIVE'
-    });
+    }, SHOPIFY_TOKEN);
 
     console.log('[DUPLICATE_DEBUG] Shopify Raw Response:', JSON.stringify(dupRes, null, 2));
 
@@ -71,7 +86,7 @@ export default async function handler(req, res) {
       }
     `;
 
-    const sourceRes = await shopifyQuery(sourceDataQuery, { id: productId });
+    const sourceRes = await shopifyQuery(sourceDataQuery, { id: productId }, SHOPIFY_TOKEN);
     const sourceProduct = sourceRes.data?.product;
     if (!sourceProduct) return res.status(404).json({ error: 'Source product not found for metafield copy' });
 
@@ -124,7 +139,7 @@ export default async function handler(req, res) {
       // Chunking if too many
       const chunkSize = 25;
       for (let i = 0; i < metafieldsToSet.length; i += chunkSize) {
-        await shopifyQuery(setMetaMutation, { metafields: metafieldsToSet.slice(i, i + chunkSize) });
+        await shopifyQuery(setMetaMutation, { metafields: metafieldsToSet.slice(i, i + chunkSize) }, SHOPIFY_TOKEN);
       }
     }
 

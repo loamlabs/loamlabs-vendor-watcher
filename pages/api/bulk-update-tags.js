@@ -1,5 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const SHOPIFY_DOMAIN = `${process.env.SHOPIFY_SHOP_NAME}.myshopify.com`;
+
+async function getShopifyToken() {
+  const response = await fetch(`https://${SHOPIFY_DOMAIN}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: process.env.SHOPIFY_CLIENT_ID,
+      client_secret: process.env.SHOPIFY_CLIENT_SECRET,
+      grant_type: 'client_credentials'
+    })
+  });
+  const data = await response.json();
+  return data.access_token;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -11,6 +26,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    const SHOPIFY_TOKEN = await getShopifyToken();
+
     // 1. Fetch current tags for the first variant of each product to preserve them
     const { data: currentRules, error: fetchError } = await supabase
       .from('watcher_rules')
@@ -20,19 +37,32 @@ export default async function handler(req, res) {
     if (fetchError) throw fetchError;
 
     // 2. Perform updates product by product to ensure tag consistency
-    // (In our system, all variants of a product share the same tags from Shopify)
     const updatePromises = productIds.map(async (pid) => {
         const productRule = currentRules.find(r => r.shopify_product_id === pid);
         let tags = Array.isArray(productRule?.tags) ? [...productRule.tags] : [];
         
         if (!tags.includes(addTag)) {
             tags.push(addTag);
-            return supabase
+            
+            // A. Update Supabase
+            const { error: dbError } = await supabase
                 .from('watcher_rules')
                 .update({ tags })
                 .eq('shopify_product_id', pid);
+            
+            if (dbError) return { error: dbError };
+
+            // B. Sync to Shopify (Tags are at the PRODUCT level)
+            const query = `mutation tagsAdd($id: ID!, $tags: [String!]!) { tagsAdd(id: $id, tags: $tags) { userErrors { message } } }`;
+            const variables = { id: `gid://shopify/Product/${pid}`, tags: [addTag] };
+            
+            await fetch(`https://${SHOPIFY_DOMAIN}/admin/api/2024-01/graphql.json`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_TOKEN },
+              body: JSON.stringify({ query, variables })
+            });
         }
-        return Promise.resolve({ error: null });
+        return { error: null };
     });
 
     const results = await Promise.all(updatePromises);

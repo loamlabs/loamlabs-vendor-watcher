@@ -27,6 +27,18 @@ export default function OpsDashboard() {
   const [labCategory, setLabCategory] = useState('all');
   const [labSearch, setLabSearch] = useState('');
   const [selectedLabProducts, setSelectedLabProducts] = useState([]);
+  const [selectedLabVariants, setSelectedLabVariants] = useState([]);
+  const [expandedProducts, setExpandedProducts] = useState([]);
+  const [showMetaEditModal, setShowMetaEditModal] = useState(false);
+  const [metaEditFields, setMetaEditFields] = useState({});
+  const [metafieldRegistry, setMetafieldRegistry] = useState([
+    { id: 1, category: 'RIM', key: 'wheel_spec_rim_internal_width', label: 'Internal Width', active: true },
+    { id: 2, category: 'RIM', key: 'wheel_spec_rim_erd', label: 'ERD', active: true },
+    { id: 3, category: 'RIM', key: 'wheel_spec_rim_hole_count', label: 'Hole Count', active: true },
+    { id: 4, category: 'HUB', key: 'wheel_spec_hub_spacing', label: 'Hub Spatially', active: true },
+    { id: 5, category: 'HUB', key: 'wheel_spec_hub_drive_side', label: 'Drive Side', active: true },
+    { id: 6, category: 'HUB', key: 'wheel_spec_hub_brake_mount', label: 'Brake Mount', active: true }
+  ]);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [syncLogs, setSyncLogs] = useState([]);
   const lastCheckedIndex = useRef(null);
@@ -312,6 +324,43 @@ export default function OpsDashboard() {
     setLoading(false);
   };
 
+  const saveBulkMetafields = async () => {
+    const fieldsToSync = Object.entries(metaEditFields)
+      .filter(([_, val]) => val !== undefined && val !== '')
+      .map(([key, val]) => {
+         return { namespace: 'custom', key, value: val, type: 'single_line_text_field' };
+      });
+    
+    if (fieldsToSync.length === 0) return;
+    setLoading(true);
+    try {
+      const auth = localStorage.getItem('loam_ops_auth');
+      if (selectedLabProducts.length > 0) {
+        await fetch('/api/bulk-update-metafields', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': auth },
+          body: JSON.stringify({ ids: selectedLabProducts, metafields: fieldsToSync, targetType: 'Product' })
+        });
+      }
+      if (selectedLabVariants.length > 0) {
+        await fetch('/api/bulk-update-metafields', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': auth },
+          body: JSON.stringify({ ids: selectedLabVariants, metafields: fieldsToSync, targetType: 'ProductVariant' })
+        });
+      }
+      setShowMetaEditModal(false);
+      setMetaEditFields({});
+      setSelectedLabProducts([]);
+      setSelectedLabVariants([]);
+      alert("Mass Metafield Sync Complete.");
+    } catch (e) {
+      console.error(e);
+      alert("Error syncing metafields.");
+    }
+    setLoading(false);
+  };
+
   const bulkIgnoreLab = async () => {
     if (selectedLabProducts.length === 0) return;
     if (!confirm(`⚠️ Are you sure you want to hide ${selectedLabProducts.length} items from the Product Lab?`)) return;
@@ -424,6 +473,7 @@ export default function OpsDashboard() {
           <SidebarLink icon={<RefreshCcw size={18}/>} label="BTI Sync" active={activeTab === 'bti_sync'} onClick={() => setActiveTab('bti_sync')} />
           <SidebarLink icon={<Beaker size={18}/>} label="Product Lab" active={activeTab === 'product_lab'} onClick={() => setActiveTab('product_lab')} />
           <SidebarLink icon={<ShieldCheck size={18}/>} label="Shop Health" active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} />
+          <SidebarLink icon={<Zap size={18}/>} label="Settings" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} />
           <SidebarLink icon={<ImageIcon size={18}/>} label="Branding" active={false} onClick={() => window.location.href = '/logos'} />
         </nav>
         <div className="relative mt-auto border-t border-zinc-800 pt-6">
@@ -646,7 +696,15 @@ export default function OpsDashboard() {
                           {shopifyPriceText !== '--' ? (
                             <div className={priceMismatch ? "text-red-700 bg-red-50 inline-flex items-center gap-2 px-3 py-1 rounded-lg border border-red-200 shadow-sm" : "text-zinc-600 px-3 py-1"}>
                                ${shopifyPriceText}
-                               {priceMismatch && <AlertCircle size={14}/>}
+                               {priceMismatch && (
+                                 <div className="group/price relative inline-block ml-1">
+                                   <AlertCircle size={14} className="hover:text-red-900 transition-colors cursor-help" />
+                                   <div className="absolute right-0 bottom-full mb-2 hidden group-hover/price:block w-48 bg-black text-white text-[10px] p-2.5 rounded-xl z-50 shadow-2xl leading-relaxed font-sans font-normal border border-zinc-800">
+                                      <div className="text-zinc-400 mb-1 uppercase font-black tracking-widest">Price Mismatch</div>
+                                      The price in Shopify does not match the computed Adjusted Price (${expectedPriceText}).
+                                   </div>
+                                 </div>
+                               )}
                             </div>
                           ) : '--'}
                         </td>
@@ -884,25 +942,6 @@ export default function OpsDashboard() {
                </div>
              </div>
 
-             {selectedLabProducts.length > 0 && (
-                <div className="mb-6 animate-in slide-in-from-top-2 duration-300">
-                  <div className="bg-black text-white p-4 rounded-3xl flex items-center justify-between shadow-2xl border border-zinc-800">
-                    <div className="flex items-center gap-6 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center font-black text-xs">{selectedLabProducts.length}</div>
-                        <div className="text-[10px] font-black uppercase tracking-widest italic text-zinc-400">Products Selected</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 px-2">
-                      <button onClick={bulkIgnoreLab} className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 transition-all shadow-lg shadow-red-500/20">
-                        <Trash2 size={14} /> Ignore & Purge Product(s)
-                      </button>
-                      <button onClick={() => setSelectedLabProducts([])} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase transition-all">Cancel</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-             
              <div className="bg-white rounded-[2.5rem] border border-zinc-200 shadow-xl overflow-hidden mb-12">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-zinc-100 border-b text-[10px] uppercase font-black text-zinc-500 tracking-widest font-mono">
@@ -914,9 +953,13 @@ export default function OpsDashboard() {
                           checked={selectedLabProducts.length > 0} 
                           onChange={(e) => {
                             if (!e.target.checked) setSelectedLabProducts([]);
+                            else {
+                                // Select all currently filtered products
+                            }
                           }}
                         />
                       </th>
+                      <th className="w-4 p-0"></th>
                       <th className="p-6">Product Family (A-Z)</th>
                       <th className="p-6">Vendor</th>
                       <th className="p-6 text-center">Variants</th>
@@ -963,42 +1006,148 @@ export default function OpsDashboard() {
                         );
                       }
 
-                      return filtered.map(product => (
-                        <tr key={product.shopify_product_id} className="hover:bg-zinc-50 transition-colors">
-                          <td className="p-6">
-                            <input 
-                              type="checkbox" 
-                              className="w-5 h-5 rounded-lg border-2 border-zinc-200 text-black focus:ring-black"
-                              checked={selectedLabProducts.includes(product.shopify_product_id)}
-                              onChange={() => {
-                                setSelectedLabProducts(prev => 
-                                  prev.includes(product.shopify_product_id) 
-                                    ? prev.filter(id => id !== product.shopify_product_id) 
-                                    : [...prev, product.shopify_product_id]
-                                );
-                              }}
-                            />
-                          </td>
-                          <td className="p-6 font-black text-sm">{product.title.split('(')[0].trim()}</td>
-                          <td className="p-6 text-zinc-400 font-bold uppercase text-[10px] tracking-widest">{product.vendor_name}</td>
-                          <td className="p-6 text-center">
-                            <span className="bg-zinc-100 text-zinc-600 px-3 py-1 rounded-full font-black text-[10px]">{product.variantCount} SKUs</span>
-                          </td>
-                          <td className="p-6 text-right">
-                            <button 
-                              onClick={() => openDupModal(product)} 
-                              disabled={loading}
-                              className={`bg-zinc-100 border-2 border-transparent hover:border-black text-zinc-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex items-center gap-2 ml-auto ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                              <RefreshCcw size={12} className={loading ? 'animate-spin' : ''}/>
-                              {loading ? 'Processing...' : 'Configure Duplicate'}
-                            </button>
-                          </td>
-                        </tr>
-                      ));
+                      return filtered.map(product => {
+                        const isExpanded = expandedProducts.includes(product.shopify_product_id);
+                        const productVariants = rules.filter(r => r.shopify_product_id === product.shopify_product_id);
+
+                        return (
+                          <React.Fragment key={product.shopify_product_id}>
+                            <tr className={`hover:bg-zinc-50 transition-colors ${isExpanded ? 'bg-zinc-50/50' : ''}`}>
+                              <td className="p-6">
+                                <input 
+                                  type="checkbox" 
+                                  className="w-5 h-5 rounded-lg border-2 border-zinc-200 text-black focus:ring-black"
+                                  checked={selectedLabProducts.includes(product.shopify_product_id)}
+                                  onChange={() => {
+                                    setSelectedLabProducts(prev => 
+                                      prev.includes(product.shopify_product_id) 
+                                        ? prev.filter(id => id !== product.shopify_product_id) 
+                                        : [...prev, product.shopify_product_id]
+                                    );
+                                  }}
+                                />
+                              </td>
+                              <td className="p-0">
+                                <button 
+                                  onClick={() => setExpandedProducts(prev => isExpanded ? prev.filter(id => id !== product.shopify_product_id) : [...prev, product.shopify_product_id])}
+                                  className={`p-2 rounded-lg hover:bg-zinc-200 transition-all ${isExpanded ? 'rotate-90' : ''}`}
+                                >
+                                  <ChevronRight size={16} className="text-zinc-400" />
+                                </button>
+                              </td>
+                              <td className="p-6 font-black text-sm">{product.title.split('(')[0].trim()}</td>
+                              <td className="p-6 text-zinc-400 font-bold uppercase text-[10px] tracking-widest">{product.vendor_name}</td>
+                              <td className="p-6 text-center">
+                                <span className="bg-zinc-100 text-zinc-600 px-3 py-1 rounded-full font-black text-[10px]">{product.variantCount} SKUs</span>
+                              </td>
+                              <td className="p-6 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button onClick={() => alert("Multi-Variant Edit Mode coming next.")} className="bg-zinc-100 hover:bg-black hover:text-white text-zinc-600 p-2 rounded-lg transition-all border border-transparent">
+                                    <Edit3 size={14} />
+                                  </button>
+                                  <button 
+                                    onClick={() => openDupModal(product)} 
+                                    disabled={loading}
+                                    className={`bg-zinc-100 border-2 border-transparent hover:border-black text-zinc-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex items-center gap-2 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  >
+                                    <RefreshCcw size={12} className={loading ? 'animate-spin' : ''}/>
+                                    {loading ? 'Processing...' : 'Duplicate'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr>
+                                <td colSpan="6" className="p-0 bg-white shadow-inner">
+                                  <div className="divide-y divide-zinc-50 border-x border-zinc-100 mx-6 mb-6 rounded-2xl overflow-hidden border border-zinc-200 bg-zinc-50">
+                                    {productVariants.map(variant => (
+                                        <div key={variant.id} className="flex items-center justify-between p-4 hover:bg-zinc-100/50 transition-colors group">
+                                        <div className="flex items-center gap-4">
+                                          <input 
+                                            type="checkbox" 
+                                            className="w-4 h-4 rounded border-2 border-zinc-200 text-black focus:ring-black"
+                                            checked={selectedLabVariants.includes(variant.id)}
+                                            onChange={() => {
+                                              setSelectedLabVariants(prev => 
+                                                prev.includes(variant.id) 
+                                                  ? prev.filter(id => id !== variant.id) 
+                                                  : [...prev, variant.id]
+                                              );
+                                            }}
+                                          />
+                                          <div className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-[10px] text-zinc-400">SKU</div>
+                                          <div>
+                                             <div className="text-[10px] font-black uppercase text-zinc-400 tracking-widest leading-none mb-1">{variant.sku || 'No SKU'}</div>
+                                             <div className="text-xs font-bold text-zinc-700">{variant.title.includes(' - ') ? variant.title.split(' - ').slice(1).join(' - ') : variant.title}</div>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-12">
+                                           <div className="text-right">
+                                              <div className="text-[8px] font-black uppercase text-zinc-300 tracking-widest">Base Price</div>
+                                              <div className="text-xs font-mono font-bold">${(variant.last_price / 100).toFixed(2)}</div>
+                                           </div>
+                                           <button className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-zinc-400 hover:text-black">
+                                              <Edit size={14} />
+                                           </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      });
                     })()}
                   </tbody>
                 </table>
+             </div>
+          </div>
+        ) : activeTab === 'admin' ? (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <div className="flex items-center justify-between mb-8">
+               <div>
+                  <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Control Module</h1>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1 italic tracking-[0.2em]">Configuring Metafield Visibility & Component Schemas</p>
+               </div>
+             </div>
+
+             <div className="bg-white rounded-[2.5rem] border border-zinc-200 shadow-xl overflow-hidden p-12">
+                <div className="grid grid-cols-3 gap-12">
+                   {['RIM', 'HUB', 'SPOKE'].map(cat => (
+                     <div key={cat} className="space-y-6">
+                        <div className="flex items-center justify-between border-b-4 border-black pb-4">
+                           <h3 className="text-2xl font-black italic tracking-tighter">{cat} SPECS</h3>
+                           <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center"><Activity size={14}/></div>
+                        </div>
+                        <div className="space-y-2">
+                           {metafieldRegistry.filter(m => m.category === cat).map(m => (
+                             <label key={m.key} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl hover:bg-zinc-100 transition-all cursor-pointer group">
+                                <span className="text-xs font-bold uppercase tracking-tight text-zinc-600 group-hover:text-black">{m.label}</span>
+                                <input 
+                                  type="checkbox" 
+                                  className="w-5 h-5 rounded-lg border-2 border-zinc-200 text-black focus:ring-black"
+                                  checked={m.active}
+                                  onChange={() => {
+                                    setMetafieldRegistry(prev => prev.map(field => field.key === m.key ? {...field, active: !field.active} : field));
+                                  }}
+                                />
+                             </label>
+                           ))}
+                        </div>
+                        <button className="w-full py-4 border-2 border-dashed border-zinc-200 rounded-2xl text-[10px] font-black uppercase text-zinc-400 hover:border-black hover:text-black transition-all flex items-center justify-center gap-2">
+                           <Plus size={14}/> Add New {cat} Metafield
+                        </button>
+                     </div>
+                   ))}
+                </div>
+                <div className="mt-12 pt-12 border-t border-zinc-100 bg-zinc-50 -mx-12 -mb-12 p-12">
+                   <div className="flex items-center gap-4 text-zinc-400">
+                      <ShieldCheck size={20}/>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em]">Settings are currently session-scoped. Multi-user persistence coming in update 4.12.</p>
+                   </div>
+                </div>
              </div>
           </div>
         ) : (
@@ -1014,6 +1163,63 @@ export default function OpsDashboard() {
                 <ShieldCheck size={60} className="mx-auto text-zinc-200 mb-6"/>
                 <h3 className="text-xl font-black uppercase italic">Data Audit in Progress</h3>
                 <p className="text-zinc-400 text-sm max-w-xs mx-auto mt-2">Integrating Section 4.11 from Master Notes. Reporting on Negative Inventory coming next.</p>
+             </div>
+          </div>
+        )}
+
+        {/* --- FLOATING LAB BAR --- */}
+        {activeTab === 'product_lab' && (selectedLabProducts.length > 0 || selectedLabVariants.length > 0) && (
+           <div className="fixed bottom-6 left-[calc(16rem+1.5rem)] right-6 z-50 bg-black text-white p-4 rounded-[1.5rem] flex items-center justify-between shadow-2xl border border-zinc-800 animate-in slide-in-from-bottom-4 duration-300">
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <button onClick={() => { setSelectedLabProducts([]); setSelectedLabVariants([]); }} className="text-zinc-500 hover:text-white transition-colors"><X size={16} /></button>
+                <div className="font-bold text-sm tracking-widest uppercase italic border-r border-zinc-800 pr-6 mr-1">
+                  {selectedLabProducts.length + selectedLabVariants.length} Selected
+                </div>
+              </div>
+              <div className="flex items-center gap-4 flex-wrap">
+                <button onClick={() => setShowMetaEditModal(true)} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors bg-blue-950/30 px-4 py-2.5 rounded-xl"><Edit size={14} /> Edit Metafields</button>
+                <div className="w-px h-6 bg-zinc-800"></div>
+                <button onClick={bulkIgnoreLab} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-red-400 transition-colors bg-red-600 px-5 py-2.5 rounded-xl shadow-lg shadow-red-500/20"><ShieldAlert size={14} /> Ignore & Purge Product(s)</button>
+              </div>
+           </div>
+        )}
+
+        {showMetaEditModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[60]">
+             <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden text-sm border border-zinc-200 animate-in zoom-in-95 font-sans">
+                <div className="p-8 border-b flex justify-between items-center bg-zinc-50">
+                   <div>
+                      <h3 className="text-2xl font-black uppercase italic tracking-tighter">Metafield Mass-Editor</h3>
+                      <p className="text-[10px] font-black uppercase text-zinc-400 mt-1 italic tracking-widest font-sans">Updating {selectedLabProducts.length} Families & {selectedLabVariants.length} Variants</p>
+                   </div>
+                   <button onClick={() => setShowMetaEditModal(false)} className="p-2 hover:bg-zinc-200 rounded-full transition-all"><X size={24}/></button>
+                </div>
+                <div className="p-8 max-h-[60vh] overflow-y-auto bg-white grid grid-cols-2 gap-8">
+                   {['RIM', 'HUB', 'SPOKE'].map(cat => (
+                     <div key={cat} className="space-y-4">
+                        <div className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] border-b border-zinc-100 pb-2 italic">{cat} SPECIFICATIONS</div>
+                        {metafieldRegistry.filter(m => m.category === cat && m.active).map(m => (
+                          <div key={m.key}>
+                             <label className="text-[11px] font-black uppercase text-zinc-500 mb-1.5 block tracking-widest">{m.label}</label>
+                             <input 
+                               type="text" 
+                               placeholder="Set Value..."
+                               className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-xl px-4 py-3 outline-none focus:border-black transition-all font-bold text-sm placeholder:text-zinc-300 placeholder:italic"
+                               value={metaEditFields[m.key] || ''}
+                               onChange={(e) => setMetaEditFields({...metaEditFields, [m.key]: e.target.value})}
+                             />
+                          </div>
+                        ))}
+                     </div>
+                   ))}
+                </div>
+                <div className="p-8 bg-zinc-50 border-t flex justify-end gap-3">
+                   <button onClick={() => setShowMetaEditModal(false)} className="px-6 py-3 rounded-xl font-black uppercase text-[10px] text-zinc-400 hover:text-black transition-all tracking-widest italic">Cancel</button>
+                   <button onClick={saveBulkMetafields} className="bg-black text-white px-10 py-3 rounded-xl font-black uppercase text-[10px] shadow-xl hover:bg-zinc-800 transition-all flex items-center gap-2 tracking-widest italic">
+                     {loading ? <RefreshCcw className="animate-spin" size={14}/> : <ShieldCheck size={14}/>}
+                     {loading ? 'Syncing...' : 'Commit Batch Updates'}
+                   </button>
+                </div>
              </div>
           </div>
         )}
