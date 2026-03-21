@@ -13,12 +13,20 @@ export default async function handler(req, res) {
   let rangeStart = 0;
   let rangeEnd = 999;
 
+  const SAFE_COLS = 'id, shopify_product_id, shopify_variant_id, title, vendor_name, vendor_url, auto_update, last_price, last_availability, last_run_at, original_msrp, current_shopify_price, current_compare_at_price, needs_review, price_last_changed_at, out_of_stock_since, oos_reminder_enabled, oos_reminder_days, bti_part_number, bti_oos_action, bti_monitoring_enabled, price_adjustment_factor, price_drop_threshold';
+  const ADVANCED_COLS = `${SAFE_COLS}, tags`;
+
   while (hasMore) {
-    const { data, error } = await supabase
-      .from('watcher_rules')
-      .select('id, shopify_product_id, shopify_variant_id, title, vendor_name, vendor_url, auto_update, last_price, last_availability, last_run_at, original_msrp, current_shopify_price, current_compare_at_price, needs_review, price_last_changed_at, out_of_stock_since, oos_reminder_enabled, oos_reminder_days, bti_part_number, bti_oos_action, bti_monitoring_enabled, price_adjustment_factor, price_drop_threshold')
-      .order('created_at', { ascending: false })
-      .range(rangeStart, rangeEnd);
+    let query = supabase.from('watcher_rules').select(ADVANCED_COLS);
+    let { data, error } = await query.order('created_at', { ascending: false }).range(rangeStart, rangeEnd);
+
+    // Fallback if tags column doesn't exist
+    if (error && error.message.includes('column "tags" does not exist')) {
+      console.log("Migration pending: tags column missing. Falling back to safe query.");
+      const retry = await supabase.from('watcher_rules').select(SAFE_COLS).order('created_at', { ascending: false }).range(rangeStart, rangeEnd);
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) return res.status(500).json({ error: error.message });
 
