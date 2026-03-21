@@ -115,6 +115,28 @@ export default function OpsDashboard() {
     fetchRules();
   };
 
+  const syncTags = async () => {
+    setLoading(true);
+    try {
+      const auth = localStorage.getItem('loam_ops_auth');
+      const res = await fetch('/api/import-catalog', { 
+        method: 'POST',
+        headers: { 
+          'x-dashboard-auth': auth,
+          'Content-Type': 'application/json'
+        } 
+      });
+      if (res.ok) {
+        alert("✅ Catalog Tags Synced Successfully!");
+        fetchRules();
+      } else {
+        const err = await res.json();
+        alert("❌ Sync Failed: " + (err.error || "Unknown Error"));
+      }
+    } catch (e) { alert("❌ Sync Failed: " + e.message); }
+    setLoading(false);
+  };
+
   const openDupModal = (product) => {
     setDupSourceProduct(product);
     setDupOptions({
@@ -745,9 +767,17 @@ export default function OpsDashboard() {
                   <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Product Lab</h1>
                   <p className="text-zinc-400 text-[10px] font-black uppercase tracking-widest mt-1">Catalog Architect & Batch Metafield Editor</p>
                </div>
-               <button className="bg-black text-white p-4 px-8 rounded-2xl font-black uppercase italic text-xs hover:bg-zinc-800 transition-all shadow-xl flex items-center gap-3">
-                 <Plus size={16} /> Create New Product
-               </button>
+               <div className="flex items-center gap-3">
+                 <button onClick={() => fetchRules()} className={`bg-blue-50 text-blue-700 p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 border border-blue-100 shadow-sm hover:bg-blue-100 transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
+                   <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> Distributor Feed Active
+                 </button>
+                 <button onClick={syncTags} className={`bg-amber-50 text-amber-700 p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 border border-amber-100 shadow-sm hover:bg-amber-100 transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
+                   <Zap size={14} /> Sync Catalog Tags
+                 </button>
+                 <button className="bg-black text-white p-3 px-6 rounded-xl font-black uppercase italic text-[10px] hover:bg-zinc-800 transition-all shadow-xl flex items-center gap-2 ml-2">
+                   <Plus size={14} /> Create New Product
+                 </button>
+               </div>
              </div>
              
              {/* --- VENDOR FILTER BAR --- */}
@@ -821,42 +851,57 @@ export default function OpsDashboard() {
                   </thead>
                   <tbody className="divide-y divide-zinc-50">
                     {/* Grouping variants into Product rows (Respecting Vendor Filter + Tag Filter + Sorting) */}
-                    {Object.values(rules.filter(r => {
-                      // 1. Vendor Filter
-                      const matchesVendor = selectedVendors.length === 0 || selectedVendors.includes(r.vendor_name);
-                      // 2. Base Inclusion Tags
-                      const labTags = ['component:hub','component:rim','component:spoke','component:nipple','component:valvestem','component:freehub','addon','accessory'];
-                      const itemTags = Array.isArray(r.tags) ? r.tags : [];
-                      const isLabItem = itemTags.some(t => labTags.includes(t.toLowerCase()));
-                      // 3. Category Filter
-                      const matchesCategory = labCategory === 'all' || itemTags.some(t => t.toLowerCase() === labCategory);
+                    {(() => {
+                      const filtered = Object.values(rules.filter(r => {
+                        const matchesVendor = selectedVendors.length === 0 || selectedVendors.includes(r.vendor_name);
+                        const labTags = ['component:hub','component:rim','component:spoke','component:nipple','component:valvestem','component:freehub','addon','accessory'];
+                        const itemTags = Array.isArray(r.tags) ? r.tags : [];
+                        const isLabItem = itemTags.some(t => labTags.includes(t.toLowerCase()));
+                        const matchesCategory = labCategory === 'all' || itemTags.some(t => t.toLowerCase() === labCategory);
+                        return matchesVendor && isLabItem && matchesCategory;
+                      }).reduce((acc, r) => {
+                        if (!acc[r.shopify_product_id]) acc[r.shopify_product_id] = { ...r, variantCount: 0 };
+                        acc[r.shopify_product_id].variantCount++;
+                        return acc;
+                      }, {}))
+                      .sort((a,b) => a.title.localeCompare(b.title));
 
-                      return matchesVendor && isLabItem && matchesCategory;
-                    }).reduce((acc, r) => {
-                      if (!acc[r.shopify_product_id]) acc[r.shopify_product_id] = { ...r, variantCount: 0 };
-                      acc[r.shopify_product_id].variantCount++;
-                      return acc;
-                    }, {}))
-                    .sort((a,b) => a.title.localeCompare(b.title))
-                    .map(product => (
-                      <tr key={product.shopify_product_id} className="hover:bg-zinc-50 transition-colors">
-                        <td className="p-6 font-black text-sm">{product.title.split('(')[0].trim()}</td>
-                        <td className="p-6 text-zinc-400 font-bold uppercase text-[10px] tracking-widest">{product.vendor_name}</td>
-                        <td className="p-6 text-center">
-                          <span className="bg-zinc-100 text-zinc-600 px-3 py-1 rounded-full font-black text-[10px]">{product.variantCount} SKUs</span>
-                        </td>
-                        <td className="p-6 text-right">
-                          <button 
-                            onClick={() => openDupModal(product)} 
-                            disabled={loading}
-                            className={`bg-zinc-100 border-2 border-transparent hover:border-black text-zinc-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex items-center gap-2 ml-auto ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          >
-                            <RefreshCcw size={12} className={loading ? 'animate-spin' : ''}/>
-                            {loading ? 'Processing...' : 'Configure Duplicate'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                      if (filtered.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan="4" className="p-20 text-center">
+                              <div className="flex flex-col items-center gap-4">
+                                <div className="p-6 bg-zinc-50 rounded-full text-zinc-300">
+                                  <Search size={40} />
+                                </div>
+                                <div className="font-black uppercase italic text-zinc-400">No matching products found</div>
+                                <p className="text-xs text-zinc-400 font-bold max-w-xs mx-auto">Click "Sync Catalog Tags" above to populate component categories for the first time.</p>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return filtered.map(product => (
+                        <tr key={product.shopify_product_id} className="hover:bg-zinc-50 transition-colors">
+                          <td className="p-6 font-black text-sm">{product.title.split('(')[0].trim()}</td>
+                          <td className="p-6 text-zinc-400 font-bold uppercase text-[10px] tracking-widest">{product.vendor_name}</td>
+                          <td className="p-6 text-center">
+                            <span className="bg-zinc-100 text-zinc-600 px-3 py-1 rounded-full font-black text-[10px]">{product.variantCount} SKUs</span>
+                          </td>
+                          <td className="p-6 text-right">
+                            <button 
+                              onClick={() => openDupModal(product)} 
+                              disabled={loading}
+                              className={`bg-zinc-100 border-2 border-transparent hover:border-black text-zinc-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex items-center gap-2 ml-auto ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              <RefreshCcw size={12} className={loading ? 'animate-spin' : ''}/>
+                              {loading ? 'Processing...' : 'Configure Duplicate'}
+                            </button>
+                          </td>
+                        </tr>
+                      ));
+                    })()}
                   </tbody>
                 </table>
              </div>
