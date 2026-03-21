@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, Trash2, AlertCircle, Zap, ZapOff, DollarSign, Tag, History, Activity } from 'lucide-react';
+import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, Trash2, AlertCircle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker } from 'lucide-react';
 
 export default function OpsDashboard() {
   const [editingRule, setEditingRule] = useState(null);
@@ -311,6 +311,7 @@ export default function OpsDashboard() {
         <nav className="space-y-1 flex-grow">
           <SidebarLink icon={<Package size={18}/>} label="Vendor Watcher" active={activeTab === 'vendors'} onClick={() => setActiveTab('vendors')} />
           <SidebarLink icon={<RefreshCcw size={18}/>} label="BTI Sync" active={activeTab === 'bti_sync'} onClick={() => setActiveTab('bti_sync')} />
+          <SidebarLink icon={<Beaker size={18}/>} label="Product Lab" active={activeTab === 'product_lab'} onClick={() => setActiveTab('product_lab')} />
           <SidebarLink icon={<ShieldCheck size={18}/>} label="Shop Health" active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} />
           <SidebarLink icon={<ImageIcon size={18}/>} label="Branding" active={false} onClick={() => window.location.href = '/logos'} />
         </nav>
@@ -687,6 +688,49 @@ export default function OpsDashboard() {
               )}
             </div>
           </>
+        ) : activeTab === 'product_lab' ? (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <div className="flex items-center justify-between mb-8">
+               <div>
+                  <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Product Lab</h1>
+                  <p className="text-zinc-400 text-[10px] font-black uppercase tracking-widest mt-1">Catalog Architect & Batch Metafield Editor</p>
+               </div>
+               <button className="bg-black text-white p-4 px-8 rounded-2xl font-black uppercase italic text-xs hover:bg-zinc-800 transition-all shadow-xl flex items-center gap-3">
+                 <Plus size={16} /> Create New Product
+               </button>
+             </div>
+             
+             <div className="bg-white rounded-[2.5rem] border border-zinc-200 shadow-xl overflow-hidden mb-12">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-zinc-100 border-b text-[10px] uppercase font-black text-zinc-500 tracking-widest font-mono">
+                    <tr>
+                      <th className="p-6">Product Family</th>
+                      <th className="p-6">Vendor</th>
+                      <th className="p-6 text-center">Variants</th>
+                      <th className="p-6 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-50">
+                    {Object.values(rules.reduce((acc, r) => {
+                      if (!acc[r.shopify_product_id]) acc[r.shopify_product_id] = { ...r, variantCount: 0 };
+                      acc[r.shopify_product_id].variantCount++;
+                      return acc;
+                    }, {})).map(product => (
+                      <tr key={product.shopify_product_id} className="hover:bg-zinc-50 transition-colors">
+                        <td className="p-6 font-black text-sm">{product.title.split('(')[0].trim()}</td>
+                        <td className="p-6 text-zinc-400 font-bold uppercase text-[10px] tracking-widest">{product.vendor_name}</td>
+                        <td className="p-6 text-center">
+                          <span className="bg-zinc-100 text-zinc-600 px-3 py-1 rounded-full font-black text-[10px]">{product.variantCount} SKUs</span>
+                        </td>
+                        <td className="p-6 text-right">
+                          <button onClick={() => { /* TODO: Select for Lab */ }} className="bg-zinc-100 hover:bg-black hover:text-white text-zinc-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all">Select for Lab</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+             </div>
+          </div>
         ) : (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
              <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic mb-2">Shop Health</h1>
