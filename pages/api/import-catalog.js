@@ -138,7 +138,7 @@ export default async function handler(req, res) {
         }
         
         if (variantBatch.length > 0) {
-          const { error: upsertError } = await supabase.from('watcher_rules').upsert(variantBatch, { onConflict: 'shopify_variant_id', ignoreDuplicates: true });
+          const { error: upsertError } = await supabase.from('watcher_rules').upsert(variantBatch, { onConflict: 'shopify_variant_id', ignoreDuplicates: false });
           if (upsertError) throw upsertError;
           importedTotal += variantBatch.length;
         }
