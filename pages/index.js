@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, Trash2, AlertCircle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker } from 'lucide-react';
+import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, ChevronDown, ChevronRight, Trash2, AlertCircle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker, Edit3, Edit, Settings } from 'lucide-react';
 
 export default function OpsDashboard() {
   const [editingRule, setEditingRule] = useState(null);
@@ -32,12 +31,14 @@ export default function OpsDashboard() {
   const [showMetaEditModal, setShowMetaEditModal] = useState(false);
   const [metaEditFields, setMetaEditFields] = useState({});
   const [metafieldRegistry, setMetafieldRegistry] = useState([
-    { id: 1, category: 'RIM', key: 'wheel_spec_rim_internal_width', label: 'Internal Width', active: true },
-    { id: 2, category: 'RIM', key: 'wheel_spec_rim_erd', label: 'ERD', active: true },
-    { id: 3, category: 'RIM', key: 'wheel_spec_rim_hole_count', label: 'Hole Count', active: true },
-    { id: 4, category: 'HUB', key: 'wheel_spec_hub_spacing', label: 'Hub Spatially', active: true },
-    { id: 5, category: 'HUB', key: 'wheel_spec_hub_drive_side', label: 'Drive Side', active: true },
-    { id: 6, category: 'HUB', key: 'wheel_spec_hub_brake_mount', label: 'Brake Mount', active: true }
+    { key: 'wheel_spec_rim_internal_width', label: 'Internal Width', categories: ['RIM'], active: true },
+    { key: 'wheel_spec_rim_erd', label: 'ERD', categories: ['RIM'], active: true },
+    { key: 'wheel_spec_rim_hole_count', label: 'Hole Count', categories: ['RIM', 'HUB'], active: true },
+    { key: 'wheel_spec_hub_spacing', label: 'Hub Spatially', categories: ['HUB'], active: true },
+    { key: 'wheel_spec_hub_drive_side', label: 'Drive Side', categories: ['HUB'], active: true },
+    { key: 'wheel_spec_hub_brake_mount', label: 'Brake Mount', categories: ['HUB'], active: true },
+    { key: 'wheel_spec_nipple_length', label: 'Nipple Length', categories: ['NIPPLE'], active: true },
+    { key: 'wheel_spec_valvestem_length', label: 'Stem Length', categories: ['VALVESTEM'], active: true }
   ]);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [syncLogs, setSyncLogs] = useState([]);
@@ -473,13 +474,13 @@ export default function OpsDashboard() {
           <SidebarLink icon={<RefreshCcw size={18}/>} label="BTI Sync" active={activeTab === 'bti_sync'} onClick={() => setActiveTab('bti_sync')} />
           <SidebarLink icon={<Beaker size={18}/>} label="Product Lab" active={activeTab === 'product_lab'} onClick={() => setActiveTab('product_lab')} />
           <SidebarLink icon={<ShieldCheck size={18}/>} label="Shop Health" active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} />
-          <SidebarLink icon={<Zap size={18}/>} label="Settings" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} />
           <SidebarLink icon={<ImageIcon size={18}/>} label="Branding" active={false} onClick={() => window.location.href = '/logos'} />
         </nav>
         <div className="relative mt-auto border-t border-zinc-800 pt-6">
            {showUserMenu && (
              <div className="absolute bottom-full left-0 w-full mb-2 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden">
                 <button onClick={() => { fetchLogs(); setShowLogsModal(true); setShowUserMenu(false); }} className="w-full p-4 flex items-center gap-3 text-zinc-400 hover:bg-zinc-800 hover:text-white font-bold text-xs uppercase transition-all border-b border-zinc-800"><History size={16}/> View Sync Logs</button>
+                <button onClick={() => { setActiveTab('admin'); setShowUserMenu(false); }} className="w-full p-4 flex items-center gap-3 text-zinc-400 hover:bg-zinc-800 hover:text-white font-bold text-xs uppercase transition-all border-b border-zinc-800"><Settings size={16}/> Settings</button>
                 <button onClick={() => { localStorage.removeItem('loam_ops_auth'); window.location.reload(); }} className="w-full p-4 flex items-center gap-3 text-red-500 hover:bg-red-500/10 font-bold text-xs uppercase transition-all"><LogOut size={16}/> End Session</button>
              </div>
            )}
@@ -1115,22 +1116,28 @@ export default function OpsDashboard() {
 
              <div className="bg-white rounded-[2.5rem] border border-zinc-200 shadow-xl overflow-hidden p-12">
                 <div className="grid grid-cols-3 gap-12">
-                   {['RIM', 'HUB', 'SPOKE'].map(cat => (
+                   {['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'].map(cat => (
                      <div key={cat} className="space-y-6">
                         <div className="flex items-center justify-between border-b-4 border-black pb-4">
-                           <h3 className="text-2xl font-black italic tracking-tighter">{cat} SPECS</h3>
-                           <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center"><Activity size={14}/></div>
+                           <h3 className="text-xl font-black italic tracking-tighter truncate pr-2">{cat.replace('VALVESTEM','VALVE STEM')}</h3>
+                           <div className="w-8 h-8 rounded-full bg-zinc-100 flex-shrink-0 flex items-center justify-center"><Activity size={14}/></div>
                         </div>
                         <div className="space-y-2">
-                           {metafieldRegistry.filter(m => m.category === cat).map(m => (
+                           {metafieldRegistry.map(m => (
                              <label key={m.key} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl hover:bg-zinc-100 transition-all cursor-pointer group">
-                                <span className="text-xs font-bold uppercase tracking-tight text-zinc-600 group-hover:text-black">{m.label}</span>
+                                <span className={m.categories.includes(cat) ? "text-xs font-black uppercase tracking-tight text-black" : "text-xs font-bold uppercase tracking-tight text-zinc-300 group-hover:text-zinc-400"}>{m.label}</span>
                                 <input 
                                   type="checkbox" 
                                   className="w-5 h-5 rounded-lg border-2 border-zinc-200 text-black focus:ring-black"
-                                  checked={m.active}
+                                  checked={m.categories.includes(cat)}
                                   onChange={() => {
-                                    setMetafieldRegistry(prev => prev.map(field => field.key === m.key ? {...field, active: !field.active} : field));
+                                    setMetafieldRegistry(prev => prev.map(field => {
+                                        if (field.key !== m.key) return field;
+                                        const newCats = field.categories.includes(cat) 
+                                            ? field.categories.filter(c => c !== cat) 
+                                            : [...field.categories, cat];
+                                        return { ...field, categories: newCats };
+                                    }));
                                   }}
                                 />
                              </label>
@@ -1195,23 +1202,46 @@ export default function OpsDashboard() {
                    <button onClick={() => setShowMetaEditModal(false)} className="p-2 hover:bg-zinc-200 rounded-full transition-all"><X size={24}/></button>
                 </div>
                 <div className="p-8 max-h-[60vh] overflow-y-auto bg-white grid grid-cols-2 gap-8">
-                   {['RIM', 'HUB', 'SPOKE'].map(cat => (
-                     <div key={cat} className="space-y-4">
-                        <div className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] border-b border-zinc-100 pb-2 italic">{cat} SPECIFICATIONS</div>
-                        {metafieldRegistry.filter(m => m.category === cat && m.active).map(m => (
-                          <div key={m.key}>
-                             <label className="text-[11px] font-black uppercase text-zinc-500 mb-1.5 block tracking-widest">{m.label}</label>
-                             <input 
-                               type="text" 
-                               placeholder="Set Value..."
-                               className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-xl px-4 py-3 outline-none focus:border-black transition-all font-bold text-sm placeholder:text-zinc-300 placeholder:italic"
-                               value={metaEditFields[m.key] || ''}
-                               onChange={(e) => setMetaEditFields({...metaEditFields, [m.key]: e.target.value})}
-                             />
-                          </div>
-                        ))}
-                     </div>
-                   ))}
+                   {(() => {
+                      const selectedItems = [
+                         ...rules.filter(r => selectedLabProducts.includes(r.shopify_product_id)),
+                         ...rules.filter(r => selectedLabVariants.includes(r.id))
+                      ];
+                      const activeCategories = Array.from(new Set(selectedItems.flatMap(r => {
+                         const tags = Array.isArray(r.tags) ? r.tags.map(t => t.toLowerCase()) : [];
+                         if (tags.includes('component:hub') || tags.includes('hub')) return 'HUB';
+                         if (tags.includes('component:rim') || tags.includes('rim')) return 'RIM';
+                         if (tags.includes('component:spoke') || tags.includes('spoke')) return 'SPOKE';
+                         if (tags.includes('component:nipple') || tags.includes('nipple')) return 'NIPPLE';
+                         if (tags.includes('component:valvestem') || tags.includes('valvestem')) return 'VALVESTEM';
+                         if (tags.includes('accessory')) return 'ACCESSORY';
+                         return [];
+                      })));
+
+                      return ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY']
+                        .filter(cat => activeCategories.length === 0 || activeCategories.includes(cat))
+                        .map(cat => {
+                           const fields = metafieldRegistry.filter(m => m.categories.includes(cat));
+                           if (fields.length === 0) return null;
+                           return (
+                             <div key={cat} className="space-y-4">
+                                <div className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] border-b border-zinc-100 pb-2 italic">{cat.replace('VALVESTEM','VALVE STEM')} SPECS</div>
+                                {fields.map(m => (
+                                  <div key={m.key}>
+                                     <label className="text-[11px] font-black uppercase text-zinc-500 mb-1.5 block tracking-widest">{m.label}</label>
+                                     <input 
+                                       type="text" 
+                                       placeholder="Set Value..."
+                                       className="w-full bg-zinc-50 border-2 border-zinc-100 rounded-xl px-4 py-3 outline-none focus:border-black transition-all font-bold text-sm placeholder:text-zinc-300 placeholder:italic"
+                                       value={metaEditFields[m.key] || ''}
+                                       onChange={(e) => setMetaEditFields({...metaEditFields, [m.key]: e.target.value})}
+                                     />
+                                  </div>
+                                ))}
+                             </div>
+                           );
+                        });
+                   })()}
                 </div>
                 <div className="p-8 bg-zinc-50 border-t flex justify-end gap-3">
                    <button onClick={() => setShowMetaEditModal(false)} className="px-6 py-3 rounded-xl font-black uppercase text-[10px] text-zinc-400 hover:text-black transition-all tracking-widest italic">Cancel</button>
