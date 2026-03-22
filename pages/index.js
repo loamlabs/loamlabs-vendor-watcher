@@ -35,12 +35,13 @@ export default function OpsDashboard() {
     { key: 'wheel_spec_rim_internal_width', label: 'Internal Width', categories: ['RIM'], active: true },
     { key: 'wheel_spec_rim_erd', label: 'ERD', categories: ['RIM'], active: true },
     { key: 'wheel_spec_rim_hole_count', label: 'Hole Count', categories: ['RIM', 'HUB'], active: true },
-    { key: 'wheel_spec_hub_spacing', label: 'Hub Spatially', categories: ['HUB'], active: true },
+    { key: 'wheel_spec_hub_spacing', label: 'Hub Spacing', categories: ['HUB'], active: true },
     { key: 'wheel_spec_hub_drive_side', label: 'Drive Side', categories: ['HUB'], active: true },
-    { key: 'wheel_spec_hub_brake_mount', label: 'Brake Mount', categories: ['HUB'], active: true },
+    { key: 'wheel_spec_hub_brake_mount', label: 'Brake Interface', categories: ['HUB'], active: true },
     { key: 'wheel_spec_nipple_length', label: 'Nipple Length', categories: ['NIPPLE'], active: true },
     { key: 'wheel_spec_valvestem_length', label: 'Stem Length', categories: ['VALVESTEM'], active: true }
   ]);
+  const [expandedGroups, setExpandedGroups] = useState([]);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [syncLogs, setSyncLogs] = useState([]);
   const lastCheckedIndex = useRef(null);
@@ -1062,45 +1063,78 @@ export default function OpsDashboard() {
                               </td>
                             </tr>
                             {isExpanded && (
-                              <tr>
-                                <td colSpan="6" className="p-0 bg-white shadow-inner">
-                                  <div className="divide-y divide-zinc-50 border-x border-zinc-100 mx-6 mb-6 rounded-2xl overflow-hidden border border-zinc-200 bg-zinc-50">
-                                    {productVariants.map(variant => (
-                                        <div key={variant.id} className="flex items-center justify-between p-4 hover:bg-zinc-100/50 transition-colors group">
-                                        <div className="flex items-center gap-4">
-                                          <input 
-                                            type="checkbox" 
-                                            className="w-4 h-4 rounded border-2 border-zinc-200 text-black focus:ring-black"
-                                            checked={selectedLabVariants.includes(variant.id)}
-                                            onChange={() => {
-                                              setSelectedLabVariants(prev => 
-                                                prev.includes(variant.id) 
-                                                  ? prev.filter(id => id !== variant.id) 
-                                                  : [...prev, variant.id]
-                                              );
-                                            }}
-                                          />
-                                          <div className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-[10px] text-zinc-400">SKU</div>
-                                          <div>
-                                             <div className="text-[10px] font-black uppercase text-zinc-400 tracking-widest leading-none mb-1">{variant.sku || 'No SKU'}</div>
-                                             <div className="text-xs font-bold text-zinc-700">{variant.title.includes(' - ') ? variant.title.split(' - ').slice(1).join(' - ') : variant.title}</div>
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-12">
-                                           <div className="text-right">
-                                              <div className="text-[8px] font-black uppercase text-zinc-300 tracking-widest">Base Price</div>
-                                              <div className="text-xs font-mono font-bold">${(variant.last_price / 100).toFixed(2)}</div>
-                                           </div>
-                                           <button className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-zinc-400 hover:text-black">
-                                              <Edit size={14} />
-                                           </button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
+                               <tr>
+                                 <td colSpan="6" className="p-0 bg-white shadow-inner">
+                                   <div className="divide-y divide-zinc-50 border-x border-zinc-100 mx-6 mb-6 rounded-2xl overflow-hidden border border-zinc-200 bg-zinc-50">
+                                     {(() => {
+                                        // Group variants by first two attributes (e.g. 28h / Black)
+                                        const groups = productVariants.reduce((acc, v) => {
+                                           const parts = v.title.split(' - ');
+                                           const groupKey = parts.length > 2 ? parts.slice(0, 2).join(' / ') : (parts[0] || 'Base');
+                                           if (!acc[groupKey]) acc[groupKey] = [];
+                                           acc[groupKey].push(v);
+                                           return acc;
+                                        }, {});
+
+                                        return Object.entries(groups)
+                                          .sort(([ka], [kb]) => ka.localeCompare(kb))
+                                          .map(([groupName, variants]) => {
+                                             const groupId = `${product.shopify_product_id}-${groupName}`;
+                                             const isGroupExpanded = expandedGroups.includes(groupId);
+                                             
+                                             return (
+                                               <div key={groupId} className="border-b border-zinc-100 last:border-0">
+                                                  <div 
+                                                    onClick={() => setExpandedGroups(prev => isGroupExpanded ? prev.filter(id => id !== groupId) : [...prev, groupId])}
+                                                    className="flex items-center justify-between p-4 bg-zinc-100/50 hover:bg-zinc-200/50 cursor-pointer transition-colors group"
+                                                  >
+                                                     <div className="flex items-center gap-4">
+                                                        <ChevronDown size={14} className={`text-zinc-400 transition-transform ${isGroupExpanded ? '' : '-rotate-90'}`} />
+                                                        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">{groupName}</div>
+                                                        <span className="text-[8px] font-black bg-white px-2 py-0.5 rounded-full border border-zinc-200 text-zinc-400">{variants.length} SKU(s)</span>
+                                                     </div>
+                                                  </div>
+                                                  {isGroupExpanded && (
+                                                    <div className="bg-white divide-y divide-zinc-50">
+                                                       {variants.sort((a,b) => a.title.localeCompare(b.title)).map(variant => (
+                                                          <div key={variant.id} className="flex items-center justify-between p-4 pl-12 hover:bg-zinc-50 transition-colors group">
+                                                             <div className="flex items-center gap-4">
+                                                               <input 
+                                                                 type="checkbox" 
+                                                                 className="w-4 h-4 rounded border-2 border-zinc-200 text-black focus:ring-black"
+                                                                 checked={selectedLabVariants.includes(variant.id)}
+                                                                 onChange={() => {
+                                                                   setSelectedLabVariants(prev => 
+                                                                     prev.includes(variant.id) 
+                                                                       ? prev.filter(id => id !== variant.id) 
+                                                                       : [...prev, variant.id]
+                                                                   );
+                                                                 }}
+                                                               />
+                                                               <div className="w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100 flex items-center justify-center font-black text-[8px] text-zinc-300">SKU</div>
+                                                               <div>
+                                                                  <div className="text-[9px] font-black uppercase text-zinc-400 tracking-widest leading-none mb-1">{variant.sku || 'No SKU'}</div>
+                                                                  <div className="text-xs font-bold text-zinc-700">{variant.title}</div>
+                                                               </div>
+                                                             </div>
+                                                             <div className="flex items-center gap-8 text-right">
+                                                                <div>
+                                                                   <div className="text-[8px] font-black uppercase text-zinc-300 tracking-widest">Base Price</div>
+                                                                   <div className="text-xs font-mono font-bold">${(variant.last_price / 100).toFixed(2)}</div>
+                                                                </div>
+                                                             </div>
+                                                          </div>
+                                                       ))}
+                                                    </div>
+                                                  )}
+                                               </div>
+                                             );
+                                          });
+                                     })()}
+                                   </div>
+                                 </td>
+                               </tr>
+                             )}
                           </React.Fragment>
                         );
                       });
@@ -1190,7 +1224,7 @@ export default function OpsDashboard() {
               <div className="flex items-center gap-4 flex-wrap">
                 <button onClick={() => setShowMetaEditModal(true)} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors bg-blue-950/30 px-4 py-2.5 rounded-xl"><Edit size={14} /> Edit Metafields</button>
                 <div className="w-px h-6 bg-zinc-800"></div>
-                <button onClick={bulkIgnoreLab} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-red-400 transition-colors bg-red-600 px-5 py-2.5 rounded-xl shadow-lg shadow-red-500/20"><ShieldAlert size={14} /> Ignore & Purge Product(s)</button>
+                <button onClick={bulkIgnoreLab} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-red-400 transition-colors bg-red-600 px-5 py-2.5 rounded-xl shadow-lg shadow-red-500/20"><ShieldAlert size={14} /> Ignore & Purge Family</button>
               </div>
            </div>
         )}
@@ -1201,7 +1235,7 @@ export default function OpsDashboard() {
                 <div className="p-8 border-b flex justify-between items-center bg-zinc-50">
                    <div>
                       <h3 className="text-2xl font-black uppercase italic tracking-tighter">Metafield Mass-Editor</h3>
-                      <p className="text-[10px] font-black uppercase text-zinc-400 mt-1 italic tracking-widest font-sans">Updating {selectedLabProducts.length} Families & {selectedLabVariants.length} Variants</p>
+                      <p className="text-[10px] font-black uppercase text-zinc-400 mt-1 italic tracking-widest font-sans">Overwriting {selectedLabProducts.length} Families & {selectedLabVariants.length} Variants</p>
                    </div>
                    <button onClick={() => setShowMetaEditModal(false)} className="p-2 hover:bg-zinc-200 rounded-full transition-all"><X size={24}/></button>
                 </div>

@@ -41,7 +41,7 @@ export default async function handler(req, res) {
 
     // 1. Duplicate the Product via Shopify GraphQL
     const duplicateMutation = `
-      mutation productDuplicate($newTitle: String, $productId: ID!, $includeImages: Boolean, $newStatus: ProductStatus) {
+      mutation productDuplicate($newTitle: String!, $productId: ID!, $includeImages: Boolean, $newStatus: ProductStatus) {
         productDuplicate(newTitle: $newTitle, productId: $productId, includeImages: $includeImages, newStatus: $newStatus) {
           newProduct { id title handle variants(first: 100) { edges { node { id title sku } } } }
           userErrors { field message }
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
     const dupRes = await shopifyQuery(duplicateMutation, { 
       productId, 
-      newTitle: newTitle || undefined,
+      newTitle: newTitle || "Cloned Hub - " + productId,
       includeImages: includeMedia ?? true,
       newStatus: status || 'ACTIVE'
     }, SHOPIFY_TOKEN);
