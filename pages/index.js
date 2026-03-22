@@ -1,3 +1,4 @@
+import React, { useState, useEffect, useRef } from 'react';
 import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, ChevronDown, ChevronRight, Trash2, AlertCircle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker, Edit3, Edit, Settings } from 'lucide-react';
 
 export default function OpsDashboard() {
