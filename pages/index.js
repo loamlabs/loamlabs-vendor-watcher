@@ -33,6 +33,7 @@ export default function OpsDashboard() {
   const [selectedLabVariants, setSelectedLabVariants] = useState([]);
   const [expandedProducts, setExpandedProducts] = useState([]);
   const [showMetaEditModal, setShowMetaEditModal] = useState(false);
+  const [metaEditTab, setMetaEditTab] = useState('variant');
   const [metaEditFields, setMetaEditFields] = useState({});
   const [metafieldRegistry, setMetafieldRegistry] = useState([
     // VARIANT METAFIELDS
@@ -437,8 +438,8 @@ export default function OpsDashboard() {
     // Multi-fetch prepopulator
     const targetProductIds = new Set(selectedLabProducts);
     selectedLabVariants.forEach(vId => {
-      const p = allUniqueRules.find(r => r.shopify_variant_id === vId);
-      if (p) targetProductIds.add(p.shopify_product_id);
+      const p = allUniqueRules.find(r => String(r.shopify_variant_id) === String(vId));
+      if (p) targetProductIds.add(String(p.shopify_product_id));
     });
     
     if (targetProductIds.size > 0) {
@@ -1280,7 +1281,7 @@ export default function OpsDashboard() {
                                 <input 
                                   type="checkbox" 
                                   className="w-5 h-5 rounded-lg border-2 border-zinc-200 text-black focus:ring-black"
-                                  checked={selectedLabProducts.includes(product.shopify_product_id)}
+                                  checked={selectedLabProducts.some(id => String(id)===String(product.shopify_product_id))}
                                   onChange={() => toggleLabProduct(product.shopify_product_id)}
                                 />
                               </td>
@@ -1381,7 +1382,7 @@ export default function OpsDashboard() {
                                                           const subLabel = clean.split(/[/-]/).map(p => p.trim()).slice(1).join(' / ') || clean.split(/[/-]/)[0];
 
                                                           return (
-                                                          <div key={variant.id} className="flex items-center justify-between p-4 pl-12 hover:bg-zinc-50 transition-colors group" onClick={(e) => { if (e.target.tagName!=='INPUT' && e.target.tagName!=='BUTTON') toggleLabVariant(variant.shopify_variant_id, e, linearVariants); }}>
+                                                          <div key={variant.id} className="flex items-center justify-between p-4 pl-12 hover:bg-zinc-50 transition-colors group select-none" onClick={(e) => { if (e.target.tagName!=='INPUT' && e.target.tagName!=='BUTTON') toggleLabVariant(variant.shopify_variant_id, e, linearVariants); }}>
                                                              <div className="flex items-center gap-4">
                                                                <input 
                                                                  type="checkbox" 
@@ -1562,7 +1563,11 @@ export default function OpsDashboard() {
                    </div>
                    <button onClick={() => setShowMetaEditModal(false)} className="p-2 hover:bg-zinc-200 rounded-full transition-all"><X size={24}/></button>
                 </div>
-                <div className="p-8 max-h-[60vh] overflow-y-auto bg-white grid grid-cols-2 gap-8">
+                <div className="flex gap-4 border-b border-zinc-100 px-8 pt-6 bg-zinc-50">
+                    <button onClick={() => setMetaEditTab('variant')} className={`px-6 py-3 font-black text-[10px] uppercase tracking-widest transition-all ${metaEditTab === 'variant' ? 'text-black border-b-2 border-black -mb-[1px] bg-white rounded-t-xl shadow-[0_-4px_10px_rgba(0,0,0,0.02)]' : 'text-zinc-400 hover:text-zinc-600'}`}>Variant Settings</button>
+                    <button onClick={() => setMetaEditTab('product')} className={`px-6 py-3 font-black text-[10px] uppercase tracking-widest transition-all ${metaEditTab === 'product' ? 'text-black border-b-2 border-black -mb-[1px] bg-white rounded-t-xl shadow-[0_-4px_10px_rgba(0,0,0,0.02)]' : 'text-zinc-400 hover:text-zinc-600'}`}>Product Settings</button>
+                 </div>
+                 <div className="p-8 max-h-[60vh] overflow-y-auto bg-white grid grid-cols-2 gap-8">
                    {(() => {
                          const uniqueSelectedTags = new Set();
                          if (selectedLabProducts.length > 0) {
@@ -1646,19 +1651,17 @@ export default function OpsDashboard() {
                            };
 
                            return (
-                             <div key={cat} className="space-y-10">
-                                <div className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] border-b border-zinc-100 pb-2 italic">{cat.replace('VALVESTEM','VALVE STEM')} SPECS</div>
+                             <div key={cat} className="space-y-6">
+                                <div className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] mb-4 italic px-2">{cat.replace('VALVESTEM','VALVE STEM')}</div>
                                 
-                                {productFields.length > 0 && (
+                                {metaEditTab === 'product' && productFields.length > 0 && (
                                    <div className="space-y-4">
-                                      <div className="text-xs font-black uppercase tracking-tighter text-zinc-800 bg-zinc-100/50 p-3 rounded-lg border border-zinc-100">Product Attributes</div>
                                       {productFields.map(m => renderField(m))}
                                    </div>
                                 )}
 
-                                {variantFields.length > 0 && (
+                                {metaEditTab === 'variant' && variantFields.length > 0 && (
                                    <div className="space-y-4">
-                                      <div className="text-xs font-black uppercase tracking-tighter text-zinc-800 bg-zinc-100/50 p-3 rounded-lg border border-zinc-100">Variant Attributes</div>
                                       {variantFields.map(m => renderField(m))}
                                    </div>
                                 )}
