@@ -588,12 +588,12 @@ export default function OpsDashboard() {
           <SidebarLink icon={<RefreshCcw size={18}/>} label="BTI Sync" active={activeTab === 'bti_sync'} onClick={() => setActiveTab('bti_sync')} />
           <SidebarLink icon={<Beaker size={18}/>} label="Product Lab" active={activeTab === 'product_lab'} onClick={() => setActiveTab('product_lab')} />
           <SidebarLink icon={<ShieldCheck size={18}/>} label="Shop Health" active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} />
-          <SidebarLink icon={<Settings size={18}/>} label="Admin Settings" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} />
         </nav>
         <div className="relative mt-auto border-t border-zinc-800 pt-6">
            {showUserMenu && (
              <div className="absolute bottom-full left-0 w-full mb-2 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden">
                 <button onClick={() => { fetchLogs(); setShowLogsModal(true); setShowUserMenu(false); }} className="w-full p-4 flex items-center gap-3 text-zinc-400 hover:bg-zinc-800 hover:text-white font-bold text-xs uppercase transition-all border-b border-zinc-800"><History size={16}/> View Sync Logs</button>
+                <button onClick={() => { setActiveTab('admin'); setShowUserMenu(false); }} className="w-full p-4 flex items-center gap-3 text-zinc-400 hover:bg-zinc-800 hover:text-white font-bold text-xs uppercase transition-all border-b border-zinc-800"><Settings size={16}/> Settings</button>
                 <button onClick={() => { localStorage.removeItem('loam_ops_auth'); window.location.reload(); }} className="w-full p-4 flex items-center gap-3 text-red-500 hover:bg-red-500/10 font-bold text-xs uppercase transition-all"><LogOut size={16}/> End Session</button>
              </div>
            )}
@@ -1293,7 +1293,7 @@ export default function OpsDashboard() {
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
              <div className="flex items-center justify-between mb-8">
                <div>
-                  <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Admin Settings</h1>
+                  <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Control Module</h1>
                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1 italic tracking-[0.2em]">Dashboard Configuration</p>
                </div>
              </div>

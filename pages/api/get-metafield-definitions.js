@@ -1,12 +1,26 @@
+async function getShopifyToken() {
+  const response = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: process.env.SHOPIFY_CLIENT_ID,
+      client_secret: process.env.SHOPIFY_CLIENT_SECRET,
+      grant_type: 'client_credentials'
+    })
+  });
+  const data = await response.json();
+  return data.access_token;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const SHOPIFY_DOMAIN = process.env.SHOPIFY_DOMAIN;
-  const SHOPIFY_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
+  const SHOPIFY_DOMAIN = `${process.env.SHOPIFY_SHOP_NAME}.myshopify.com`;
+  const SHOPIFY_TOKEN = await getShopifyToken();
 
-  if (!SHOPIFY_DOMAIN || !SHOPIFY_TOKEN) {
+  if (!process.env.SHOPIFY_SHOP_NAME || !SHOPIFY_TOKEN) {
     return res.status(500).json({ error: 'Shopify credentials missing' });
   }
 
