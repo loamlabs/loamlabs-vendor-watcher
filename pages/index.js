@@ -34,12 +34,17 @@ export default function OpsDashboard() {
   const [expandedProducts, setExpandedProducts] = useState([]);
   const [showMetaEditModal, setShowMetaEditModal] = useState(false);
   const [metaEditTab, setMetaEditTab] = useState('variant');
+
+  useEffect(() => {
+     if (showMetaEditModal && selectedLabProducts.length === 0) setMetaEditTab('variant');
+  }, [showMetaEditModal, selectedLabProducts.length]);
   const [metaEditFields, setMetaEditFields] = useState({});
   const [metafieldRegistry, setMetafieldRegistry] = useState([
     // VARIANT METAFIELDS
     { key: 'inventory_alert_threshold', label: 'Inventory Alert Threshold', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'hub_manual_cross_value', label: 'Hub Manual Cross Value', categories: ['HUB'], target: 'variant', type: 'decimal' },
     { key: 'weight_g', label: 'Weight (Variant)', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'decimal' },
+    { key: 'weight', label: 'Weight (Variant Aliased)', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'decimal' },
     { key: 'length_adjust_mm', label: 'Length Adjust mm', categories: ['SPOKE'], target: 'variant', type: 'decimal' },
     { key: 'wheel_spec_position', label: 'Position', categories: ['HUB'], target: 'variant', type: 'single_line_text_field' },
     { key: 'wheel_spec_brake_interface', label: 'Brake Interface', categories: ['HUB'], target: 'variant', type: 'single_line_text_field' },
@@ -549,7 +554,8 @@ export default function OpsDashboard() {
     const cat = getPrimaryCategory(variant.tags);
     const activeCat = getActiveLabCategory();
 
-    if (e && e.shiftKey && lastCheckedVariantRef.current && linearVariants) {
+    const isShift = e && (e.shiftKey || (e.nativeEvent && e.nativeEvent.shiftKey));
+    if (isShift && lastCheckedVariantRef.current && linearVariants) {
       const idx = linearVariants.findIndex(v => String(v.shopify_variant_id) === String(variantId));
       const lastIdx = linearVariants.findIndex(v => String(v.shopify_variant_id) === String(lastCheckedVariantRef.current));
       if (idx !== -1 && lastIdx !== -1) {
@@ -1388,7 +1394,7 @@ export default function OpsDashboard() {
                                                                  type="checkbox" 
                                                                  className="w-4 h-4 rounded border-2 border-zinc-200 text-black focus:ring-black cursor-pointer pointer-events-auto"
                                                                  checked={selectedLabVariants.some(id => String(id)===String(variant.shopify_variant_id))}
-                                                                 onChange={(e) => toggleLabVariant(variant.shopify_variant_id, e, linearVariants)}
+                                                                 onChange={() => {}} onClick={(e) => toggleLabVariant(variant.shopify_variant_id, e.nativeEvent, linearVariants)}
                                                                />
                                                                <div className="w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100 flex items-center justify-center font-black text-[8px] text-zinc-300">SKU</div>
                                                                <div>
@@ -1565,7 +1571,7 @@ export default function OpsDashboard() {
                 </div>
                 <div className="flex gap-4 border-b border-zinc-100 px-8 pt-6 bg-zinc-50">
                     <button onClick={() => setMetaEditTab('variant')} className={`px-6 py-3 font-black text-[10px] uppercase tracking-widest transition-all ${metaEditTab === 'variant' ? 'text-black border-b-2 border-black -mb-[1px] bg-white rounded-t-xl shadow-[0_-4px_10px_rgba(0,0,0,0.02)]' : 'text-zinc-400 hover:text-zinc-600'}`}>Variant Settings</button>
-                    <button onClick={() => setMetaEditTab('product')} className={`px-6 py-3 font-black text-[10px] uppercase tracking-widest transition-all ${metaEditTab === 'product' ? 'text-black border-b-2 border-black -mb-[1px] bg-white rounded-t-xl shadow-[0_-4px_10px_rgba(0,0,0,0.02)]' : 'text-zinc-400 hover:text-zinc-600'}`}>Product Settings</button>
+                    {selectedLabProducts.length > 0 && <button onClick={() => setMetaEditTab('product')} className={`px-6 py-3 font-black text-[10px] uppercase tracking-widest transition-all ${metaEditTab === 'product' ? 'text-black border-b-2 border-black -mb-[1px] bg-white rounded-t-xl shadow-[0_-4px_10px_rgba(0,0,0,0.02)]' : 'text-zinc-400 hover:text-zinc-600'}`}>Product Settings</button>}
                  </div>
                  <div className="p-8 max-h-[60vh] overflow-y-auto bg-white grid grid-cols-2 gap-8">
                    {(() => {
