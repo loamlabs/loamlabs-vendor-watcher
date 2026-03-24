@@ -52,6 +52,11 @@ export default async function handler(req, res) {
       if (itemTags.includes('watcher-ignore')) continue;
       if (!rule.vendor_url) continue;
 
+      if (rule.bti_monitoring_enabled === true || rule.bti_monitoring_enabled === 'true') {
+        console.log(`Skipping ${rule.id} because it is actively managed by external BTI Sync.`);
+        continue;
+      }
+
       let vendorPrice;
       const url = `${rule.vendor_url}.js`;
       const vResponse = await fetch(url);
@@ -129,7 +134,9 @@ export default async function handler(req, res) {
                     // If front wheel is requested (and not "No Front Wheel"), add its price
                     const hasFront = frontWheelValue && frontWheelValue !== 'no front wheel' && frontWheelValue !== 'none';
                     if (hasFront) {
-                        const frontUrl = FRONT_WHEEL_URL_MAP[rule.vendor_url?.replace(/\/$/, '')];
+                        let frontUrl = FRONT_WHEEL_URL_MAP[rule.vendor_url?.replace(/\/$/, '')];
+                        if (!frontUrl && rule.vendor_url) frontUrl = rule.vendor_url.replace(/\/$/, '') + '-front';
+                        
                         if (frontUrl) {
                             try {
                                 const frontResp = await fetch(frontUrl + '.js');
