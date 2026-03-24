@@ -111,6 +111,16 @@ export default async function handler(req, res) {
               if (spokeCountValue !== 'Std') parts.push(spokeCountValue);
               
               titleSuffix = parts.length > 0 ? `(${parts.join(' / ')})` : '';
+            } else if (p.node.title.toLowerCase().includes('valve')) {
+              // Valve Stems usually have Color and Length
+              const lengthOptNames = Object.keys(mappedOptions).filter(k => k.toLowerCase().includes('length') || k.toLowerCase().includes('size'));
+              const lengthValue = lengthOptNames.length > 0 ? mappedOptions[lengthOptNames[0]] : '';
+              
+              technicalKey = `${p.node.id}-${colorValue}-${lengthValue}`;
+              const parts = [];
+              if (colorValue) parts.push(colorValue);
+              if (lengthValue) parts.push(lengthValue);
+              titleSuffix = parts.length > 0 ? `(${parts.join(' / ')})` : '';
             } else if (isWheelset) {
               // Extract all variants precisely
               technicalKey = `${p.node.id}-${v.node.id}`;

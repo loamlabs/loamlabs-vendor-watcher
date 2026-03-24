@@ -31,7 +31,7 @@ export default async function handler(req, res) {
           node {
             namespace
             key
-            type
+            type { name }
             validations {
               name
               value
@@ -39,12 +39,12 @@ export default async function handler(req, res) {
           }
         }
       }
-      variantMetafields: metafieldDefinitions(first: 250, ownerType: VARIANT) {
+      variantMetafields: metafieldDefinitions(first: 250, ownerType: PRODUCTVARIANT) {
         edges {
           node {
             namespace
             key
-            type
+            type { name }
             validations {
               name
               value
