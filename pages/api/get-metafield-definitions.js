@@ -74,6 +74,9 @@ export default async function handler(req, res) {
     const productDefs = data.data.productMetafields.edges.map(e => e.node);
     const variantDefs = data.data.variantMetafields.edges.map(e => e.node);
 
+    console.log("=== DIAGNOSTIC: FIRST VARIANT METADATA DEFS ===");
+    console.log(JSON.stringify(variantDefs.slice(0, 5).map(v => ({ key: v.key, type: v.type, validations: v.validations })), null, 2));
+
     // Combine and parse the choices
     const allDefs = [...productDefs, ...variantDefs];
     
