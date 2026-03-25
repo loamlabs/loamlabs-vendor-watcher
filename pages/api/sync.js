@@ -48,9 +48,11 @@ export default async function handler(req, res) {
     let stockChanges = [], oosReminders = [];
 
     for (const rule of rules) {
-      const itemTags = Array.isArray(rule.tags) ? rule.tags : [];
-      if (itemTags.includes('watcher-ignore')) continue;
-      if (!rule.vendor_url) continue;
+      try {
+        const itemTags = Array.isArray(rule.tags) ? rule.tags : [];
+        if (itemTags.includes('watcher-ignore')) continue;
+        if (!rule.vendor_url) continue;
+
 
       let vendorPrice;
       const url = `${rule.vendor_url}.js`;
@@ -68,8 +70,8 @@ export default async function handler(req, res) {
         continue;
       }
 
-      try {
         let parsedOptions = rule.option_values || {};
+
         if (typeof parsedOptions === 'string') {
           try { parsedOptions = JSON.parse(parsedOptions); } catch (e) {}
         }
@@ -155,7 +157,7 @@ export default async function handler(req, res) {
                     if (driverValue) {
                         let driverSurcharge = 17995; // default: $179.95 for XD/HG/MS
                         if (driverValue.includes('7p') || driverValue.includes('7sp') || driverValue.includes('cassette')) {
-                            driverSurcharge = 32995; // $329.95 for 7spd Integrated Cassette
+                            driverSurcharge = 42995; // Updated to $429.95 for 7spd Integrated Cassette
                         }
                         finalPrice += driverSurcharge;
                     }
@@ -279,8 +281,19 @@ export default async function handler(req, res) {
         if (winner) {
           if (!winner.available && (rule.bti_monitoring_enabled === true || rule.bti_monitoring_enabled === 'true')) {
              console.log(`Vendor OOS for ${rule.id}. Deferring to external BTI Sync (active monitoring).`);
+             
+             // Dynamic Hand-off: Automatically tell Shopify that BTI is permitted to take over since Vendor is OOS.
+             // Only if current Shopify flag is NOT already true.
+             if (rule.auto_update === true && currentBtiFlag !== true) {
+                 await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
+                     method: 'PUT', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
+                     body: JSON.stringify({ variant: { id: rule.shopify_variant_id, metafields: [{ namespace: "custom", key: "inventory_monitoring_enabled", value: "true", type: "boolean" }] } })
+                 }).catch(e => console.error(e));
+             }
+
              await supabase.from('watcher_rules').update({
                  last_log: `Vendor OOS (Matched: "${winner.public_title || 'Parsed Options'}"). Deferring to BTI.`,
+                 last_availability: false,
                  last_run_at: new Date().toISOString()
              }).eq('id', rule.id);
              continue; // Exit the loop before touching Shopify Price or Inventory Policy!
@@ -322,13 +335,15 @@ export default async function handler(req, res) {
           const sResponse = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
             method: 'POST', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              query: `query($id: ID!) { productVariant(id: $id) { price compareAtPrice inventoryQuantity inventoryPolicy product { id } } }`,
+              query: `query($id: ID!) { productVariant(id: $id) { price compareAtPrice inventoryQuantity inventoryPolicy product { id } btiMonitor: metafield(namespace: "custom", key: "inventory_monitoring_enabled") { value } } }`,
               variables: { id: variantGid }
             })
           });
           const sData = await sResponse.json();
           const variant = sData.data?.productVariant;
-          if (!variant) throw new Error("Shopify ID not found");
+          if (!variant) throw new Error(`Shopify ID ${rule.shopify_variant_id} not found`);
+
+          const currentBtiFlag = variant.btiMonitor ? (variant.btiMonitor.value === 'true') : null;
 
           const myPrice = parseFloat(variant.price).toFixed(2);
           const myCompare = variant.compareAtPrice ? parseFloat(variant.compareAtPrice).toFixed(2) : null;
@@ -337,6 +352,13 @@ export default async function handler(req, res) {
           const needsCompareFix = myCompare && Number(myCompare) < Number(goalPrice);
 
           let updatePayload = { id: rule.shopify_variant_id, price: goalPrice };
+          if (rule.bti_monitoring_enabled === true || rule.bti_monitoring_enabled === 'true') {
+             // Dynamic Hand-off: Turn off BTI sync at the Shopify level because Vendor has stock and we need strict price control here.
+             // Only update if current value is NOT 'false' to save network calls.
+             if (currentBtiFlag !== false) {
+                updatePayload.metafields = [{ namespace: "custom", key: "inventory_monitoring_enabled", value: "false", type: "boolean" }];
+             }
+          }
           let changeReason = "";
 
           if ((isDiff || needsCompareFix) && !rule.needs_review) {
@@ -423,12 +445,20 @@ export default async function handler(req, res) {
           }).eq('id', rule.id);
 
         } else {
-          const vendorOptions = vData.variants.slice(0, 2).map(v => v.public_title).join(', ');
-          await supabase.from('watcher_rules').update({ 
-            last_log: `FAILED: Found 0 matches for parsed options. Vendor uses: ${vendorOptions}` 
-          }).eq('id', rule.id);
+           const vendorOptions = vData.variants.slice(0, 2).map(v => v.public_title).join(', ');
+           await supabase.from('watcher_rules').update({ 
+             last_log: `FAILED: Found 0 matches for parsed options. Vendor uses: ${vendorOptions}`,
+             last_run_at: new Date().toISOString()
+           }).eq('id', rule.id);
         }
-      } catch (err) { console.error(`Error on ${rule.title}:`, err.message); }
+      } catch (ruleError) {
+        console.error(`FAILURE on rule ${rule.id} (${rule.title}):`, ruleError);
+        attention.push({ title: rule.title, reason: `Sync Failed: ${ruleError.message}` });
+        await supabase.from('watcher_rules').update({ 
+            last_log: `CRASHED: ${ruleError.message.slice(0, 100)}`,
+            last_run_at: new Date().toISOString()
+        }).eq('id', rule.id).catch(() => {});
+      }
     }
 
     // --- 30-Day Log Cleanup ---
