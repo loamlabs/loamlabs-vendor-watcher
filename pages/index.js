@@ -19,6 +19,8 @@ export default function OpsDashboard() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [visibleCount, setVisibleCount] = useState(50);
   const [selectedRules, setSelectedRules] = useState([]);
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [bulkEditUrl, setBulkEditUrl] = useState('');
   const [showDupModal, setShowDupModal] = useState(false);
   const [dupSourceProduct, setDupSourceProduct] = useState(null);
   const [dupOptions, setDupOptions] = useState({ 
@@ -268,6 +270,22 @@ export default function OpsDashboard() {
         headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
         body: JSON.stringify({ id, updates: { auto_update: state } })
       })));
+      fetchRules();
+      setSelectedRules([]);
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  };
+
+  const executeBulkEdit = async () => {
+    setLoading(true);
+    try {
+      await Promise.all(selectedRules.map(id => fetch('/api/update-rule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
+        body: JSON.stringify({ id, updates: { vendor_url: bulkEditUrl } })
+      })));
+      setShowBulkEditModal(false);
+      setBulkEditUrl('');
       fetchRules();
       setSelectedRules([]);
     } catch(e) { console.error(e); }
@@ -873,6 +891,8 @@ export default function OpsDashboard() {
                   <div className="w-px h-6 bg-zinc-800 hidden sm:block"></div>
                   <button onClick={bulkSetPriceAdjust} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors bg-blue-950/30 px-3 py-2 rounded-xl"><DollarSign size={14} /> Set Price Adjust</button>
                   <button onClick={bulkSetCompareAt} className="flex items-center gap-2 text-[10px] font-black uppercase text-purple-400 hover:text-purple-300 transition-colors bg-purple-950/30 px-3 py-2 rounded-xl"><Tag size={14} /> Set Compare-At → Base</button>
+                  <div className="w-px h-6 bg-zinc-800 hidden sm:block"></div>
+                  <button onClick={() => setShowBulkEditModal(true)} className="flex items-center gap-2 text-[10px] font-black uppercase text-amber-400 hover:text-amber-300 transition-colors bg-amber-950/30 px-3 py-2 rounded-xl"><Edit size={14} /> Mass Edit URL</button>
                   <div className="w-px h-6 bg-zinc-800 hidden sm:block"></div>
                   <button onClick={bulkDelete} className="flex items-center gap-2 text-[10px] font-black uppercase text-red-500/60 hover:text-red-400 transition-colors px-3 py-2"><Trash2 size={14} /> Delete Selected</button>
                   <button onClick={bulkIgnore} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-red-400 transition-colors bg-red-600 px-3 py-2 rounded-xl"><ShieldAlert size={14} /> Ignore & Purge Product(s)</button>
@@ -1827,6 +1847,28 @@ export default function OpsDashboard() {
                     </div>
                 </div>
                 <button onClick={() => updateRule(editingRule.id, editingRule)} className="w-full bg-black text-white font-black p-5 rounded-2xl uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-xl italic">Save Changes</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showBulkEditModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm" style={{animation: 'fadeIn 0.2s ease-out'}}>
+            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-zinc-100" style={{animation: 'scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'}}>
+              <div className="p-8 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+                <div>
+                  <h2 className="text-2xl font-black uppercase italic tracking-tight">Mass Edit Rule(s)</h2>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1">Applying to {selectedRules.length} items</p>
+                </div>
+                <button onClick={() => setShowBulkEditModal(false)} className="p-3 bg-white hover:bg-zinc-100 rounded-2xl border border-zinc-200 transition-all text-zinc-400 hover:text-black">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-8 space-y-6">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-zinc-400 mb-2 block tracking-widest italic">Vendor URL Target</label>
+                  <input type="text" className="w-full p-4 bg-zinc-100 rounded-xl font-mono text-xs outline-none border-2 border-transparent focus:border-black transition-all" value={bulkEditUrl} onChange={(e) => setBulkEditUrl(e.target.value)} placeholder="https://www.vendor.com/product/..." />
+                </div>
+                <button onClick={executeBulkEdit} disabled={!bulkEditUrl} className="w-full bg-black text-white font-black p-5 rounded-2xl uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-xl italic disabled:opacity-50">Apply to {selectedRules.length} Items</button>
               </div>
             </div>
           </div>

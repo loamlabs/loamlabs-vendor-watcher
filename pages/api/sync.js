@@ -102,7 +102,7 @@ export default async function handler(req, res) {
             for (const [optName, optValue] of Object.entries(parsedOptions)) {
                 if (!optValue) continue;
                 if (optName.toLowerCase().includes('rear')) rearSizeValue = optValue.toLowerCase().replace(/["']/g, '').trim();
-                if (optName.toLowerCase().includes('front')) frontWheelValue = optValue.toLowerCase().replace(/["']/g, '').trim();
+                if (optName.toLowerCase().includes('front') || optValue.toLowerCase().includes('front')) frontWheelValue = optValue.toLowerCase().replace(/["']/g, '').trim();
                 if (optName.toLowerCase().includes('driver') || optName.toLowerCase().includes('axle') || optName.toLowerCase().includes('freehub') || optName.toLowerCase().includes('cassette')) driverValue = optValue.toLowerCase().replace(/["']/g, '').trim();
             }
 
