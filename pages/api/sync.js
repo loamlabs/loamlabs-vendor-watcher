@@ -160,7 +160,11 @@ export default async function handler(req, res) {
                         finalPrice += driverSurcharge;
                     }
 
-                    winner = { price: finalPrice, available: finalAvail };
+                    winner = { 
+                      price: finalPrice, 
+                      available: finalAvail, 
+                      public_title: `${bestRear.public_title} + ${hasFront ? 'Front' : 'No Front'} + Driver Surcharge`
+                    };
                 }
             }
 
@@ -275,6 +279,10 @@ export default async function handler(req, res) {
         if (winner) {
           if (!winner.available && (rule.bti_monitoring_enabled === true || rule.bti_monitoring_enabled === 'true')) {
              console.log(`Vendor OOS for ${rule.id}. Deferring to external BTI Sync (active monitoring).`);
+             await supabase.from('watcher_rules').update({
+                 last_log: `Vendor OOS (Matched: "${winner.public_title || 'Parsed Options'}"). Deferring to BTI.`,
+                 last_run_at: new Date().toISOString()
+             }).eq('id', rule.id);
              continue; // Exit the loop before touching Shopify Price or Inventory Policy!
           }
 
