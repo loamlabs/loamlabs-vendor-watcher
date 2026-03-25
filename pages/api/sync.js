@@ -346,38 +346,9 @@ export default async function handler(req, res) {
 
           const currentBtiFlag = variant.btiMonitor ? (variant.btiMonitor.value === 'true') : null;
           const productHandle = variant.product?.handle || '';
-
-          if (!winner.available && (rule.bti_monitoring_enabled === true || rule.bti_monitoring_enabled === 'true')) {
-             console.log(`[SYNC] Vendor OOS for ${rule.title} (${rule.id}). Match: "${winner.public_title || 'Parsed Options'}". Deferring to BTI Sync (active monitoring).`);
-             
-             // Dynamic Hand-off: Automatically tell Shopify that BTI is permitted to take over since Vendor is OOS.
-             if (rule.auto_update === true && currentBtiFlag !== true) {
-                 console.log(`[SYNC] Enabling BTI authority for ${rule.title} (Metafield Toggle ON).`);
-                 await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
-                     method: 'PUT', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ variant: { id: rule.shopify_variant_id, metafields: [{ namespace: "custom", key: "inventory_monitoring_enabled", value: "true", type: "boolean" }] } })
-                 }).catch(e => console.error(e));
-             }
-
-             await supabase.from('watcher_rules').update({
-                 last_log: `Vendor OOS (Matched: "${winner.public_title || 'Parsed Options'}"). Deferring to BTI. Link: https://loamlabs.com/products/${productHandle}`,
-                 last_availability: false,
-                 last_run_at: new Date().toISOString()
-             }).eq('id', rule.id);
-             continue; // Exit the loop before touching Shopify Price or Inventory Policy!
-          }
-
-          if (winner.available && currentBtiFlag === true && rule.auto_update === true) {
-              console.log(`[SYNC] Vendor BACK-IN-STOCK for ${rule.title}. Reclaiming authority from BTI.`);
-              await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
-                  method: 'PUT', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ variant: { id: rule.shopify_variant_id, metafields: [{ namespace: "custom", key: "inventory_monitoring_enabled", value: "false", type: "boolean" }] } })
-              }).catch(e => console.error(e));
-          }
-
           const vendorPrice = winner.price / 100;
 
-          // Sale Reversion & Smart Margin Safety Logic
+          // 1. CALCULATE GOAL PRICE (Based on Vendor MSRP/MSRP-MAP)
           const stdFactor = rule.price_adjustment_factor || 1.0;
           let goalPriceNum = vendorPrice * stdFactor;
           let isDeepSale = false;
@@ -385,14 +356,17 @@ export default async function handler(req, res) {
           if (rule.original_msrp && rule.original_msrp > 0) {
             const discountRatio = (rule.original_msrp - vendorPrice) / rule.original_msrp;
             if (discountRatio >= 0.10) {
-              // 10%+ SALE: Adjust final price so that a 10% builder discount matches the vendor sale price exactly
               goalPriceNum = vendorPrice / 0.90;
               isDeepSale = true;
             }
           }
           const goalPrice = parseFloat(goalPriceNum).toFixed(2);
+          const myPrice = parseFloat(variant.price).toFixed(2);
+          const myCompare = variant.compareAtPrice ? parseFloat(variant.compareAtPrice).toFixed(2) : null;
+          const isDiff = Number(goalPrice) !== Number(myPrice);
+          const needsPriceUpdate = isDiff || (myCompare && Number(myCompare) < Number(goalPrice));
 
-          // 45-Day New Normal Timer Logic & Drastic Sale
+          // 2. 45-DAY MSRP TIMER LOGIC
           let newPriceLastChangedAt = rule.price_last_changed_at || null;
           if (rule.last_price !== winner.price) {
             newPriceLastChangedAt = new Date().toISOString();
@@ -406,53 +380,54 @@ export default async function handler(req, res) {
             }
           }
 
-
-          const myPrice = parseFloat(variant.price).toFixed(2);
-
-          const myCompare = variant.compareAtPrice ? parseFloat(variant.compareAtPrice).toFixed(2) : null;
+          // 3. APPLY UPDATES (Price & Metafield Hand-off)
           let finalShopifyPriceNum = Number(myPrice);
-          const isDiff = Number(goalPrice) !== Number(myPrice);
-          const needsCompareFix = myCompare && Number(myCompare) < Number(goalPrice);
+          let updatePayloadForPrice = { id: rule.shopify_variant_id };
+          let shouldPutPrice = false;
 
-          let updatePayload = { id: rule.shopify_variant_id, price: goalPrice };
-          if (rule.bti_monitoring_enabled === true || rule.bti_monitoring_enabled === 'true') {
-             // Dynamic Hand-off: Turn off BTI sync at the Shopify level because Vendor has stock and we need strict price control here.
-             // Only update if current value is NOT 'false' to save network calls.
-             if (currentBtiFlag !== false) {
-                updatePayload.metafields = [{ namespace: "custom", key: "inventory_monitoring_enabled", value: "false", type: "boolean" }];
+          if (needsPriceUpdate && rule.auto_update === true && !rule.needs_review) {
+             updatePayloadForPrice.price = goalPrice;
+             if (myCompare && Number(myCompare) > Number(myPrice)) {
+                const gap = Number(myCompare) - Number(myPrice);
+                updatePayloadForPrice.compare_at_price = (Number(goalPrice) + gap).toFixed(2);
+             } else {
+                updatePayloadForPrice.compare_at_price = goalPrice;
+             }
+             shouldPutPrice = true;
+             finalShopifyPriceNum = Number(goalPrice);
+          }
+
+          // Metafield Hand-off (Inventory Arbitration)
+          let currentEffectiveBtiFlag = currentBtiFlag;
+          if (rule.auto_update === true && !rule.needs_review) {
+             if (winner.available && currentBtiFlag === true) {
+                console.log(`[SYNC] Vendor BACK-IN-STOCK for ${rule.title}. Reclaiming INVENTORY authority from BTI.`);
+                updatePayloadForPrice.metafields = [{ namespace: "custom", key: "inventory_monitoring_enabled", value: "false", type: "boolean" }];
+                shouldPutPrice = true;
+                currentEffectiveBtiFlag = false;
+             } else if (!winner.available && (rule.bti_monitoring_enabled === true || rule.bti_monitoring_enabled === 'true') && currentBtiFlag !== true) {
+                console.log(`[SYNC] Vendor OOS for ${rule.title}. Deferring INVENTORY to BTI.`);
+                updatePayloadForPrice.metafields = [{ namespace: "custom", key: "inventory_monitoring_enabled", value: "true", type: "boolean" }];
+                shouldPutPrice = true;
+                currentEffectiveBtiFlag = true;
              }
           }
-          let changeReason = "";
 
-          if ((isDiff || needsCompareFix) && !rule.needs_review) {
-            if (myCompare && Number(myCompare) > Number(myPrice)) {
-              const gap = Number(myCompare) - Number(myPrice);
-              updatePayload.compare_at_price = (Number(goalPrice) + gap).toFixed(2);
-              changeReason = `$${myPrice} -> $${goalPrice} (Sale Gap Preserved)`;
-            } else {
-              // Phase 8: Safety Flush to prevent inverted discounts bleeding to the storefront when Base raises over Compare.
-              updatePayload.compare_at_price = goalPrice;
-              changeReason = `$${myPrice} -> $${goalPrice}`;
-            }
-
-            if (rule.auto_update === true) {
-              await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
+          if (shouldPutPrice) {
+             await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
                 method: 'PUT', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ variant: updatePayload })
-              });
-              updated.push({ title: rule.title, reason: changeReason });
-              finalShopifyPriceNum = Number(goalPrice);
-            } else {
-              attention.push({ title: rule.title, reason: `Manual Sync Required: ${changeReason}` });
-            }
-          } else { inSync.push({ title: rule.title }); }
+                body: JSON.stringify({ variant: updatePayloadForPrice })
+             }).catch(e => console.error(e));
+             if (needsPriceUpdate && rule.auto_update === true && !rule.needs_review) {
+                updated.push({ title: rule.title, reason: `Price Adjusted ($${myPrice} -> $${goalPrice})` });
+             }
+          }
 
-          // --- STOCK STATUS SYNC (non-BTI products only) ---
-          let effectivePolicy = variant.inventoryPolicy; // Current Shopify state (may reflect BTI sync)
-          if (rule.auto_update === true) {
+          // 4. INVENTORY POLICY SYNC (non-BTI controlled items only)
+          let effectivePolicy = variant.inventoryPolicy;
+          if (rule.auto_update === true && currentEffectiveBtiFlag !== true) {
             const shopifyQty = variant.inventoryQuantity || 0;
             const vendorInStock = winner.available;
-
             if (shopifyQty <= 0) {
               if (!vendorInStock && effectivePolicy === 'CONTINUE') {
                 await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
@@ -472,7 +447,7 @@ export default async function handler(req, res) {
             }
           }
 
-          // --- OOS Stopwatch (based on Shopify inventoryPolicy — the ultimate source of truth) ---
+          // 5. OOS STOPWATCH & REMINDERS
           let newOutOfStockSince = rule.out_of_stock_since || null;
           if (effectivePolicy === 'DENY') {
             if (!newOutOfStockSince) {
@@ -480,14 +455,13 @@ export default async function handler(req, res) {
             } else {
               const daysOOS = (new Date() - new Date(newOutOfStockSince)) / (1000 * 60 * 60 * 24);
               if (Math.floor(daysOOS) === 90 || Math.floor(daysOOS) === 91 || Math.floor(daysOOS) === 92) {
-                attention.push({ title: rule.title, reason: `Out of Stock for 3 Months. Discontinued or Backorder?` });
+                attention.push({ title: rule.title, reason: `Out of Stock for 3 Months. Discontinued?` });
               }
             }
           } else {
             newOutOfStockSince = null;
           }
 
-          // --- Rolling OOS Reminder ---
           if (rule.oos_reminder_enabled !== false && newOutOfStockSince) {
             const daysSinceOOS = Math.floor((new Date() - new Date(newOutOfStockSince)) / (1000 * 60 * 60 * 24));
             const reminderInterval = rule.oos_reminder_days || 20;
@@ -496,15 +470,21 @@ export default async function handler(req, res) {
             }
           }
 
+          // 6. FINAL DATABASE UPDATE
+          let newLog = `Synced (${winner.available ? 'In Stock' : 'OOS'}). Link: https://loamlabs.com/products/${productHandle}`;
+          if (!winner.available && currentEffectiveBtiFlag === true) {
+             newLog = `Vendor OOS (Matched: "${winner.public_title}"). Deferring INVENTORY to BTI. Link: https://loamlabs.com/products/${productHandle}`;
+          }
+
           await supabase.from('watcher_rules').update({ 
             last_price: Math.round(vendorPrice * 100), 
             last_availability: winner.available,
             last_run_at: new Date().toISOString(),
-            last_log: `Matched: "${winner.public_title}".`,
+            last_log: newLog,
             price_last_changed_at: newPriceLastChangedAt,
             out_of_stock_since: newOutOfStockSince,
             current_shopify_price: Math.round(finalShopifyPriceNum * 100),
-            current_compare_at_price: updatePayload.compare_at_price ? Math.round(Number(updatePayload.compare_at_price) * 100) : (myCompare ? Math.round(Number(myCompare) * 100) : null)
+            current_compare_at_price: updatePayloadForPrice.compare_at_price ? Math.round(Number(updatePayloadForPrice.compare_at_price) * 100) : (myCompare ? Math.round(Number(myCompare) * 100) : null)
           }).eq('id', rule.id);
 
         } else {
