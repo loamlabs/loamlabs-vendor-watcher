@@ -279,11 +279,24 @@ export default async function handler(req, res) {
         }
 
         if (winner) {
+          const variantGid = `gid://shopify/ProductVariant/${rule.shopify_variant_id}`;
+          const sResponse = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
+            method: 'POST', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: `query($id: ID!) { productVariant(id: $id) { price compareAtPrice inventoryQuantity inventoryPolicy product { id } btiMonitor: metafield(namespace: "custom", key: "inventory_monitoring_enabled") { value } } }`,
+              variables: { id: variantGid }
+            })
+          });
+          const sData = await sResponse.json();
+          const variant = sData.data?.productVariant;
+          if (!variant) throw new Error(`Shopify ID ${rule.shopify_variant_id} not found`);
+
+          const currentBtiFlag = variant.btiMonitor ? (variant.btiMonitor.value === 'true') : null;
+
           if (!winner.available && (rule.bti_monitoring_enabled === true || rule.bti_monitoring_enabled === 'true')) {
              console.log(`Vendor OOS for ${rule.id}. Deferring to external BTI Sync (active monitoring).`);
              
              // Dynamic Hand-off: Automatically tell Shopify that BTI is permitted to take over since Vendor is OOS.
-             // Only if current Shopify flag is NOT already true.
              if (rule.auto_update === true && currentBtiFlag !== true) {
                  await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
                      method: 'PUT', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
@@ -331,21 +344,8 @@ export default async function handler(req, res) {
           }
 
 
-          const variantGid = `gid://shopify/ProductVariant/${rule.shopify_variant_id}`;
-          const sResponse = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
-            method: 'POST', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `query($id: ID!) { productVariant(id: $id) { price compareAtPrice inventoryQuantity inventoryPolicy product { id } btiMonitor: metafield(namespace: "custom", key: "inventory_monitoring_enabled") { value } } }`,
-              variables: { id: variantGid }
-            })
-          });
-          const sData = await sResponse.json();
-          const variant = sData.data?.productVariant;
-          if (!variant) throw new Error(`Shopify ID ${rule.shopify_variant_id} not found`);
-
-          const currentBtiFlag = variant.btiMonitor ? (variant.btiMonitor.value === 'true') : null;
-
           const myPrice = parseFloat(variant.price).toFixed(2);
+
           const myCompare = variant.compareAtPrice ? parseFloat(variant.compareAtPrice).toFixed(2) : null;
           let finalShopifyPriceNum = Number(myPrice);
           const isDiff = Number(goalPrice) !== Number(myPrice);
