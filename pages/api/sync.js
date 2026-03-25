@@ -264,6 +264,14 @@ export default async function handler(req, res) {
   
                   if (ruleTitle.includes('superboost') && !vTitle.includes('157')) return false;
                   if (!ruleTitle.includes('superboost') && ruleTitle.includes('rear') && !vTitle.includes('148')) return false;
+
+                  // Sidekick SL specific: SL hubs are ONLY 110x15mm Boost. Standard are 110x15/20mm.
+                  if (ruleTitle.includes('sidekick sl')) {
+                     if (!vTitle.includes('110x15mm')) return false;
+                  } else if (ruleTitle.includes('sidekick') && !ruleTitle.includes('sl') && isHub && isFrontRule) {
+                     // Standard Sidekick Front Hub: Use 110x15/20mm
+                     if (vTitle.includes('110x15mm') && !vTitle.includes('15/20')) return false;
+                  }
                   
                   if (!ruleTitle.includes('7spd') && !ruleTitle.includes('7 spd') && (vTitle.includes('7spd') || vTitle.includes('7 spd'))) return false;
                   if (!ruleTitle.includes('mini') && vTitle.includes('mini')) return false;
@@ -276,6 +284,30 @@ export default async function handler(req, res) {
           if (candidates.length > 0) {
             winner = candidates.reduce((prev, curr) => (prev.price > curr.price) ? prev : curr);
           }
+
+            // Fallback: If no custom logic matched, try a token-based best match using rule.option_values
+            if (!winner && candidates.length > 0) {
+              const ruleOptions = rule.option_values ? (typeof rule.option_values === 'string' ? JSON.parse(rule.option_values) : rule.option_values) : {};
+              const ruleTokens = Object.values(ruleOptions).flatMap(v => String(v).toLowerCase().split(/[\s/]+/).filter(t => t.length > 1));
+              
+              if (ruleTokens.length > 0) {
+                 const bestMatch = candidates.map(c => {
+                    const cTitle = c.public_title.toLowerCase(); // Changed from c.title to c.public_title
+                    const score = ruleTokens.filter(t => cTitle.includes(t)).length;
+                    return { variant: c, score };
+                 }).sort((a, b) => b.score - a.score)[0];
+                 
+                 if (bestMatch && bestMatch.score > 0) {
+                    winner = bestMatch.variant;
+                    vStatus = `Matched by tokens (${ruleTokens.join(', ')}).`;
+                 }
+              }
+              
+              if (!winner) {
+                 winner = candidates.reduce((prev, curr) => (prev.price > curr.price) ? prev : curr);
+                 vStatus = `Fallback: Highest price (No specific match).`;
+              }
+            }
         }
 
         if (winner) {
