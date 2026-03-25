@@ -52,11 +52,6 @@ export default async function handler(req, res) {
       if (itemTags.includes('watcher-ignore')) continue;
       if (!rule.vendor_url) continue;
 
-      if (rule.bti_monitoring_enabled === true || rule.bti_monitoring_enabled === 'true') {
-        console.log(`Skipping ${rule.id} because it is actively managed by external BTI Sync.`);
-        continue;
-      }
-
       let vendorPrice;
       const url = `${rule.vendor_url}.js`;
       const vResponse = await fetch(url);
@@ -108,7 +103,7 @@ export default async function handler(req, res) {
                 if (!optValue) continue;
                 if (optName.toLowerCase().includes('rear')) rearSizeValue = optValue.toLowerCase().replace(/["']/g, '').trim();
                 if (optName.toLowerCase().includes('front')) frontWheelValue = optValue.toLowerCase().replace(/["']/g, '').trim();
-                if (optName.toLowerCase().includes('driver') || optName.toLowerCase().includes('axle') || optName.toLowerCase().includes('freehub')) driverValue = optValue.toLowerCase().replace(/["']/g, '').trim();
+                if (optName.toLowerCase().includes('driver') || optName.toLowerCase().includes('axle') || optName.toLowerCase().includes('freehub') || optName.toLowerCase().includes('cassette')) driverValue = optValue.toLowerCase().replace(/["']/g, '').trim();
             }
 
             if (rearSizeValue) {
@@ -278,6 +273,11 @@ export default async function handler(req, res) {
         }
 
         if (winner) {
+          if (!winner.available && (rule.bti_monitoring_enabled === true || rule.bti_monitoring_enabled === 'true')) {
+             console.log(`Vendor OOS for ${rule.id}. Deferring to external BTI Sync (active monitoring).`);
+             continue; // Exit the loop before touching Shopify Price or Inventory Policy!
+          }
+
           const vendorPrice = winner.price / 100;
 
           // Sale Reversion & Smart Margin Safety Logic
