@@ -101,6 +101,7 @@ export default async function handler(req, res) {
         // 1. DYNAMIC MATCHING ENGINE (TOKENIZED)
         let winner = null;
         let isDeepSale = false;
+        let vStatus = 'No specific match logic applied';
 
         const ruleTitle = normalize(rule.title);
         const isHub = ruleTitle.includes('hub');
