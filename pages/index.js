@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, ChevronDown, ChevronRight, Trash2, AlertCircle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker, Edit3, Edit, Settings } from 'lucide-react';
+import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, ChevronDown, ChevronRight, Trash2, AlertCircle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker, Edit3, Edit, Settings, ExternalLink } from 'lucide-react';
 
 export default function OpsDashboard() {
   const [editingRule, setEditingRule] = useState(null);
@@ -401,14 +401,41 @@ export default function OpsDashboard() {
     setLoading(true);
     try {
       const res = await fetch('/api/sync', { 
-        // Use the password you used to log in to the dashboard
         headers: { 'x-dashboard-auth': password } 
       });
       if (res.ok) {
-        alert("Sync Complete!");
+        alert("Full Sync Complete!");
         fetchRules(password);
       } else {
         alert("Sync failed. Error code: " + res.status);
+      }
+    } catch (e) { alert("Sync failed to connect."); }
+    setLoading(false);
+  };
+
+  const runSelectiveSync = async (ruleIds) => {
+    if (!ruleIds || ruleIds.length === 0) return;
+    const msg = ruleIds.length === 1 ? "Run live sync for this item?" : `Run live sync for ${ruleIds.length} selected items?`;
+    if (!confirm(msg)) return;
+    
+    setLoading(true);
+    try {
+      const res = await fetch('/api/sync', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
+        body: JSON.stringify({ ruleIds })
+      });
+      if (res.ok) {
+        alert("Selective Sync Complete!");
+        fetchRules(); // Refresh data
+        if (ruleIds.length === 1) {
+            setSelectedRules(prev => prev.filter(id => id !== ruleIds[0]));
+        } else {
+            setSelectedRules([]);
+        }
+      } else {
+        const errorData = await res.json();
+        alert("Sync failed: " + (errorData.error || res.status));
       }
     } catch (e) { alert("Sync failed to connect."); }
     setLoading(false);
@@ -893,6 +920,8 @@ export default function OpsDashboard() {
                   <button onClick={bulkSetPriceAdjust} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors bg-blue-950/30 px-3 py-2 rounded-xl"><DollarSign size={14} /> Set Price Adjust</button>
                   <button onClick={bulkSetCompareAt} className="flex items-center gap-2 text-[10px] font-black uppercase text-purple-400 hover:text-purple-300 transition-colors bg-purple-950/30 px-3 py-2 rounded-xl"><Tag size={14} /> Set Compare-At → Base</button>
                   <div className="w-px h-6 bg-zinc-800 hidden sm:block"></div>
+                  <button onClick={() => runSelectiveSync(selectedRules)} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-green-400 transition-colors bg-zinc-900 px-3 py-2 rounded-xl border border-zinc-700"><RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> Sync Selected Items</button>
+                  <div className="w-px h-6 bg-zinc-800 hidden sm:block"></div>
                   <button onClick={() => setShowBulkEditModal(true)} className="flex items-center gap-2 text-[10px] font-black uppercase text-amber-400 hover:text-amber-300 transition-colors bg-amber-950/30 px-3 py-2 rounded-xl"><Edit size={14} /> Mass Edit URL</button>
                   <div className="w-px h-6 bg-zinc-800 hidden sm:block"></div>
                   <button onClick={bulkDelete} className="flex items-center gap-2 text-[10px] font-black uppercase text-red-500/60 hover:text-red-400 transition-colors px-3 py-2"><Trash2 size={14} /> Delete Selected</button>
@@ -996,9 +1025,10 @@ export default function OpsDashboard() {
                         <td className="p-6 font-mono font-bold text-lg text-zinc-400">
                           {rule.current_compare_at_price ? `$${(rule.current_compare_at_price / 100).toFixed(2)}` : '--'}
                         </td>
-                        <td className="p-6 flex justify-end items-center gap-4 pointer-events-auto" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => toggleAutoSync(rule.id, rule.auto_update)} className={`w-12 h-6 rounded-full p-1 flex items-center transition-all ${rule.auto_update ? 'bg-black justify-end shadow-inner' : 'bg-zinc-300 justify-start'}`}><div className="w-4 h-4 bg-white rounded-full shadow-md"></div></button>
-                          <button onClick={() => setEditingRule(rule)} className="bg-zinc-100 hover:bg-black hover:text-white text-zinc-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase transition-all">Edit</button>
+                         <td className="p-6 flex justify-end items-center gap-4 pointer-events-auto" onClick={e => e.stopPropagation()}>
+                           <button onClick={() => runSelectiveSync([rule.id])} title="Sync this item now" className="p-2 bg-zinc-100 hover:bg-black hover:text-white text-zinc-400 rounded-lg transition-all"><RefreshCcw size={14} /></button>
+                           <button onClick={() => toggleAutoSync(rule.id, rule.auto_update)} className={`w-12 h-6 rounded-full p-1 flex items-center transition-all ${rule.auto_update ? 'bg-black justify-end shadow-inner' : 'bg-zinc-300 justify-start'}`}><div className="w-4 h-4 bg-white rounded-full shadow-md"></div></button>
+                           <button onClick={() => setEditingRule(rule)} className="bg-zinc-100 hover:bg-black hover:text-white text-zinc-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase transition-all">Edit</button>
                           <button onClick={() => deleteRule(rule.id)} className="text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={18} /></button>
                         </td>
                       </tr>
@@ -1802,6 +1832,15 @@ export default function OpsDashboard() {
                   <label className="text-[10px] font-black uppercase text-zinc-400 mb-2 block tracking-widest italic">Vendor Product URL</label>
                   <input type="text" className="w-full p-4 bg-zinc-100 rounded-xl font-mono text-xs outline-none border-2 border-transparent focus:border-black transition-all" value={editingRule.vendor_url || ''} onChange={(e) => setEditingRule({...editingRule, vendor_url: e.target.value})} />
                 </div>
+                {editingRule.last_log && editingRule.last_log.includes('Link:') && (
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-zinc-400 mb-2 block tracking-widest italic">LoamLabs Store URL</label>
+                    <div className="flex items-center gap-2">
+                       <input type="text" readOnly className="flex-grow p-4 bg-zinc-50 rounded-xl font-mono text-[10px] text-zinc-500 outline-none border-2 border-transparent" value={editingRule.last_log.split('Link:')[1].trim()} />
+                       <a href={editingRule.last_log.split('Link:')[1].trim()} target="_blank" className="p-4 bg-black text-white rounded-xl hover:bg-zinc-800 transition-all"><ExternalLink size={14}/></a>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="text-[10px] font-black uppercase text-zinc-400 mb-2 block tracking-widest italic">Price Adjustment</label>

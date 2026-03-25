@@ -32,11 +32,20 @@ export default async function handler(req, res) {
     let rangeStart = 0;
 
     while (hasMore) {
-      const { data, error } = await supabase.from('watcher_rules').select('*').range(rangeStart, rangeStart + 999);
+      let query = supabase.from('watcher_rules').select('*');
+      
+      // Support selective sync for one or many items
+      if (req.body?.ruleIds && Array.isArray(req.body.ruleIds)) {
+        query = query.in('id', req.body.ruleIds);
+      } else if (req.query?.id) {
+        query = query.eq('id', req.query.id);
+      }
+
+      const { data, error } = await query.range(rangeStart, rangeStart + 999);
       if (error) throw error;
       if (data && data.length > 0) {
         rules = rules.concat(data);
-        if (data.length < 1000) hasMore = false;
+        if (data.length < 1000 || req.body?.ruleIds || req.query?.id) hasMore = false;
         else rangeStart += 1000;
       } else {
         hasMore = false;
@@ -315,7 +324,7 @@ export default async function handler(req, res) {
           const sResponse = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
             method: 'POST', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              query: `query($id: ID!) { productVariant(id: $id) { price compareAtPrice inventoryQuantity inventoryPolicy product { id } btiMonitor: metafield(namespace: "custom", key: "inventory_monitoring_enabled") { value } } }`,
+              query: `query($id: ID!) { productVariant(id: $id) { price compareAtPrice inventoryQuantity inventoryPolicy product { id handle } btiMonitor: metafield(namespace: "custom", key: "inventory_monitoring_enabled") { value } } }`,
               variables: { id: variantGid }
             })
           });
@@ -324,12 +333,14 @@ export default async function handler(req, res) {
           if (!variant) throw new Error(`Shopify ID ${rule.shopify_variant_id} not found`);
 
           const currentBtiFlag = variant.btiMonitor ? (variant.btiMonitor.value === 'true') : null;
+          const productHandle = variant.product?.handle || '';
 
           if (!winner.available && (rule.bti_monitoring_enabled === true || rule.bti_monitoring_enabled === 'true')) {
-             console.log(`Vendor OOS for ${rule.id}. Deferring to external BTI Sync (active monitoring).`);
+             console.log(`[SYNC] Vendor OOS for ${rule.title} (${rule.id}). Match: "${winner.public_title || 'Parsed Options'}". Deferring to BTI Sync (active monitoring).`);
              
              // Dynamic Hand-off: Automatically tell Shopify that BTI is permitted to take over since Vendor is OOS.
              if (rule.auto_update === true && currentBtiFlag !== true) {
+                 console.log(`[SYNC] Enabling BTI authority for ${rule.title} (Metafield Toggle ON).`);
                  await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
                      method: 'PUT', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
                      body: JSON.stringify({ variant: { id: rule.shopify_variant_id, metafields: [{ namespace: "custom", key: "inventory_monitoring_enabled", value: "true", type: "boolean" }] } })
@@ -337,11 +348,19 @@ export default async function handler(req, res) {
              }
 
              await supabase.from('watcher_rules').update({
-                 last_log: `Vendor OOS (Matched: "${winner.public_title || 'Parsed Options'}"). Deferring to BTI.`,
+                 last_log: `Vendor OOS (Matched: "${winner.public_title || 'Parsed Options'}"). Deferring to BTI. Link: https://loamlabs.com/products/${productHandle}`,
                  last_availability: false,
                  last_run_at: new Date().toISOString()
              }).eq('id', rule.id);
              continue; // Exit the loop before touching Shopify Price or Inventory Policy!
+          }
+
+          if (winner.available && currentBtiFlag === true && rule.auto_update === true) {
+              console.log(`[SYNC] Vendor BACK-IN-STOCK for ${rule.title}. Reclaiming authority from BTI.`);
+              await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/variants/${rule.shopify_variant_id}.json`, {
+                  method: 'PUT', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ variant: { id: rule.shopify_variant_id, metafields: [{ namespace: "custom", key: "inventory_monitoring_enabled", value: "false", type: "boolean" }] } })
+              }).catch(e => console.error(e));
           }
 
           const vendorPrice = winner.price / 100;
