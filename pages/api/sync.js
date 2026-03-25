@@ -67,7 +67,12 @@ export default async function handler(req, res) {
       const url = `${rule.vendor_url}.js`;
       const vResponse = await fetch(url);
       if (!vResponse.ok) {
-        console.log(`Berd endpoint returned ${vResponse.status} for ${url}, skipping...`);
+        const errLog = `Fetch failed (${vResponse.status}): ${url}`;
+        console.error(`[SYNC ERROR] ${errLog}`);
+        await supabase.from('watcher_rules').update({
+            last_log: errLog,
+            last_run_at: new Date().toISOString()
+        }).eq('id', rule.id);
         continue;
       }
       const textObj = await vResponse.text();
@@ -75,7 +80,12 @@ export default async function handler(req, res) {
       try {
         vData = JSON.parse(textObj);
       } catch(e) {
-        console.log(`Berd endpoint returned non-JSON payload for ${url}, skipping...`);
+        const errLog = `JSON Parse failed: ${url}`;
+        console.error(`[SYNC ERROR] ${errLog}`);
+        await supabase.from('watcher_rules').update({
+            last_log: errLog,
+            last_run_at: new Date().toISOString()
+        }).eq('id', rule.id);
         continue;
       }
 
@@ -319,6 +329,7 @@ export default async function handler(req, res) {
             }
         }
 
+        console.log(`[RULE: ${rule.id}] Processing "${rule.title}" | Winner: "${winner?.public_title || 'None'}" (InStock: ${winner?.available}) | Status: ${vStatus}`);
         if (winner) {
           const variantGid = `gid://shopify/ProductVariant/${rule.shopify_variant_id}`;
           const sResponse = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
