@@ -49,14 +49,14 @@ export default function OpsDashboard() {
     { key: 'weight_g', label: 'Weight (Variant)', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'decimal' },
     { key: 'weight', label: 'Weight (Variant Aliased)', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'decimal' },
     { key: 'length_adjust_mm', label: 'Length Adjust mm', categories: ['SPOKE'], target: 'variant', type: 'decimal' },
-    { key: 'wheel_spec_position', label: 'Position', categories: ['HUB'], target: 'variant', type: 'single_line_text_field' },
-    { key: 'wheel_spec_brake_interface', label: 'Brake Interface', categories: ['HUB'], target: 'variant', type: 'single_line_text_field' },
-    { key: 'wheel_spec_hub_spacing', label: 'Hub Spacing', categories: ['HUB'], target: 'variant', type: 'single_line_text_field' },
-    { key: 'wheel_spec_rim_size', label: 'Rim Size', categories: ['RIM'], target: 'variant', type: 'single_line_text_field' },
-    { key: 'rim_erd', label: 'Rim ERD', categories: ['RIM'], target: 'variant', type: 'decimal' },
+    { key: 'wheel_spec_position', label: 'Position', categories: ['HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
+    { key: 'wheel_spec_brake_interface', label: 'Brake Interface', categories: ['HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
+    { key: 'wheel_spec_hub_spacing', label: 'Hub Spacing', categories: ['HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
+    { key: 'wheel_spec_rim_size', label: 'Rim Size', categories: ['RIM'], target: 'variant', type: 'single_line_text_field', isConstant: true },
+    { key: 'rim_erd', label: 'Rim ERD', categories: ['RIM'], target: 'variant', type: 'decimal', isConstant: true },
     { key: 'valve_min_rim_depth_mm', label: 'Valve Min Rim Depth mm', categories: ['VALVESTEM'], target: 'variant', type: 'integer' },
     { key: 'valve_max_rim_depth_mm', label: 'Valve Max Rim Depth mm', categories: ['VALVESTEM'], target: 'variant', type: 'integer' },
-    { key: 'internal_width_mm', label: 'Internal Width mm', categories: ['RIM'], target: 'variant', type: 'integer' },
+    { key: 'internal_width_mm', label: 'Internal Width mm', categories: ['RIM'], target: 'variant', type: 'integer', isConstant: true },
     { key: 'acc_rim_width_min', label: 'Accessory Compatible Rim Width MIN (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'acc_rim_width_max', label: 'Accessory Compatible Rim Width MAX (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'hub_sp_offset_left', label: 'Hub SP Offset Spoke Hole Left', categories: ['HUB'], target: 'variant', type: 'decimal' },
@@ -110,6 +110,26 @@ export default function OpsDashboard() {
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [syncLogs, setSyncLogs] = useState([]);
   const lastCheckedIndex = useRef(null);
+
+  const getDiscrepancies = (variants) => {
+    if (!variants || variants.length <= 1) return {};
+    const constantKeys = metafieldRegistry.filter(m => m.isConstant).map(m => m.key);
+    const issues = {};
+    
+    constantKeys.forEach(key => {
+      const values = variants.map(v => v[key]).filter(val => val !== undefined && val !== null && val !== '');
+      const uniqueValues = [...new Set(values)];
+      if (uniqueValues.length > 1) {
+        // Calculate consensus (most common value)
+        const counts = {};
+        values.forEach(v => { counts[v] = (counts[v] || 0) + 1; });
+        const consensus = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+        
+        issues[key] = { values: uniqueValues, consensus };
+      }
+    });
+    return issues;
+  };
 
   const handleCheckboxClick = (index, ruleId, e) => {
     if (e.shiftKey && lastCheckedIndex.current !== null && lastCheckedIndex.current !== index) {
@@ -451,6 +471,36 @@ export default function OpsDashboard() {
       setSelectedLabProducts([]);
       setSelectedLabVariants([]);
     }
+  };
+
+  const syncFieldToFamily = async (product, fieldKey, value) => {
+    const reg = metafieldRegistry.find(m => m.key === fieldKey);
+    if (!reg) return;
+    
+    const productVariants = allUniqueRules.filter(r => r.shopify_product_id === product.shopify_product_id);
+    const variantIds = productVariants.map(v => v.shopify_variant_id);
+    
+    if (!confirm(`Sync ${reg.label} value "${value}" to all ${variantIds.length} variants in "${product.title}"?`)) return;
+    
+    setLoading(true);
+    try {
+      const auth = localStorage.getItem('loam_ops_auth');
+      await fetch('/api/bulk-update-metafields', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': auth },
+        body: JSON.stringify({ 
+          ids: variantIds, 
+          metafields: [{ namespace: 'custom', key: fieldKey.replace('variant_', ''), value, type: reg.type }], 
+          targetType: 'ProductVariant' 
+        })
+      });
+      alert(`Synchronized ${reg.label} across product family.`);
+      fetchRules();
+    } catch (e) {
+      console.error(e);
+      alert("Error syncing field to family.");
+    }
+    setLoading(false);
   };
 
   const saveBulkMetafields = async () => {
@@ -1317,6 +1367,7 @@ export default function OpsDashboard() {
                       <th className="p-6">Product Family (A-Z)</th>
                       <th className="p-6">Vendor</th>
                       <th className="p-6 text-center">Variants</th>
+                      <th className="p-6 text-center">Integrity</th>
                       <th className="p-6 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -1350,7 +1401,7 @@ export default function OpsDashboard() {
                       if (filtered.length === 0) {
                         return (
                           <tr>
-                            <td colSpan="5" className="p-20 text-center">
+                            <td colSpan="6" className="p-20 text-center">
                               <div className="flex flex-col items-center gap-4">
                                 <div className="p-6 bg-zinc-50 rounded-full text-zinc-300">
                                   <Search size={40} />
@@ -1366,6 +1417,8 @@ export default function OpsDashboard() {
                       return filtered.map(product => {
                         const isExpanded = expandedProducts.includes(product.shopify_product_id);
                         const productVariants = allUniqueRules.filter(r => r.shopify_product_id === product.shopify_product_id);
+                        const discrepancies = getDiscrepancies(productVariants);
+                        const hasIssue = Object.keys(discrepancies).length > 0;
 
                         return (
                           <React.Fragment key={product.shopify_product_id}>
@@ -1390,6 +1443,25 @@ export default function OpsDashboard() {
                               <td className="p-6 text-zinc-400 font-bold uppercase text-[10px] tracking-widest">{product.vendor_name}</td>
                               <td className="p-6 text-center">
                                 <span className="bg-zinc-100 text-zinc-600 px-3 py-1 rounded-full font-black text-[10px]">{product.variantCount} SKUs</span>
+                              </td>
+                              <td className="p-6 text-center">
+                                {hasIssue ? (
+                                  <div className="group/integrity relative inline-block">
+                                    <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full font-black text-[9px] uppercase italic animate-pulse cursor-help border border-red-200">⚠️ Discrepancy</span>
+                                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover/integrity:block w-48 bg-black text-white text-[10px] p-3 rounded-xl z-50 shadow-2xl font-sans text-left leading-relaxed">
+                                       <div className="text-zinc-400 mb-2 uppercase font-black tracking-widest">Inconsistent Fields:</div>
+                                       {Object.keys(discrepancies).map(k => (
+                                         <div key={k} className="flex items-center justify-between gap-2 border-b border-zinc-800 last:border-0 py-1">
+                                           <span className="text-zinc-500">{metafieldRegistry.find(m=>m.key===k)?.label || k}</span>
+                                           <span className="text-red-400 font-bold">{discrepancies[k].values.length} vals</span>
+                                         </div>
+                                       ))}
+                                       <div className="mt-2 text-[8px] text-zinc-500 italic">Expand to fix individual variants</div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="bg-green-50 text-green-600 px-3 py-1 rounded-full font-black text-[9px] uppercase italic border border-green-100">✓ Healthy</span>
+                                )}
                               </td>
                               <td className="p-6 text-right">
                                 <div className="flex items-center justify-end gap-2">
@@ -1474,6 +1546,17 @@ export default function OpsDashboard() {
                                                           clean = clean.replace(/^[(\s/-]+|[)\s/-]+$/g, '').trim();
                                                           const subLabel = clean.split(/[/-]/).map(p => p.trim()).slice(1).join(' / ') || clean.split(/[/-]/)[0];
 
+                                                          const variantConstantMetafields = metafieldRegistry.filter(m => m.isConstant && m.target === 'variant');
+                                                           const tags = Array.isArray(product.tags) ? product.tags.map(t => t.toLowerCase()) : [];
+                                                           const activeConstants = variantConstantMetafields.filter(m => m.categories.some(c => 
+                                                              (c === 'RIM' && (tags.includes('rim') || tags.includes('component:rim'))) ||
+                                                              (c === 'HUB' && (tags.includes('hub') || tags.includes('component:hub'))) ||
+                                                              (c === 'SPOKE' && (tags.includes('spoke') || tags.includes('component:spoke'))) ||
+                                                              (c === 'NIPPLE' && (tags.includes('nipple') || tags.includes('component:nipple'))) ||
+                                                              (c === 'VALVESTEM' && (tags.includes('valvestem') || tags.includes('component:valvestem'))) ||
+                                                              (c === 'ACCESSORY' && (tags.includes('accessory') || tags.includes('component:accessory')))
+                                                           ));
+
                                                           return (
                                                           <div key={variant.id} className="flex items-center justify-between p-4 pl-12 hover:bg-zinc-50 transition-colors group select-none" onClick={(e) => { if (e.target.tagName!=='INPUT' && e.target.tagName!=='BUTTON') toggleLabVariant(variant.shopify_variant_id, e, linearVariants); }}>
                                                              <div className="flex items-center gap-4">
@@ -1481,7 +1564,7 @@ export default function OpsDashboard() {
                                                                  type="checkbox" 
                                                                  className="w-4 h-4 rounded border-2 border-zinc-200 text-black focus:ring-black cursor-pointer pointer-events-auto"
                                                                  checked={selectedLabVariants.some(id => String(id)===String(variant.shopify_variant_id))}
-                                                                 onChange={() => {}} onClick={(e) => toggleLabVariant(variant.shopify_variant_id, e.nativeEvent, linearVariants)}
+                                                                 onChange={() => {}} onClick={(e) => toggleLabVariant(variant.shopify_variant_id, e, linearVariants)}
                                                                />
                                                                <div className="w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100 flex items-center justify-center font-black text-[8px] text-zinc-300">SKU</div>
                                                                <div>
@@ -1490,11 +1573,40 @@ export default function OpsDashboard() {
                                                                   <div className="text-[9px] text-zinc-400 mt-0.5">{variant.title}</div>
                                                                </div>
                                                              </div>
+
+                                                             <div className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar ml-8 mr-8">
+                                                                  {activeConstants.map(m => {
+                                                                     const val = variant[m.key];
+                                                                     const disc = discrepancies[m.key];
+                                                                     const isMismatch = disc && val !== disc.consensus;
+                                                                     
+                                                                     return (
+                                                                       <div key={m.key} className={`group/m group flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold whitespace-nowrap transition-all ${isMismatch ? 'bg-red-50 border-red-200 text-red-600 shadow-sm' : val ? 'bg-zinc-50 border-zinc-100 text-zinc-500' : 'bg-transparent border-transparent text-zinc-300 opacity-60'}`}>
+                                                                          <span className="uppercase opacity-50 text-[8px] tracking-widest">{m.label.replace('Wheel Spec ','').replace('Rim ','')}:</span>
+                                                                          <span className={isMismatch ? 'font-black' : ''}>{val || '--'}</span>
+                                                                          {val && (
+                                                                             <button 
+                                                                               onClick={(e) => { e.stopPropagation(); syncFieldToFamily(product, m.key, val); }}
+                                                                               title={`Sync ${m.label} to all variants`}
+                                                                               className="ml-1 p-1 bg-white hover:bg-black hover:text-white rounded-md border border-zinc-200 opacity-0 group-hover/m:opacity-100 transition-all shadow-sm"
+                                                                             >
+                                                                               <RefreshCcw size={10} />
+                                                                             </button>
+                                                                          )}
+                                                                       </div>
+                                                                     );
+                                                                  })}
+                                                              </div>
+
                                                              <div className="flex items-center gap-8 text-right">
                                                                 <div>
                                                                    <div className="text-[8px] font-black uppercase text-zinc-300 tracking-widest">Base Price</div>
                                                                    <div className="text-xs font-mono font-bold">${(variant.last_price / 100).toFixed(2)}</div>
                                                                 </div>
+                                                                <button onClick={(e) => { e.stopPropagation(); setEditingRule(variant); }} className="opacity-0 group-hover:opacity-100 p-2 text-zinc-400 hover:text-black transition-all bg-white rounded-lg border border-zinc-100 flex items-center gap-2 ml-4">
+                                                                    <div className="text-[10px] font-mono text-zinc-300">#{variant.shopify_variant_id}</div>
+                                                                    <ExternalLink size={14}/>
+                                                                 </button>
                                                              </div>
                                                           </div>
                                                           );
