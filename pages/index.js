@@ -1001,11 +1001,16 @@ export default function OpsDashboard() {
                         <td className="p-6 text-center">
                           {rule.needs_review ? <span className="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-pulse uppercase tracking-tighter whitespace-nowrap">Review Required</span> : rule.last_availability ? <span className="bg-green-100 text-green-700 text-[9px] font-black px-3 py-1 rounded-full uppercase italic whitespace-nowrap">Active</span> : <span className="bg-red-100 text-red-600 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter whitespace-nowrap">Out of Stock</span>}
                         </td>
-                        <td className="p-6 text-center">
+                        <td className="p-6 text-center text-xs">
                           {rule.bti_inventory_active ? (
                             <div className="flex flex-col items-center gap-1">
                               <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase italic shadow-sm">BTI Active</span>
                               {rule.bti_part_number && <span className="text-[7px] font-mono text-blue-400 font-bold">{rule.bti_part_number}</span>}
+                            </div>
+                          ) : rule.bti_part_number ? (
+                            <div className="flex flex-col items-center gap-1 opacity-60">
+                              <span className="bg-zinc-100 text-zinc-500 text-[8px] font-black px-2 py-0.5 rounded-full uppercase italic border border-zinc-200">Linked</span>
+                              <span className="text-[7px] font-mono text-zinc-400 font-bold">{rule.bti_part_number}</span>
                             </div>
                           ) : (
                             <span className="text-zinc-200 text-[10px] font-bold">—</span>

@@ -317,8 +317,22 @@ export default async function handler(req, res) {
           let finalShopifyPriceNum = Number(myPrice);
           let updatePayloadForPrice = { id: rule.shopify_variant_id };
           let shouldPutPrice = false;
+          let currentEffectiveBtiFlag = currentBtiFlag;
+          if (rule.auto_update === true && !rule.needs_review) {
+             if (winner.available && currentBtiFlag === true) {
+                console.log(`[SYNC] Vendor BACK-IN-STOCK for ${rule.title}. Reclaiming authority from BTI.`);
+                updatePayloadForPrice.metafields = [{ namespace: "custom", key: "inventory_monitoring_enabled", value: false, type: "boolean" }];
+                shouldPutPrice = true;
+                currentEffectiveBtiFlag = false;
+             } else if (!winner.available && (rule.bti_monitoring_enabled === true || rule.bti_monitoring_enabled === 'true' || rule.tags?.includes('bti-sync')) && currentBtiFlag !== true) {
+                console.log(`[SYNC] Vendor OOS for ${rule.title}. Deferring authority to BTI.`);
+                updatePayloadForPrice.metafields = [{ namespace: "custom", key: "inventory_monitoring_enabled", value: true, type: "boolean" }];
+                shouldPutPrice = true;
+                currentEffectiveBtiFlag = true;
+             }
+          }
 
-          if (needsPriceUpdate && rule.auto_update === true && !rule.needs_review) {
+          if (needsPriceUpdate && rule.auto_update === true && !rule.needs_review && currentEffectiveBtiFlag !== true) {
              updatePayloadForPrice.price = goalPrice;
              if (myCompare && Number(myCompare) > Number(myPrice)) {
                 const gap = Number(myCompare) - Number(myPrice);
@@ -326,21 +340,6 @@ export default async function handler(req, res) {
              } else { updatePayloadForPrice.compare_at_price = goalPrice; }
              shouldPutPrice = true;
              finalShopifyPriceNum = Number(goalPrice);
-          }
-
-          let currentEffectiveBtiFlag = currentBtiFlag;
-          if (rule.auto_update === true && !rule.needs_review) {
-             if (winner.available && currentBtiFlag === true) {
-                console.log(`[SYNC] Vendor BACK-IN-STOCK for ${rule.title}. Reclaiming INVENTORY authority from BTI.`);
-                updatePayloadForPrice.metafields = [{ namespace: "custom", key: "inventory_monitoring_enabled", value: "false", type: "boolean" }];
-                shouldPutPrice = true;
-                currentEffectiveBtiFlag = false;
-             } else if (!winner.available && (rule.bti_monitoring_enabled === true || rule.bti_monitoring_enabled === 'true') && currentBtiFlag !== true) {
-                console.log(`[SYNC] Vendor OOS for ${rule.title}. Deferring INVENTORY to BTI.`);
-                updatePayloadForPrice.metafields = [{ namespace: "custom", key: "inventory_monitoring_enabled", value: "true", type: "boolean" }];
-                shouldPutPrice = true;
-                currentEffectiveBtiFlag = true;
-             }
           }
 
           if (shouldPutPrice) {
@@ -389,8 +388,8 @@ export default async function handler(req, res) {
             if (daysSinceOOS > 0 && daysSinceOOS % reminderInterval === 0) oosReminders.push({ title: rule.title, days: daysSinceOOS });
           }
 
-          let newLog = `Synced (${winner.available ? 'In Stock' : 'OOS'}). Link: https://loamlabs.com/products/${productHandle}`;
-          if (!winner.available && currentEffectiveBtiFlag === true) newLog = `Vendor OOS (Matched: "${winner.public_title}"). Deferring INVENTORY to BTI. Link: https://loamlabs.com/products/${productHandle}`;
+          let newLog = `Synced (${winner.available ? 'In Stock' : 'OOS'}). Link: https://loamlabsusa.com/products/${productHandle}`;
+          if (!winner.available && currentEffectiveBtiFlag === true) newLog = `Vendor OOS (Matched: "${winner.public_title}"). Deferring INVENTORY to BTI. Link: https://loamlabsusa.com/products/${productHandle}`;
 
           await supabase.from('watcher_rules').update({ 
             last_price: Math.round(vendorPrice * 100), 
