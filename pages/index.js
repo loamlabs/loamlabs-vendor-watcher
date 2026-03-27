@@ -441,6 +441,18 @@ export default function OpsDashboard() {
     setLoading(false);
   };
 
+  const runLabSync = () => {
+    const idsFromProducts = rules.filter(r => selectedLabProducts.includes(String(r.shopify_product_id))).map(r => r.id);
+    const idsFromVariants = rules.filter(r => selectedLabVariants.includes(String(r.shopify_variant_id))).map(r => r.id);
+    const allIds = [...new Set([...idsFromProducts, ...idsFromVariants])];
+    runSelectiveSync(allIds);
+    // Note: runSelectiveSync will clear selectedRules, but we need to clear lab selections too
+    if (allIds.length > 0) {
+      setSelectedLabProducts([]);
+      setSelectedLabVariants([]);
+    }
+  };
+
   const saveBulkMetafields = async () => {
     const validEntries = Object.entries(metaEditFields).filter(([_, val]) => val !== undefined && val !== '' && val !== '_CONFLICT_');
     
@@ -1628,6 +1640,8 @@ export default function OpsDashboard() {
               </div>
               <div className="flex items-center gap-4 flex-wrap">
                 <button onClick={openMetafieldEditor} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors bg-blue-950/30 px-4 py-2.5 rounded-xl"><Edit size={14} /> Edit Metafields</button>
+                <div className="w-px h-6 bg-zinc-800"></div>
+                <button onClick={runLabSync} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-green-400 transition-colors bg-zinc-900 px-4 py-2.5 rounded-xl border border-zinc-700 shadow-lg"><RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> Sync Selected Items</button>
                 <div className="w-px h-6 bg-zinc-800"></div>
                 <button onClick={bulkIgnoreLab} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-red-400 transition-colors bg-red-600 px-5 py-2.5 rounded-xl shadow-lg shadow-red-500/20"><ShieldAlert size={14} /> Ignore & Purge Family</button>
               </div>
