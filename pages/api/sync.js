@@ -307,7 +307,7 @@ export default async function handler(req, res) {
           const sResponse = await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/graphql.json`, {
             method: 'POST', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              query: `query($id: ID!) { productVariant(id: $id) { price compareAtPrice inventoryQuantity inventoryPolicy product { id handle } btiMonitor: metafield(namespace: "custom", key: "inventory_monitoring_enabled") { value } } }`,
+              query: `query($id: ID!) { productVariant(id: $id) { price compareAtPrice inventoryQuantity inventoryPolicy product { id handle tags } btiMonitor: metafield(namespace: "custom", key: "inventory_monitoring_enabled") { value } } }`,
               variables: { id: variantGid }
             })
           });
@@ -316,7 +316,33 @@ export default async function handler(req, res) {
           if (!variant) throw new Error(`Shopify ID ${rule.shopify_variant_id} not found`);
 
           const currentBtiFlag = variant.btiMonitor ? (variant.btiMonitor.value === 'true') : null;
+          const productTags = variant.product?.tags || [];
+          const productId = variant.product?.id || null;
           const productHandle = variant.product?.handle || '';
+          
+          const MASTER_TAG = 'vendor-watcher-master';
+          let updatedTags = [...productTags];
+          let tagsModified = false;
+
+          if (winner.available) {
+             if (!updatedTags.includes(MASTER_TAG)) {
+                updatedTags.push(MASTER_TAG);
+                tagsModified = true;
+             }
+          } else if (currentEffectiveBtiFlag === true) {
+             if (updatedTags.includes(MASTER_TAG)) {
+                updatedTags = updatedTags.filter(t => t !== MASTER_TAG);
+                tagsModified = true;
+             }
+          }
+
+          if (tagsModified && productId) {
+             const numericProductId = productId.split('/').pop();
+             await fetch(`https://${process.env.SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2024-04/products/${numericProductId}.json`, {
+                method: 'PUT', headers: { 'X-Shopify-Access-Token': adminToken, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ product: { id: numericProductId, tags: updatedTags.join(', ') } })
+             }).catch(e => console.error(e));
+          }
           const vendorPrice = winner.price / 100;
           const stdFactor = rule.price_adjustment_factor || 1.0;
           let goalPriceNum = vendorPrice * stdFactor;
