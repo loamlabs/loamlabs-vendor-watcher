@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, ChevronDown, ChevronRight, Trash2, AlertCircle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker, Edit3, Edit, Settings, ExternalLink, BarChart3 } from 'lucide-react';
+import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, ChevronDown, ChevronRight, Trash2, AlertCircle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker, Edit3, Edit, Settings, ExternalLink, BarChart } from 'lucide-react';
 
 export default function OpsDashboard() {
   const [editingRule, setEditingRule] = useState(null);
@@ -21,6 +21,7 @@ export default function OpsDashboard() {
   const [visibleCount, setVisibleCount] = useState(50);
   const [selectedRules, setSelectedRules] = useState([]);
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [showMetaEditModal, setShowMetaEditModal] = useState(false);
   const [bulkEditUrl, setBulkEditUrl] = useState('');
   const [showDupModal, setShowDupModal] = useState(false);
   const [dupSourceProduct, setDupSourceProduct] = useState(null);
@@ -921,7 +922,7 @@ export default function OpsDashboard() {
             onClick={() => setActiveTab('product_lab')} 
             badge={totalDiscrepancies > 0 ? totalDiscrepancies : null}
           />
-          <SidebarLink icon={<BarChart3 size={18}/>} label="Insights & Analytics" active={activeTab === 'insights'} onClick={() => { setActiveTab('insights'); fetchAbandonedBuilds(); }} />
+          <SidebarLink icon={<BarChart size={18}/>} label="Insights & Analytics" active={activeTab === 'insights'} onClick={() => { setActiveTab('insights'); fetchAbandonedBuilds(); }} />
           <SidebarLink icon={<ShieldCheck size={18}/>} label="Shop Health" active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} />
         </nav>
         <div className="relative mt-auto border-t border-zinc-800 pt-6">
