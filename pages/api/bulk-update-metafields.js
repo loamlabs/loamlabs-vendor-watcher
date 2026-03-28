@@ -33,7 +33,8 @@ export default async function handler(req, res) {
     const metafieldsToSet = [];
     ids.forEach(id => {
       // Ensure Shopify ID formatting
-      const shopifyId = id.includes('gid://') ? id : `gid://shopify/${targetType}/${id}`;
+      const stringId = String(id);
+      const shopifyId = stringId.includes('gid://') ? stringId : `gid://shopify/${targetType}/${stringId}`;
       
       metafields.forEach(meta => {
         metafieldsToSet.push({
@@ -80,7 +81,7 @@ export default async function handler(req, res) {
       const { error: dbError } = await supabase
         .from('watcher_rules')
         .update(updateData)
-        .in('shopify_variant_id', ids.map(id => id.split('/').pop()));
+        .in('shopify_variant_id', ids.map(id => String(id).split('/').pop()));
       
       if (dbError) throw dbError;
     }

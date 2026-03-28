@@ -1663,28 +1663,28 @@ export default function OpsDashboard() {
                                                   </div>
                                                   {isGroupExpanded && (
                                                     <div className="bg-white divide-y divide-zinc-50">
-                                                       {variants.sort((a,b) => a.title.localeCompare(b.title)).map(variant => {
-                                                          const pSplit = product.title.split('(')[0].trim().toLowerCase();
-                                                          const discrepancies = getDiscrepancies(variants);
-                                                          
-                                                          let clean = variant.title;
-                                                          if (clean.toLowerCase().startsWith(pSplit)) { clean = clean.substring(pSplit.length).trim(); }
-                                                          clean = clean.replace(/^[(\s/-]+|[)\s/-]+$/g, '').trim();
-                                                          const subLabel = clean.split(/[/-]/).map(p => p.trim()).slice(1).join(' / ') || clean.split(/[/-]/)[0];
+                                                        {(() => {
+                                                           const groupDiscrepancies = getDiscrepancies(variants);
+                                                           return variants.sort((a,b) => a.title.localeCompare(b.title)).map(variant => {
+                                                              const pSplit = String(product.title || "").split('(')[0].trim().toLowerCase();
+                                                              let clean = variant.title;
+                                                              if (clean.toLowerCase().startsWith(pSplit)) { clean = clean.substring(pSplit.length).trim(); }
+                                                              clean = clean.replace(/^[(\s/-]+|[)\s/-]+$/g, '').trim();
+                                                              const subLabel = clean.split(/[/-]/).map(p => p.trim()).slice(1).join(' / ') || clean.split(/[/-]/)[0];
 
-                                                          const variantConstantMetafields = metafieldRegistry.filter(m => m.isConstant && m.target === 'variant');
-                                                           const tags = Array.isArray(product.tags) ? product.tags.map(t => t.toLowerCase()) : [];
-                                                           const activeConstants = variantConstantMetafields.filter(m => m.categories.some(c => 
-                                                              (c === 'RIM' && (tags.includes('rim') || tags.includes('component:rim'))) ||
-                                                              (c === 'HUB' && (tags.includes('hub') || tags.includes('component:hub'))) ||
-                                                              (c === 'SPOKE' && (tags.includes('spoke') || tags.includes('component:spoke'))) ||
-                                                              (c === 'NIPPLE' && (tags.includes('nipple') || tags.includes('component:nipple'))) ||
-                                                              (c === 'VALVESTEM' && (tags.includes('valvestem') || tags.includes('component:valvestem'))) ||
-                                                              (c === 'ACCESSORY' && (tags.includes('accessory') || tags.includes('component:accessory')))
-                                                           ));
+                                                              const variantConstantMetafields = metafieldRegistry.filter(m => m.isConstant && m.target === 'variant');
+                                                              const tags = Array.isArray(product.tags) ? product.tags.map(t => t.toLowerCase()) : [];
+                                                              const activeConstants = variantConstantMetafields.filter(m => m.categories.some(c => 
+                                                                (c === 'RIM' && (tags.includes('rim') || tags.includes('component:rim'))) ||
+                                                                (c === 'HUB' && (tags.includes('hub') || tags.includes('component:hub'))) ||
+                                                                (c === 'SPOKE' && (tags.includes('spoke') || tags.includes('component:spoke'))) ||
+                                                                (c === 'NIPPLE' && (tags.includes('nipple') || tags.includes('component:nipple'))) ||
+                                                                (c === 'VALVESTEM' && (tags.includes('valvestem') || tags.includes('component:valvestem'))) ||
+                                                                (c === 'ACCESSORY' && (tags.includes('accessory') || tags.includes('component:accessory')))
+                                                              ));
 
                                                           return (
-                                                          <div key={variant.id} className="flex items-center justify-between p-4 pl-12 hover:bg-zinc-50 transition-colors group select-none" onClick={(e) => { if (e.target.tagName!=='INPUT' && e.target.tagName!=='BUTTON') toggleLabVariant(variant.shopify_variant_id, e, linearVariants); }}>
+                                                          <div key={variant.shopify_variant_id} className="flex items-center justify-between p-4 pl-12 hover:bg-zinc-50 transition-colors group select-none" onClick={(e) => { if (e.target.tagName!=='INPUT' && e.target.tagName!=='BUTTON') toggleLabVariant(variant.shopify_variant_id, e, linearVariants); }}>
                                                              <div className="flex items-center gap-4">
                                                                <input 
                                                                  type="checkbox" 
@@ -1703,7 +1703,7 @@ export default function OpsDashboard() {
                                                              <div className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar ml-8 mr-8">
                                                                   {activeConstants.map(m => {
                                                                      const val = variant[m.key];
-                                                                     const disc = discrepancies[m.key];
+                                                                     const disc = groupDiscrepancies[m.key];
                                                                      const isMismatch = disc && val !== disc.consensus;
                                                                      
                                                                      return (
@@ -1736,7 +1736,7 @@ export default function OpsDashboard() {
                                                              </div>
                                                           </div>
                                                           );
-                                                       })}
+                                                        })})()}
                                                     </div>
                                                   )}
                                                </div>
