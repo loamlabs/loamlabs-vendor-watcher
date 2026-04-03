@@ -125,18 +125,17 @@ export default async function handler(req, res) {
             let rearSizeValue = null, frontWheelValue = null, driverValue = null;
             for (const [optName, optValue] of Object.entries(parsedOptions)) {
                 if (!optValue) continue;
-                if (optName.toLowerCase().includes('rear')) rearSizeValue = optValue.toLowerCase().replace(/["']/g, '').trim();
-                if (optName.toLowerCase().includes('front') || optValue.toLowerCase().includes('front')) frontWheelValue = optValue.toLowerCase().replace(/["']/g, '').trim();
+                const ov = optValue.toLowerCase();
+                if (optName.toLowerCase().includes('rear')) rearSizeValue = ov.replace(/["']/g, '').trim();
+                if (optName.toLowerCase().includes('front') || ov.includes('front')) frontWheelValue = ov.replace(/["']/g, '').trim();
                 if (
                     optName.toLowerCase().includes('driver') || 
                     optName.toLowerCase().includes('axle') || 
                     optName.toLowerCase().includes('freehub') || 
                     optName.toLowerCase().includes('cassette') ||
-                    optValue.toLowerCase() === 'ms' ||
-                    optValue.toLowerCase() === 'xd' ||
-                    optValue.toLowerCase() === 'hg'
+                    ov === 'ms' || ov === 'xd' || ov === 'hg' || ov === 'mini hg' || ov.includes('7 spd') || ov.includes('mini-hg')
                 ) {
-                    driverValue = optValue.toLowerCase().replace(/["']/g, '').trim();
+                    driverValue = ov.replace(/["']/g, '').trim();
                 }
             }
 
@@ -187,11 +186,43 @@ export default async function handler(req, res) {
                     }
 
                     if (driverValue && driverValue !== 'none' && driverValue !== 'no freehub') {
-                        let driverSurcharge = 17995; 
-                        if (driverValue.includes('7p') || driverValue.includes('7sp') || driverValue.includes('cassette')) {
-                            driverSurcharge = 32995; 
+                        let accessoryUrl = 'https://www.ethirteen.com/products/replacement-freehub-body-kit-sidekick';
+                        if (driverValue.includes('7 spd') || driverValue.includes('7spd') || driverValue.includes('cassette') || driverValue.includes('mini')) {
+                            accessoryUrl = 'https://www.ethirteen.com/products/sidekick-driver-kit-downhill';
                         }
-                        finalPrice += driverSurcharge;
+                        
+                        try {
+                            const accResp = await fetch(accessoryUrl + '.js', { headers: { 'User-Agent': randomUA } });
+                            const accData = await accResp.json();
+                            if (accData?.variants?.length > 0) {
+                                let driverSurcharge = 17995; 
+                                const axleString = axleMatch ? axleMatch[1] : (isSuperboost ? '157' : '148');
+                                
+                                const matchingVariant = accData.variants.find(v => {
+                                    const vt = normalize(v.public_title);
+                                    if (!vt.includes(axleString)) return false;
+                                    if (driverValue.includes('7 spd') || driverValue.includes('7spd') || driverValue.includes('cassette')) {
+                                        return vt.includes('7 spd') || vt.includes('cassette');
+                                    }
+                                    if (driverValue.includes('mini')) return vt.includes('mini');
+                                    if (driverValue === 'xd') return vt.includes('xd') && !vt.includes('ms');
+                                    if (driverValue === 'ms' || driverValue === 'microspline') return vt.includes('microspline') || vt.includes('ms');
+                                    if (driverValue === 'hg') return vt.includes('hg') && !vt.includes('mini');
+                                    return vt.includes(driverValue);
+                                });
+
+                                if (matchingVariant) {
+                                    driverSurcharge = Math.max(matchingVariant.price, matchingVariant.compare_at_price || 0);
+                                    console.log(`[SYNC] Dynamic Surcharge for ${driverValue}: $${(driverSurcharge/100).toFixed(2)} (from ${accessoryUrl})`);
+                                } else {
+                                    console.warn(`[SYNC] No exact match for driver ${driverValue} in ${accessoryUrl}. Falling back to 179.95.`);
+                                }
+                                finalPrice += driverSurcharge;
+                            }
+                        } catch (ae) {
+                            console.error(`Surcharge fetch failed for ${accessoryUrl}: ${ae.message}`);
+                            finalPrice += 17995; // Absolute fallback
+                        }
                     }
 
                     winner = { 

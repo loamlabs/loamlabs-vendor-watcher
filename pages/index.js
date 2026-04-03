@@ -1261,13 +1261,13 @@ export default function OpsDashboard() {
                         </div>
                       </div>
                     </th>
-                    <th className="p-6 text-center whitespace-nowrap">Dist. Status</th>
-                    <th className="p-6 text-center">BTI</th>
-                    <th className="p-6">Memory (Base)</th>
-                    <th className="p-6">Adjusted Price</th>
-                    <th className="p-6">Current (Shopify)</th>
-                    <th className="p-6">Compare-At (Shopify)</th>
-                    <th className="p-6 text-right">Auto-Sync / Actions</th>
+                    <th className="p-6 text-center whitespace-nowrap" title="BTI status relative to inventory monitoring">Dist. Status</th>
+                    <th className="p-6 text-center" title="Whether BTI is currently governing inventory for this variant">BTI</th>
+                    <th className="p-6" title="The highest detected MSRP or High-Water-Mark price from the vendor.">Memory (Base)</th>
+                    <th className="p-6" title="Target price based on Adjustment Factor (e.g. 0.99 = 1% discount).">Adjusted Price</th>
+                    <th className="p-6" title="Live price on your Shopify store. Red indicates a mismatch with Adjusted Price.">Current (Shopify)</th>
+                    <th className="p-6" title="The 'Was' price on Shopify. Should be >= Adjusted Price to show a sale badge.">Compare-At (Shopify)</th>
+                    <th className="p-6 text-right" title="Automation controls and row actions.">Auto-Sync / Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
