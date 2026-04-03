@@ -58,8 +58,8 @@ export default function OpsDashboard() {
     { key: 'wheel_spec_hub_spacing', label: 'Hub Spacing', categories: ['HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
     { key: 'wheel_spec_rim_size', label: 'Rim Size', categories: ['RIM'], target: 'variant', type: 'single_line_text_field', isConstant: true },
     { key: 'rim_erd', label: 'Rim ERD', categories: ['RIM'], target: 'variant', type: 'decimal', isConstant: true },
-    { key: 'valve_min_rim_depth_mm', label: 'Valve Min Rim Depth mm', categories: ['VALVESTEM'], target: 'variant', type: 'integer' },
-    { key: 'valve_max_rim_depth_mm', label: 'Valve Max Rim Depth mm', categories: ['VALVESTEM'], target: 'variant', type: 'integer' },
+    { key: 'valve_min_rim_depth_mm', label: 'Valve Min Rim Depth mm', categories: ['VALVESTEM'], target: 'variant', type: 'integer', isConstant: true },
+    { key: 'valve_max_rim_depth_mm', label: 'Valve Max Rim Depth mm', categories: ['VALVESTEM'], target: 'variant', type: 'integer', isConstant: true },
     { key: 'internal_width_mm', label: 'Internal Width mm', categories: ['RIM'], target: 'variant', type: 'integer', isConstant: true },
     { key: 'acc_rim_width_min', label: 'Accessory Compatible Rim Width MIN (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'acc_rim_width_max', label: 'Accessory Compatible Rim Width MAX (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
@@ -1705,7 +1705,11 @@ export default function OpsDashboard() {
 
                                                              <div className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar ml-8 mr-8">
                                                                   {activeConstants.map(m => {
-                                                                     const val = variant[m.key];
+                                                                     let val = variant[m.key];
+                                                                     let parsedVal = val;
+                                                                     if (typeof val === 'string' && val.startsWith('[') && val.endsWith(']')) {
+                                                                        try { const arr = JSON.parse(val); if (arr.length > 0) parsedVal = arr[0]; } catch(e) {}
+                                                                     }
                                                                      const disc = groupDiscrepancies[m.key];
                                                                      const isMismatch = disc && val !== disc.consensus;
                                                                      
@@ -1716,11 +1720,15 @@ export default function OpsDashboard() {
                                                                              <select 
                                                                                className={`${isMismatch ? 'font-black' : ''} bg-transparent outline-none cursor-pointer hover:text-black focus:text-black leading-none pb-0 text-[10px]`}
                                                                                style={{ width: '45px' }}
-                                                                               value={val || ''}
+                                                                               value={parsedVal || ''}
                                                                                title="Select new value directly"
                                                                                onClick={e => e.stopPropagation()}
                                                                                onChange={async (e) => {
-                                                                                 const newVal = e.target.value;
+                                                                                 const rawVal = e.target.value;
+                                                                                 let newVal = rawVal;
+                                                                                 if (m.type && m.type.startsWith('list.') && rawVal) {
+                                                                                    newVal = JSON.stringify([rawVal]);
+                                                                                 }
                                                                                  if (newVal === val) return;
                                                                                  setLoading(true);
                                                                                  try {
