@@ -502,6 +502,22 @@ export default function OpsDashboard() {
     setLoading(false);
   };
 
+  const bulkApprovePrices = async () => {
+    if (!confirm(`Are you sure you want to approve manual price changes for ${selectedRules.length} items and PUSH them to Shopify?\n\nThis will permanently clear their "Needs Review" flags.`)) return;
+    setLoading(true);
+    try {
+      await Promise.all(selectedRules.map(id => fetch('/api/update-rule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
+        body: JSON.stringify({ id, updates: { needs_review: false } })
+      })));
+      alert(`Prices Approved! Running Sync to push to Shopify...`);
+      await runSelectiveSync(selectedRules);
+      setSelectedRules([]);
+    } catch(e) { console.error(e); alert('Error approving prices.'); }
+    setLoading(false);
+  };
+
   const bulkSetPriceAdjust = async () => {
     const input = prompt(`Set Price Adjustment Factor for ${selectedRules.length} selected items.\n\nExamples: 0.95 = 5% discount, 0.99 = 1% discount, 1.0 = vendor MSRP\n\nEnter new factor:`);
     if (!input) return;
@@ -2273,24 +2289,27 @@ export default function OpsDashboard() {
               </div>
               <div className="flex items-center gap-4 flex-wrap">
                 {/* Product Lab Actions */}
-                {activeTab === 'product_lab' && <button onClick={openMetafieldEditor} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors bg-blue-950/30 px-4 py-2.5 rounded-xl"><Edit size={14} /> Edit Metafields</button>}
+                {activeTab === 'product_lab' && <button title="Opens a modal to globally edit metafield components for selected assets" onClick={openMetafieldEditor} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors bg-blue-950/30 px-4 py-2.5 rounded-xl"><Edit size={14} /> Edit Metafields</button>}
                 {activeTab === 'product_lab' && <div className="w-px h-6 bg-zinc-800"></div>}
 
                 {/* Vendor Watcher Actions */}
-                {activeTab === 'vendors' && <button onClick={() => setShowBulkEditModal(true)} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors bg-blue-950/30 px-4 py-2.5 rounded-xl"><Edit size={14} /> Set Vendor JSON</button>}
-                {activeTab === 'vendors' && <button onClick={bulkSetPriceAdjust} className="flex items-center gap-2 text-[10px] font-black uppercase text-amber-400 hover:text-amber-300 transition-colors bg-amber-950/30 px-4 py-2.5 rounded-xl">Price Factor</button>}
-                {activeTab === 'vendors' && <button onClick={bulkSetCompareAt} className="flex items-center gap-2 text-[10px] font-black uppercase text-amber-400 hover:text-amber-300 transition-colors bg-amber-950/30 px-4 py-2.5 rounded-xl">Compare-At = MSRP</button>}
+                {activeTab === 'vendors' && <button title="Changes the .json URL the engine scrapes to find this products vendor data" onClick={() => setShowBulkEditModal(true)} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors bg-blue-950/30 px-4 py-2.5 rounded-xl"><Edit size={14} /> Set Vendor JSON</button>}
+                {activeTab === 'vendors' && <button title="Clears 'Needs Review' safety flags and forcefully pushes these prices up/down into Shopify" onClick={bulkApprovePrices} className="flex items-center gap-2 text-[10px] font-black uppercase text-green-400 hover:text-green-300 transition-colors bg-green-950/30 px-4 py-2.5 rounded-xl border border-green-900/50 shadow-lg"><CheckCircle size={14} /> Approve & Push Prices</button>}
+                {activeTab === 'vendors' && <div className="w-px h-6 bg-zinc-800"></div>}
+                
+                {activeTab === 'vendors' && <button title="Set a raw markup factor (e.g. 1.05 = 5% margin increase above MSRP)" onClick={bulkSetPriceAdjust} className="flex items-center gap-2 text-[10px] font-black uppercase text-amber-400 hover:text-amber-300 transition-colors bg-amber-950/30 px-4 py-2.5 rounded-xl">Price Factor</button>}
+                {activeTab === 'vendors' && <button title="Overrides the Shopify 'compare-at' value to equal the current cached MSRP, showing a sale badge" onClick={bulkSetCompareAt} className="flex items-center gap-2 text-[10px] font-black uppercase text-amber-400 hover:text-amber-300 transition-colors bg-amber-950/30 px-4 py-2.5 rounded-xl">Compare-At = MSRP</button>}
                 {activeTab === 'vendors' && <div className="w-px h-6 bg-zinc-800"></div>}
 
                 {/* Sync selected */}
-                <button onClick={() => { activeTab === 'vendors' ? runSelectiveSync(selectedRules) : runLabSync(); }} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-green-400 transition-colors bg-zinc-900 px-4 py-2.5 rounded-xl border border-zinc-700 shadow-lg"><RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> Sync Selected Items</button>
+                <button title="Triggers the live sync scraper immediately to update caching and shopify status if allowed." onClick={() => { activeTab === 'vendors' ? runSelectiveSync(selectedRules) : runLabSync(); }} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-green-400 transition-colors bg-zinc-900 px-4 py-2.5 rounded-xl border border-zinc-700 shadow-lg"><RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> Sync Selected Items</button>
                 
                 {activeTab === 'product_lab' && <div className="w-px h-6 bg-zinc-800"></div>}
-                {activeTab === 'product_lab' && <button onClick={bulkIgnoreLab} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-red-400 transition-colors bg-red-600 px-5 py-2.5 rounded-xl shadow-lg shadow-red-500/20"><ShieldAlert size={14} /> Ignore & Purge Family</button>}
+                {activeTab === 'product_lab' && <button title="Permanently ignores these items from the Lab tools" onClick={bulkIgnoreLab} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-red-400 transition-colors bg-red-600 px-5 py-2.5 rounded-xl shadow-lg shadow-red-500/20"><ShieldAlert size={14} /> Ignore & Purge Family</button>}
 
                 {activeTab === 'vendors' && <div className="w-px h-6 bg-zinc-800"></div>}
-                {activeTab === 'vendors' && <button onClick={bulkIgnore} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-red-400 transition-colors bg-red-600 px-5 py-2.5 rounded-xl bg-opacity-30"><ShieldAlert size={14} /> Disable Watch</button>}
-                {activeTab === 'vendors' && <button onClick={bulkDelete} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-red-400 transition-colors bg-orange-700 px-5 py-2.5 rounded-xl">Destroy</button>}
+                {activeTab === 'vendors' && <button title="Disables Auto-Update and permanently removes these from future syncs" onClick={bulkIgnore} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-red-400 transition-colors bg-red-600 px-5 py-2.5 rounded-xl bg-opacity-30"><ShieldAlert size={14} /> Disable Watch</button>}
+                {activeTab === 'vendors' && <button title="Irreversibly deletes these sync rules entirely from Supabase" onClick={bulkDelete} className="flex items-center gap-2 text-[10px] font-black uppercase text-white hover:text-red-400 transition-colors bg-orange-700 px-5 py-2.5 rounded-xl">Destroy</button>}
               </div>
            </div>
         )}
