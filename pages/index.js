@@ -2293,7 +2293,7 @@ export default function OpsDashboard() {
                 {activeTab === 'product_lab' && <div className="w-px h-6 bg-zinc-800"></div>}
 
                 {/* Vendor Watcher Actions */}
-                {activeTab === 'vendors' && <button title="Changes the .json URL the engine scrapes to find this products vendor data" onClick={() => setShowBulkEditModal(true)} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors bg-blue-950/30 px-4 py-2.5 rounded-xl"><Edit size={14} /> Set Vendor JSON</button>}
+                {activeTab === 'vendors' && <button title="Changes the .json URL the engine scrapes to find this products vendor data" onClick={() => setShowBulkEditModal(true)} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors bg-blue-950/30 px-4 py-2.5 rounded-xl"><Edit size={14} /> Set Vendor URL</button>}
                 {activeTab === 'vendors' && <button title="Clears 'Needs Review' safety flags and forcefully pushes these prices up/down into Shopify" onClick={bulkApprovePrices} className="flex items-center gap-2 text-[10px] font-black uppercase text-green-400 hover:text-green-300 transition-colors bg-green-950/30 px-4 py-2.5 rounded-xl border border-green-900/50 shadow-lg"><CheckCircle size={14} /> Approve & Push Prices</button>}
                 {activeTab === 'vendors' && <div className="w-px h-6 bg-zinc-800"></div>}
                 

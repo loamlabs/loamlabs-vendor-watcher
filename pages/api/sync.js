@@ -187,7 +187,7 @@ export default async function handler(req, res) {
                     }
 
                     if (driverValue && driverValue !== 'none' && driverValue !== 'no freehub') {
-                        let driverSurcharge = 19995; 
+                        let driverSurcharge = 17995; 
                         if (driverValue.includes('7p') || driverValue.includes('7sp') || driverValue.includes('cassette')) {
                             driverSurcharge = 42995; 
                         }
@@ -387,7 +387,7 @@ export default async function handler(req, res) {
              }
           }
 
-          if (needsPriceUpdate && rule.auto_update === true && !forceNeedsReview && currentEffectiveBtiFlag !== true) {
+          if (needsPriceUpdate && rule.auto_update === true && !forceNeedsReview) {
              updatePayloadForPrice.price = goalPrice;
              const baseCompare = myCompare ? Number(myCompare) : 0;
              if (baseCompare > Number(goalPrice)) {
