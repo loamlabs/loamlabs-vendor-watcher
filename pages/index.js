@@ -1712,7 +1712,31 @@ export default function OpsDashboard() {
                                                                      return (
                                                                        <div key={m.key} className={`group/m group flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold whitespace-nowrap transition-all ${isMismatch ? 'bg-red-50 border-red-200 text-red-600 shadow-sm' : val ? 'bg-zinc-50 border-zinc-100 text-zinc-500' : 'bg-transparent border-transparent text-zinc-300 opacity-60'}`}>
                                                                           <span className="uppercase opacity-50 text-[8px] tracking-widest">{m.label.replace('Wheel Spec ','').replace('Rim ','')}:</span>
-                                                                          <span className={isMismatch ? 'font-black' : ''}>{val || '--'}</span>
+                                                                          <span 
+                                                                             className={`${isMismatch ? 'font-black' : ''} cursor-pointer hover:text-black hover:underline decoration-dashed decoration-1 underline-offset-4`}
+                                                                             title="Click to edit value directly"
+                                                                             onClick={async (e) => {
+                                                                                e.stopPropagation();
+                                                                                const newVal = window.prompt(`Update ${m.label}:\n\n(Leave blank to clear the value)`, val || '');
+                                                                                if (newVal !== null && newVal !== val) {
+                                                                                   setLoading(true);
+                                                                                   try {
+                                                                                     const auth = localStorage.getItem('loam_ops_auth');
+                                                                                     await fetch('/api/bulk-update-metafields', {
+                                                                                       method: 'POST',
+                                                                                       headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': auth },
+                                                                                       body: JSON.stringify({ 
+                                                                                         ids: [String(variant.shopify_variant_id)], 
+                                                                                         metafields: [{ namespace: 'custom', key: m.key, value: newVal, type: m.type }], 
+                                                                                         targetType: 'ProductVariant' 
+                                                                                       })
+                                                                                     });
+                                                                                     fetchRules();
+                                                                                   } catch(err) { alert("Failed to update."); }
+                                                                                   setLoading(false);
+                                                                                }
+                                                                             }}
+                                                                           >{val || '--'}</span>
                                                                           {val && (
                                                                              <button 
                                                                                onClick={(e) => { e.stopPropagation(); syncFieldToFamily(product, m.key, val); }}
