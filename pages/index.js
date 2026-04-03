@@ -511,9 +511,7 @@ export default function OpsDashboard() {
         headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
         body: JSON.stringify({ id, updates: { needs_review: false } })
       })));
-      alert(`Prices Approved! Running Sync to push to Shopify...`);
-      await runSelectiveSync(selectedRules);
-      setSelectedRules([]);
+      await runSelectiveSync(selectedRules, true, true);
     } catch(e) { console.error(e); alert('Error approving prices.'); }
     setLoading(false);
   };
@@ -607,22 +605,24 @@ export default function OpsDashboard() {
     setLoading(false);
   };
 
-  const runSelectiveSync = async (ruleIds) => {
+  const runSelectiveSync = async (ruleIds, quiet = false, forceApprove = false) => {
     if (!ruleIds || ruleIds.length === 0) return;
-    const msg = ruleIds.length === 1 ? "Run live sync for this item?" : `Run live sync for ${ruleIds.length} selected items?`;
-    if (!confirm(msg)) return;
+    if (!quiet) {
+      const msg = ruleIds.length === 1 ? "Run live sync for this item?" : `Run live sync for ${ruleIds.length} selected items?`;
+      if (!confirm(msg)) return;
+    }
     
     setLoading(true);
     try {
       const res = await fetch('/api/sync', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
-        body: JSON.stringify({ ruleIds })
+        body: JSON.stringify({ ruleIds, force_approve: forceApprove })
       });
       if (res.ok) {
-        alert("Selective Sync Complete!");
+        if (!quiet) alert("Selective Sync Complete!");
         fetchRules(); // Refresh data
-        if (ruleIds.length === 1) {
+        if (ruleIds.length === 1 && !quiet) {
             setSelectedRules(prev => prev.filter(id => id !== ruleIds[0]));
         } else {
             setSelectedRules([]);
@@ -982,6 +982,7 @@ export default function OpsDashboard() {
     let syncMatch = true;
     if (syncFilter === 'on') syncMatch = r.auto_update === true;
     if (syncFilter === 'off') syncMatch = r.auto_update === false;
+    if (syncFilter === 'review') syncMatch = r.needs_review === true;
     if (syncFilter === 'sale') {
       const msrp = r.original_msrp || 0;
       const price = (r.last_price || 0) / 100;
@@ -1181,6 +1182,12 @@ export default function OpsDashboard() {
                 >
                    <AlertCircle size={14} /> Out of Stock
                 </button>
+                <button 
+                  onClick={() => setSyncFilter('review')} 
+                  className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all flex items-center gap-2 ${syncFilter === 'review' ? 'bg-indigo-600 text-white border-indigo-700 shadow-lg shadow-indigo-500/30 scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
+                >
+                   <AlertCircle size={14} /> Review Required
+                </button>
                 </div>
                 <div className="relative flex-shrink-0">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300" />
@@ -1222,9 +1229,9 @@ export default function OpsDashboard() {
                   <tr>
                     <th className="p-6 pr-0 w-4">
                       <input type="checkbox" className="w-4 h-4 rounded text-black focus:ring-black cursor-pointer" onChange={(e) => {
-                        if (e.target.checked) setSelectedRules(paginatedRules.map(r => r.id));
+                        if (e.target.checked) setSelectedRules(filteredRules.map(r => r.id));
                         else setSelectedRules([]);
-                      }} checked={selectedRules.length === paginatedRules.length && paginatedRules.length > 0} />
+                      }} checked={selectedRules.length === filteredRules.length && filteredRules.length > 0} />
                     </th>
                     <th className="p-6 italic tracking-tighter">
                       <div className="flex items-center gap-2">
