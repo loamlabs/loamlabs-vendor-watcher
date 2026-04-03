@@ -44,7 +44,15 @@ export default function OpsDashboard() {
   const [componentData, setComponentData] = useState({ hubs: [], rims: [], spokes: [], nipples: [] });
   const [componentTab, setComponentTab] = useState('rims');
   const [componentVendorFilter, setComponentVendorFilter] = useState('All');
+  const [componentColumnOrder, setComponentColumnOrder] = useState({});
+  const [draggedColumn, setDraggedColumn] = useState(null);
 
+  useEffect(() => {
+     try {
+       const saved = localStorage.getItem('loamops_cols');
+       if (saved) setComponentColumnOrder(JSON.parse(saved));
+     } catch(e) {}
+  }, []);
 
   useEffect(() => {
      if (showMetaEditModal && selectedLabProducts.length === 0) setMetaEditTab('variant');
@@ -2159,27 +2167,72 @@ export default function OpsDashboard() {
                            : activeList.filter(item => (item.Vendor || item.vendor || item.Brand || item.brand) === componentVendorFilter);
                            
                         // Build dynamic headers based on the first item
-                        const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand'];
-                        const columns = Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k));
+                        const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'Tags', 'tags'];
+                        const rawColumns = Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k));
+                        
+                        let columns = componentColumnOrder[componentTab] || [];
+                        const colCheck = columns.filter(c => rawColumns.includes(c));
+                        if (colCheck.length !== rawColumns.length) {
+                           columns = rawColumns;
+                        }
+
+                        const formatColumnTitle = (title) => {
+                            let clean = title.replace(/^Metafield:\s*custom\./i, '');
+                            clean = clean.replace(/^Variant Metafield:\s*custom\./i, '');
+                            clean = clean.replace(/\[.*?\]/g, '');
+                            clean = clean.replace(/_/g, ' ');
+                            return clean.trim().replace(/\b\w/g, l => l.toUpperCase());
+                        };
+
+                        const handleDragStart = (col) => setDraggedColumn(col);
+                        const handleDragOver = (e) => e.preventDefault();
+                        const handleDrop = (targetCol) => {
+                           if (!draggedColumn || draggedColumn === targetCol) return;
+                           const currentCols = [...columns];
+                           const srcIdx = currentCols.indexOf(draggedColumn);
+                           const tgtIdx = currentCols.indexOf(targetCol);
+                           currentCols.splice(srcIdx, 1);
+                           currentCols.splice(tgtIdx, 0, draggedColumn);
+                           const newOrderMap = { ...componentColumnOrder, [componentTab]: currentCols };
+                           setComponentColumnOrder(newOrderMap);
+                           localStorage.setItem('loamops_cols', JSON.stringify(newOrderMap));
+                           setDraggedColumn(null);
+                        };
                         
                         return (
                            <div className="overflow-x-auto max-h-[600px] relative scrollbar-thin">
-                             <table className="w-full text-left text-sm whitespace-nowrap">
+                             <table className="w-full text-left text-sm whitespace-nowrap select-none">
                                <thead className="bg-zinc-50 sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                                   <tr>
                                      <th className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest bg-zinc-50 z-20 top-0 left-0 sticky">Name</th>
                                      {columns.map(col => (
-                                        <th key={col} className="p-4 font-black text-[10px] uppercase text-zinc-400 tracking-widest">{col}</th>
+                                        <th 
+                                           key={col} 
+                                           draggable
+                                           onDragStart={() => handleDragStart(col)}
+                                           onDragOver={handleDragOver}
+                                           onDrop={() => handleDrop(col)}
+                                           className="p-4 font-black text-[10px] uppercase text-zinc-400 tracking-widest cursor-grab active:cursor-grabbing hover:bg-zinc-100 transition-colors"
+                                        >
+                                           {formatColumnTitle(col)}
+                                        </th>
                                      ))}
                                   </tr>
                                </thead>
                                <tbody className="divide-y divide-zinc-100">
                                   {filteredList.map((row, i) => {
-                                     // To render arrays mapping component identifiers
+                                     const shopifyId = row['Product ID'] || row['product_id'] || row['ID'];
                                      return (
-                                     <tr key={row.id || i} className="hover:bg-zinc-50/50 transition-colors group cursor-pointer">
+                                     <tr key={row.id || i} className="hover:bg-zinc-50/50 transition-colors group cursor-pointer" onClick={() => { /* Edit Modal Trigger goes here */ }}>
                                         <td className="p-4 px-6 text-xs border-r border-zinc-50 sticky left-0 bg-white group-hover:bg-zinc-50/50 min-w-[200px] truncate max-w-[300px]">
-                                           <div className="font-bold text-black">{row.Name || row.name || row.title || row.Title || 'Unknown'}</div>
+                                           <div className="font-bold text-black flex items-center justify-between">
+                                              <span>{row.Name || row.name || row.title || row.Title || 'Unknown'}</span>
+                                              {shopifyId && (
+                                                <a href={`https://admin.shopify.com/store/loamlabs/products/${shopifyId}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="Open in Shopify Admin" className="p-1.5 rounded-lg bg-zinc-50 border border-zinc-100 hover:bg-black hover:text-white hover:border-black text-zinc-400 transition-all flex-shrink-0 ml-2">
+                                                   <ExternalLink size={10} />
+                                                </a>
+                                              )}
+                                           </div>
                                            <div className="text-[9px] font-black uppercase text-zinc-400 tracking-widest mt-0.5">{row.Vendor || row.vendor || row.Brand || row.brand || ''}</div>
                                         </td>
                                         {columns.map(col => {
