@@ -40,6 +40,7 @@ export default function OpsDashboard() {
   const [labDiscrepancyOnly, setLabDiscrepancyOnly] = useState(false);
   const [abandonedBuilds, setAbandonedBuilds] = useState([]);
   const [insightsLoading, setInsightsLoading] = useState(false);
+  const [showDiscrepancyDropdown, setShowDiscrepancyDropdown] = useState(false);
 
 
   useEffect(() => {
@@ -984,9 +985,45 @@ export default function OpsDashboard() {
             icon={<Beaker size={18}/>} 
             label="Product Lab" 
             active={activeTab === 'product_lab'} 
-            onClick={() => setActiveTab('product_lab')} 
+            onClick={() => { setActiveTab('product_lab'); setShowDiscrepancyDropdown(false); }} 
             badge={totalDiscrepancies > 0 ? totalDiscrepancies : null}
+            badgeOnClick={(e) => {
+               e.stopPropagation();
+               setShowDiscrepancyDropdown(!showDiscrepancyDropdown);
+            }}
           />
+          {showDiscrepancyDropdown && discrepancyProducts.length > 0 && (
+             <div className="absolute left-[240px] top-40 w-80 bg-black border border-zinc-800 rounded-2xl shadow-[0_0_50px_rgba(239,68,68,0.1)] p-4 z-[100] animate-in fade-in zoom-in duration-200">
+                <div className="border-b border-zinc-800 pb-3 mb-3">
+                   <h3 className="text-white font-black uppercase tracking-tighter text-sm italic">Data Integrity</h3>
+                   <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">{totalDiscrepancies} Fragmented Product Families</p>
+                </div>
+                <div className="max-h-80 overflow-y-auto no-scrollbar space-y-2">
+                   {discrepancyProducts.map(dp => {
+                      const dpNameBase = dp.title.split(' - ')[0].split('(')[0].trim();
+                      return (
+                        <button 
+                           key={dp.shopify_product_id}
+                           onClick={() => {
+                              setActiveTab('product_lab');
+                              setLabCategory('all');
+                              setLabSearch(dpNameBase);
+                              setLabDiscrepancyOnly(true);
+                              setShowDiscrepancyDropdown(false);
+                           }}
+                           className="w-full text-left p-3 hover:bg-zinc-900 rounded-xl transition-all group border border-transparent hover:border-zinc-800"
+                        >
+                           <div className="flex items-center justify-between mb-1">
+                              <span className="text-[9px] font-black text-red-400 uppercase tracking-widest leading-none group-hover:text-red-300">{dp.vendor_name || 'LoamLabs'}</span>
+                              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                           </div>
+                           <div className="text-xs font-bold text-zinc-300 truncate group-hover:text-white transition-colors">{dp.title}</div>
+                        </button>
+                      );
+                   })}
+                </div>
+             </div>
+          )}
           <SidebarLink icon={<BarChart size={18}/>} label="Insights & Analytics" active={activeTab === 'insights'} onClick={() => { setActiveTab('insights'); fetchAbandonedBuilds(); }} />
           <SidebarLink icon={<ShieldCheck size={18}/>} label="Shop Health" active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} />
         </nav>
