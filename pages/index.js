@@ -145,6 +145,10 @@ export default function OpsDashboard() {
     const parts = cleanLabel.split(/[/-]/).map(p => p.trim());
     const tags = Array.isArray(product.tags) ? product.tags.map(t => t.toLowerCase()) : [];
     
+    if (tags.includes('rim') || tags.includes('component:rim')) {
+      if (variant.wheel_spec_rim_size) return String(variant.wheel_spec_rim_size);
+    }
+
     if (parts.length > 0) {
       if (tags.includes('component:hub') || tags.includes('hub')) return parts[0]; // Hole Count
       if (tags.includes('component:valvestem') || tags.includes('valvestem') || tags.includes('component:spoke') || tags.includes('spoke') || tags.includes('component:nipple') || tags.includes('nipple')) return parts[0]; // Color
