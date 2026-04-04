@@ -522,8 +522,13 @@ export default function OpsDashboard() {
   };
 
   const MANDATORY_FIELDS = {
-    rims: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Option 2 Name', 'Option 2 Value', 'Wheel Spec Position', 'Rim Erd', 'Weight G (p)'],
-    hubs: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter', 'Hub Lacing Policy', 'Hub Type', 'Weight G (v)', 'Wheel Spec Position'],
+        [findKey('Option 1 Value')]: ''
+    hubs: [
+      'Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter', 'Hub Lacing Policy', 'Hub Type', 'Weight G (v)', 'Wheel Spec Position',
+      'Variant Metafield: custom.hub_manual_cross_value [number_decimal]',
+      'Variant Metafield: custom.hub_lacing_cross_left [number_decimal]',
+      'Variant Metafield: custom.hub_lacing_cross_right [number_decimal]'
+    ],
     spokes: ['Name', 'Vendor', 'Spoke Type', 'Spoke Cross Section Area Mm2', 'Spoke Model Group', 'Weight G (p)', 'Spoke Diameter Spec', 'Spoke Rounding Rule'],
     nipples: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Weight G (p)']
   };
@@ -606,7 +611,7 @@ export default function OpsDashboard() {
         ...newComp,
         [findKey('Option 1 Name')]: 'Size', 
         [findKey('Option 2 Name')]: 'Spoke Count',
-        [findKey('Wheel Spec Position')]: 'Front',
+        [findKey('Wheel Spec Position')]: '',
         [findKey('Rim Size')]: '29"',
         [findKey('Rim ERD')]: '',
         [findKey('Weight G')]: ''
@@ -615,14 +620,14 @@ export default function OpsDashboard() {
       newComp = {
         ...newComp,
         [findKey('Option 1 Name')]: 'Type',
-        [findKey('Option 1 Value')]: 'Standard'
+        [findKey('Option 1 Value')]: '',
       };
     } else if (tab === 'hubs') {
       newComp = {
         ...newComp,
         [findKey('Option 1 Name')]: 'Spoke Count',
         [findKey('Option 2 Name')]: 'Spacing',
-        [findKey('Wheel Spec Position')]: 'Front',
+        [findKey('Wheel Spec Position')]: '',
         [findKey('Brake Interface')]: 'Centerlock',
         [findKey('Hub Type')]: 'J-Bend',
         [findKey('Hub Pairing Policy')]: 'None'
@@ -2363,7 +2368,7 @@ export default function OpsDashboard() {
                              <input 
                                type="text" 
                                placeholder="Paste Shopify Logo URL..." 
-                               className="w-full p-4 bg-zinc-50 rounded-xl outline-none border-2 border-transparent focus:border-black transition-all font-mono text-xs"
+                                                      className={`w-full p-4 rounded-xl outline-none border-2 transition-all font-mono text-xs ${isMandatory && String(editingComponent[key] || '').trim() === '' && editingComponent[key] !== 0 && editingComponent[key] !== '0' ? 'bg-red-50 border-red-200 focus:border-red-500' : 'bg-zinc-50 border-transparent focus:border-black'}`}
                                defaultValue={logo?.logo_url || ''}
                                onBlur={(e) => handleLogoUpdate(vendor, e.target.value)}
                              />
@@ -2544,7 +2549,8 @@ export default function OpsDashboard() {
                                <tbody className="divide-y divide-zinc-100">
                                   {filteredList.map((row, i) => {
                                      const shopifyId = row['Product ID'] || row['product_id'] || row['ID'];
-                                     const isValid = isComponentValid(row, componentTab);
+                                     const validation = getComponentValidation(row, componentTab);
+                                     const { isValid, missingFields } = validation;
                                      return (
                                      <tr key={row.id || i} className={`${isValid ? 'odd:bg-white even:bg-zinc-100/30' : 'bg-red-50 hover:bg-red-100/50'} transition-colors group cursor-pointer border-b border-zinc-100 last:border-0`} onClick={() => handleEditComponent(row)}>
                                         <td 
@@ -2665,7 +2671,7 @@ export default function OpsDashboard() {
                                             list={`list-${field.key.replace(/\s+/g, '-')}`}
                                             value={getComponentValue(editingComponent, field.key)}
                                             onChange={(e) => setEditingComponent({...editingComponent, [field.key]: e.target.value})}
-                                            className="w-full p-4 bg-zinc-50 rounded-xl outline-none border-2 border-transparent focus:border-black transition-all font-bold text-sm"
+                                             className={`w-full p-4 rounded-xl outline-none border-2 transition-all font-bold text-sm ${(field.key === 'Name' || field.key === 'Vendor') && (String(getComponentValue(editingComponent, field.key)).trim() === '') ? 'bg-red-50 border-red-200 focus:border-red-500' : 'bg-zinc-50 border-transparent focus:border-black'}`}
                                          />
                                       </div>
                                       {isDuplicateMode && (
@@ -2712,7 +2718,7 @@ export default function OpsDashboard() {
                                                         }
                                                         setEditingComponent({...editingComponent, ...updates});
                                                      }}
-                                                     className="w-full p-4 bg-zinc-50 rounded-xl outline-none border-2 border-transparent focus:border-black transition-all font-bold text-sm appearance-none cursor-pointer"
+                                                      className={`w-full p-4 rounded-xl outline-none border-2 transition-all font-bold text-sm appearance-none cursor-pointer ${isMandatory && String(editingComponent[key] || '').trim() === '' && editingComponent[key] !== 0 && editingComponent[key] !== '0' ? 'bg-red-50 border-red-200 focus:border-red-500' : 'bg-zinc-50 border-transparent focus:border-black'}`}
                                                   >
                                                      <option value="">Select {formatColumnTitle(key)}...</option>
                                                      {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
