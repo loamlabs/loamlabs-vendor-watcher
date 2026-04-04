@@ -58,6 +58,14 @@ export default function OpsDashboard() {
     setTimeout(() => setNotification(null), 4000);
   };
 
+  const formatColumnTitle = (title) => {
+    let clean = title.replace(/^Metafield:\s*custom\./i, '');
+    clean = clean.replace(/^Variant Metafield:\s*custom\./i, '');
+    clean = clean.replace(/\[.*?\]/g, '');
+    clean = clean.replace(/_/g, ' ');
+    return clean.trim().replace(/\b\w/g, l => l.toUpperCase());
+  };
+
   const spokePolish = (val) => {
     if (!val) return val;
     const str = String(val).trim();
@@ -2395,7 +2403,7 @@ export default function OpsDashboard() {
                                            <div className="font-bold text-black flex items-center justify-between">
                                               <span className="truncate">{row.Name || row.name || row.title || row.Title || 'Unknown'}</span>
                                               {shopifyId && (
-                                                <a href={`https://admin.shopify.com/store/loamlabs/products/${shopifyId}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="Open in Shopify Admin" className="p-1.5 rounded-lg bg-zinc-50 border border-zinc-100 hover:bg-black hover:text-white hover:border-black text-zinc-400 transition-all flex-shrink-0 ml-2">
+                                                <a href={`https://admin.shopify.com/store/loam-labs-nihi/products/${shopifyId}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="Open in Shopify Admin" className="p-1.5 rounded-lg bg-zinc-50 border border-zinc-100 hover:bg-black hover:text-white hover:border-black text-zinc-400 transition-all flex-shrink-0 ml-2">
                                                    <ExternalLink size={10} />
                                                 </a>
                                               )}
