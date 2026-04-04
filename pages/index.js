@@ -2687,6 +2687,8 @@ export default function OpsDashboard() {
                                 {[
                                    { label: 'Display Name', key: 'Name' },
                                    { label: 'Vendor / Brand', key: 'Vendor' },
+                                    { label: 'Product ID', key: 'Product ID' },
+                                    { label: 'Variant ID', key: 'Variant ID' },
                                    { label: 'Tags (comma separated)', key: 'Tags' }
                                 ].map(field => (
                                    <div key={field.key} className="flex gap-4">
