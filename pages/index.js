@@ -491,13 +491,65 @@ export default function OpsDashboard() {
     setIsComponentDrawerOpen(true);
   };
 
+  const COMPONENT_SUGGESTIONS = {
+    'Option 1 Name': ['Size', 'Spoke Count', 'Color', 'Spacing', 'Hole Count', 'Brake Interface'],
+    'Option 2 Name': ['Spoke Count', 'Hole Count', 'Size', 'Color', 'Driver'],
+    'Vendor': ['Berd', 'DT Swiss', 'Sapim', 'Industry Nine', 'Chris King', 'Hope', 'Stan\'s NoTubes', 'Onyx', 'Shimano', 'SRAM'],
+    'Brand': ['Berd', 'DT Swiss', 'Sapim', 'Industry Nine', 'Chris King', 'Hope', 'Stan\'s NoTubes', 'Onyx', 'Shimano', 'SRAM'],
+    'Position': ['Front', 'Rear', 'Universal', 'Front/Rear'],
+    'Brake Interface': ['6-Bolt', 'Centerlock', 'Rim Brake'],
+    'Hub Spacing': ['100mm QR', '100x12mm TA', '100x15mm TA', '110x15mm Boost', '110x20mm TA', '130mm QR', '135mm QR', '142x12mm TA', '148x12mm Boost', '150x12mm TA', '157x12mm SuperBoost'],
+    'Rim Size': ['700c', '650b', '29"', '27.5"', '26"', '24"', '20"']
+  };
+
+  const MANDATORY_FIELDS = {
+    rims: ['Name', 'Vendor', 'Position', 'Option 1 Name', 'Option 1 Value', 'Option 2 Name', 'Option 2 Value', 'Rim ERD', 'Weight (g)'],
+    hubs: ['Name', 'Vendor', 'Position', 'Option 1 Name', 'Option 1 Value', 'Brake Interface', 'Hub Spacing'],
+    spokes: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value'],
+    nipples: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value']
+  };
+
+  const isComponentValid = (component, tab) => {
+    if (!component) return true;
+    const required = MANDATORY_FIELDS[tab] || [];
+    return required.every(field => {
+      const val = component[field] || (editingComponent && editingComponent[field]) || ''; 
+      return String(val).trim() !== '';
+    });
+  };
+
   const handleCreateNewComponent = (tab) => {
-    const newComp = { Vendor: componentVendorFilter !== 'All' ? componentVendorFilter : '' };
+    let newComp = { Vendor: componentVendorFilter !== 'All' ? componentVendorFilter : '' };
     if (tab === 'rims') {
-      newComp['Option 1 Name'] = 'Size';
-      newComp['Option 2 Name'] = 'Spoke Count';
+      newComp = { 
+        ...newComp,
+        'Option 1 Name': 'Size', 
+        'Option 2 Name': 'Spoke Count',
+        'Position': 'Universal',
+        'Rim Size': '29"',
+        'Rim ERD': '',
+        'Weight (g)': ''
+      };
     } else if (tab === 'hubs') {
-      newComp['Option 1 Name'] = 'Spoke Count';
+      newComp = {
+        ...newComp,
+        'Option 1 Name': 'Spoke Count',
+        'Option 2 Name': 'Spacing',
+        'Position': 'Front',
+        'Brake Interface': 'Centerlock'
+      };
+    } else if (tab === 'spokes') {
+        newComp = {
+          ...newComp,
+          'Option 1 Name': 'Color',
+          'Option 2 Name': 'Size'
+        };
+    } else if (tab === 'nipples') {
+        newComp = {
+          ...newComp,
+          'Option 1 Name': 'Color',
+          'Option 2 Name': 'Type'
+        };
     }
     setEditingComponent(newComp);
     setIsDuplicateMode(false);
@@ -1774,6 +1826,13 @@ export default function OpsDashboard() {
                           <tr>
                             <td colSpan="6" className="p-20 text-center">
                               <div className="flex flex-col items-center gap-4">
+                                {/* DATALISTS FOR AUTO-SUGGEST */}
+                                {Object.entries(COMPONENT_SUGGESTIONS).map(([key, options]) => (
+                                   <datalist id={`list-${key.replace(/\s+/g, '-')}`} key={key}>
+                                      {options.map(opt => <option key={opt} value={opt} />)}
+                                   </datalist>
+                                ))}
+
                                 <div className="p-6 bg-zinc-50 rounded-full text-zinc-300">
                                   <Search size={40} />
                                 </div>
@@ -2354,8 +2413,8 @@ export default function OpsDashboard() {
                         };
                         
                         return (
-                           <div className="overflow-x-auto max-h-[600px] relative scrollbar-thin">
-                             <table className="w-full text-left text-sm whitespace-nowrap select-none">
+                           <div className="overflow-x-auto max-h-[650px] relative scrollbar-thin rounded-2xl border border-zinc-100 shadow-inner">
+                             <table className="min-w-full text-left text-sm whitespace-nowrap select-none border-collapse">
                                <thead className="bg-zinc-50 sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                                   <tr>
                                      <th 
@@ -2385,15 +2444,16 @@ export default function OpsDashboard() {
                                            {formatColumnTitle(col)}
                                            <div onMouseDown={(e) => startResizing(e, componentTab + '_' + col)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-black/20 transition-colors z-30 opacity-0 group-hover/h:opacity-100" />
                                         </th>
-                                     ))}
-                                     <th className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest text-right bg-zinc-50">Actions</th>
-                                  </tr>
+                                      ))}
+                                      <th className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest text-right bg-zinc-50">Actions</th>
+                                   </tr>
                                </thead>
                                <tbody className="divide-y divide-zinc-100">
                                   {filteredList.map((row, i) => {
                                      const shopifyId = row['Product ID'] || row['product_id'] || row['ID'];
+                                     const isValid = isComponentValid(row, componentTab);
                                      return (
-                                     <tr key={row.id || i} className="hover:bg-zinc-50/50 transition-colors group cursor-pointer" onClick={() => handleEditComponent(row)}>
+                                     <tr key={row.id || i} className={`${isValid ? 'odd:bg-white even:bg-zinc-50/40' : 'bg-red-50 hover:bg-red-100/50'} transition-colors group cursor-pointer border-b border-zinc-50 last:border-0`} onClick={() => handleEditComponent(row)}>
                                         <td 
                                            style={{ 
                                               width: componentColumnWidths[componentTab + '_name'] || 300, 
@@ -2456,17 +2516,25 @@ export default function OpsDashboard() {
                  <div className="fixed inset-0 z-[100] flex justify-end">
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsComponentDrawerOpen(false)}></div>
                     <div className="relative w-full max-w-xl bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-500">
-                       <div className="p-8 border-b border-zinc-100 flex items-center justify-between bg-zinc-50">
-                          <div>
-                             <h3 className="text-2xl font-black uppercase italic tracking-tighter text-zinc-900">
-                                {isDuplicateMode ? 'Confirm Duplication' : (editingComponent.id || editingComponent.ID ? 'Edit Component' : 'New Component')}
-                             </h3>
-                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mt-1">
-                                {componentTab.replace(/s$/, '')} master record
-                             </p>
-                          </div>
-                          <button onClick={() => setIsComponentDrawerOpen(false)} className="p-3 hover:bg-zinc-200 rounded-2xl transition-all"><X size={20}/></button>
-                       </div>
+                        <div className="p-8 border-b flex justify-between items-center bg-zinc-50 sticky top-0 z-20">
+                           <div className="flex items-center gap-4">
+                              <div className={`p-4 rounded-2xl shadow-xl border-2 ${isDuplicateMode ? 'bg-amber-500 border-amber-600 text-white' : (isComponentValid(editingComponent, componentTab) ? 'bg-black text-white' : 'bg-red-500 border-red-600 text-white animate-pulse')}`}>
+                                 {isDuplicateMode ? <Plus size={24}/> : (isComponentValid(editingComponent, componentTab) ? <Database size={24}/> : <ShieldAlert size={24}/>)}
+                              </div>
+                              <div>
+                                 <h3 className="text-2xl font-black uppercase italic tracking-tighter">
+                                    {isDuplicateMode ? 'Clone Architect' : (editingComponent.id ? 'Refine Component' : 'Legacy Enrollment')}
+                                 </h3>
+                                 <div className="flex items-center gap-2">
+                                    <p className="text-[10px] font-black uppercase text-zinc-400 italic tracking-widest">{componentTab.slice(0, -1)} registry</p>
+                                    {!isComponentValid(editingComponent, componentTab) && (
+                                       <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-red-100 text-red-600 rounded-md animate-pulse">Required Data Missing</span>
+                                    )}
+                                 </div>
+                              </div>
+                           </div>
+                           <button onClick={() => setIsComponentDrawerOpen(false)} className="p-3 hover:bg-zinc-200 rounded-2xl transition-all"><X size={24}/></button>
+                        </div>
 
                        <div className="flex-grow overflow-y-auto p-8 space-y-8 scrollbar-thin">
                           {isDuplicateMode && (
@@ -2482,18 +2550,20 @@ export default function OpsDashboard() {
 
                           <div className="grid gap-6">
                              {/* BASIC FIELDS */}
-                             <div className="space-y-4">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block italic">Primary Identity</label>
+                             <div className="space-y-4 mb-10">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500/60 block italic">Primary Identity</label>
                                 {[
-                                   { key: 'Name', label: 'Display Name' },
-                                   { key: 'Vendor', label: 'Manufacturer' }
+                                   { label: 'Display Name', key: 'Name' },
+                                   { label: 'Vendor / Brand', key: 'Vendor' },
+                                   { label: 'Tags (comma separated)', key: 'Tags' }
                                 ].map(field => (
-                                   <div key={field.key} className="flex items-start gap-4">
+                                   <div key={field.key} className="flex gap-4">
                                       <div className="flex-grow">
+                                         <div className="text-[9px] font-black uppercase text-zinc-500/60 mb-1 ml-1 tracking-widest">{field.label}</div>
                                          <input 
                                             type="text" 
-                                            placeholder={field.label}
-                                            value={editingComponent[field.key] || ''}
+                                            list={`list-${field.key.replace(/\s+/g, '-')}`}
+                                            value={editingComponent[field.key] || editingComponent[field.key.toLowerCase()] || ''}
                                             onChange={(e) => setEditingComponent({...editingComponent, [field.key]: e.target.value})}
                                             className="w-full p-4 bg-zinc-50 rounded-xl outline-none border-2 border-transparent focus:border-black transition-all font-bold text-sm"
                                          />
@@ -2521,9 +2591,10 @@ export default function OpsDashboard() {
                                    return specFields.map(key => (
                                       <div key={key} className="flex items-start gap-4 group/field">
                                          <div className="flex-grow">
-                                            <div className="text-[9px] font-black uppercase text-zinc-300 mb-1 ml-1 tracking-widest">{formatColumnTitle(key)}</div>
+                                            <div className="text-[9px] font-black uppercase text-zinc-500/60 mb-1 ml-1 tracking-widest">{formatColumnTitle(key)}</div>
                                             <input 
                                                type="text" 
+                                               list={`list-${key.replace(/\s+/g, '-')}`}
                                                value={editingComponent[key] || ''}
                                                onChange={(e) => {
                                                   let val = e.target.value;
