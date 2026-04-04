@@ -522,7 +522,7 @@ export default function OpsDashboard() {
   };
 
   const MANDATORY_FIELDS = {
-        [findKey('Option 1 Value')]: ''
+    rims: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Option 2 Name', 'Option 2 Value', 'Wheel Spec Position', 'Rim Erd', 'Weight G (p)'],
     hubs: [
       'Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter', 'Hub Lacing Policy', 'Hub Type', 'Weight G (v)', 'Wheel Spec Position',
       'Variant Metafield: custom.hub_manual_cross_value [number_decimal]',
