@@ -447,15 +447,19 @@ export default function OpsDashboard() {
 
   const saveComponentChanges = async (newArray, tabOverride = null) => {
     const tab = tabOverride || componentTab;
+    const sanitizedArray = newArray.map(item => {
+      const { tags, Tags, ...rest } = item;
+      return rest;
+    });
     setComponentSaving(true);
     try {
       const res = await fetch('/api/components', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
-        body: JSON.stringify({ [tab]: newArray })
+        body: JSON.stringify({ [tab]: sanitizedArray })
       });
       if (res.ok) {
-        setComponentData(prev => ({ ...prev, [tab]: newArray }));
+        setComponentData(prev => ({ ...prev, [tab]: sanitizedArray }));
         setIsComponentDrawerOpen(false);
         setEditingComponent(null);
         setConfirmedFields([]);
@@ -503,77 +507,88 @@ export default function OpsDashboard() {
   };
 
   const DROPDOWN_OPTIONS = {
-    'Position': ['Front', 'Rear', 'Universal', 'Front/Rear'],
-    'Wheel Spec Position': ['Front', 'Rear', 'Universal', 'Front/Rear'],
+    'Wheel Spec Position': ['Front', 'Rear', 'Front/Rear'],
     'Brake Interface': ['Centerlock', '6-Bolt', 'N/A', 'Rim Brake'],
-    'Hub Spacing': ['100x12mm', '100x15mm', '110x15mm (Boost)', '135mm QR', '142x12mm', '148x12mm (Boost)', '157x12mm (Super Boost)'],
     'Option 1 Name': ['Size', 'Spoke Count', 'Freehub', 'Spacing', 'Color', 'Type'],
     'Option 2 Name': ['Size', 'Spoke Count', 'Freehub', 'Spacing', 'Color', 'Type'],
     'Rim Size': ['700c', '650b', '29"', '27.5"', '26"', '24"', '20"'],
     'Spoke Count': ['24h', '28h', '32h', '36h'],
     'Hub Type': ['J-Bend', 'Straight Pull', 'Hook Flange'],
-    'Hub Lacing Policy': ['Standard', 'Use Manual Override Field', 'None'],
-    'Rim Washer Policy': ['None', 'Required', 'Optional'],
-    'Rim Spoke Hole Offset': ['0', '0.5', '1', '1.5', '2', '2.5', '3', '3.5', '4', '4.5', '5'],
-    'Rim Target Tension Kgf': ['100', '110', '120', '125', '130', '135'],
-    'Spoke Type': ['J-Bend', 'Straight Pull'],
-    'Spoke Rounding Rule': ['Round Down', 'Standard', 'Round Up'],
+    'Hub Lacing Policy': ['Standard', 'Force 2-Cross for 28h Only', 'Force 3-Cross for 28h Only', 'Force All as 2-Cross', 'Use Manual Override Field', 'None'],
+    'Rim Washer Policy': ['Optional', 'Mandatory', 'Not Compatible', 'None'],
+    'Spoke Type': ['J-Bend', 'Straight Pull', 'Carbon'],
+    'Spoke Rounding Rule': ['Nearest', 'Even'],
     'Hub Freehub': ['Standard', 'XD', 'XDR', 'N/A']
   };
 
   const MANDATORY_FIELDS = {
-    rims: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Wheel Spec Position', 'Rim Erd', 'Weight G', 'Rim Washer Policy', 'Rim Spoke Hole Offset', 'Rim Target Tension Kgf'],
-    hubs: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Hub Type', 'Wheel Spec Position', 'Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter', 'Weight G'],
-    spokes: ['Name', 'Vendor', 'Spoke Type', 'Spoke Cross Section Area Mm2', 'Spoke Model Group', 'Weight G', 'Spoke Diameter Spec', 'Spoke Rounding Rule'],
-    nipples: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Weight G']
+    rims: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Option 2 Name', 'Option 2 Value', 'Wheel Spec Position', 'Rim Erd', 'Weight G (p)'],
+    hubs: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter', 'Hub Lacing Policy', 'Hub Type', 'Weight G (v)', 'Wheel Spec Position'],
+    spokes: ['Name', 'Vendor', 'Spoke Type', 'Spoke Cross Section Area Mm2', 'Spoke Model Group', 'Weight G (p)', 'Spoke Diameter Spec', 'Spoke Rounding Rule'],
+    nipples: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Weight G (p)']
   };
 
   const getComponentValue = (component, key) => {
     if (!component) return '';
     const normKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
     
-    // 1. Try exact match
+    // 1. Differentiate Product vs Variant weight specifically
+    if (normKey === 'weightgp') {
+       return component['Metafield: custom.weight_g [number_decimal]'] || component['Metafield: custom.weight_g'] || '';
+    }
+    if (normKey === 'weightgv') {
+       return component['Variant Metafield: custom.weight_g [number_decimal]'] || component['Variant Metafield: custom.weight_g'] || '';
+    }
+
+    // 2. Try exact match
     if (component[key] !== undefined) return component[key];
     
-    // 2. Try normalized match across all keys
+    // 3. Try normalized match across all keys
     const foundKey = Object.keys(component).find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normKey);
     if (foundKey) return component[foundKey];
     
-    // 3. Technical Fallbacks
+    // 4. Technical Fallbacks
     if (normKey === 'wheelspecposition') return component.position || component.Position || '';
     if (normKey === 'rimerd') return component.erd || component.ERD || component.rim_erd || '';
-    if (normKey === 'weightg') return component.weight || component.Weight || component['Weight (g)'] || component.weight_g || '';
-    if (normKey === 'hubspokeholediameter') return component.hub_hole_diameter || component.hole_diameter || component.spoke_hole_diameter || '';
+    if (normKey === 'weightg') return component.weight || component.Weight || component.weight_g || '';
+    if (normKey === 'hubspokeholediameter') return component.hub_hole_diameter || component.hole_diameter || '';
     
-    // 4. Primary Identity Fallbacks
+    // 5. Primary Identity Fallbacks
     if (normKey === 'name') return component.Name || component.name || component.title || component.Title || '';
     if (normKey === 'vendor') return component.Vendor || component.vendor || component.Brand || component.brand || '';
 
     return '';
   };
 
-  const isComponentValid = (component, tab) => {
-    if (!component) return true;
+  const getComponentValidation = (component, tab) => {
+    if (!component) return { isValid: true, missingFields: [] };
+    const missing = [];
     const required = MANDATORY_FIELDS[tab] || [];
-    const isValid = required.every(field => {
-      // Normalization: Field names in MANDATORY_FIELDS are human-friendly.
-      // getComponentValue handles the case-insensitive/underscore matching.
-      
-      const type = getComponentValue(component, 'Hub Type');
-      
-      // Conditional Mandatory Logic (Based on Hub Type)
-      if (field === 'Hub Sp Offset Spoke Hole Left' || field === 'Hub Sp Offset Spoke Hole Right') {
-         if (type !== 'Straight Pull') return true;
-      }
-      if (field === 'Hub Lacing Policy') {
-         if (type !== 'Straight Pull' && type !== 'Hook Flange') return true;
+    
+    const hubType = getComponentValue(component, 'Hub Type');
+    
+    required.forEach(field => {
+      if (tab === 'hubs') {
+        if (field === 'Hub Offset Spoke Hole Left' || field === 'Hub Offset Spoke Hole Right' || field === 'Hub Sp Offset Spoke Hole Left' || field === 'Hub Sp Offset Spoke Hole Right') {
+          if (hubType !== 'Straight Pull') return;
+        }
+        if (field === 'Hub Lacing Policy') {
+          if (hubType !== 'Straight Pull' && hubType !== 'Hook Flange') return;
+        }
       }
 
       const val = getComponentValue(component, field);
-      return val !== undefined && val !== null && String(val).trim() !== '';
+      const isEmpty = val === undefined || val === null || String(val).trim() === '';
+      
+      if (isEmpty && val !== 0 && val !== '0') {
+        missing.push(field);
+      }
     });
-    return isValid;
+
+    return { isValid: missing.length === 0, missingFields: missing };
   };
+
+  const isComponentValid = (component, tab) => getComponentValidation(component, tab).isValid;
 
   const handleCreateNewComponent = (tab) => {
     const activeList = componentData[tab] || [];
@@ -591,10 +606,16 @@ export default function OpsDashboard() {
         ...newComp,
         [findKey('Option 1 Name')]: 'Size', 
         [findKey('Option 2 Name')]: 'Spoke Count',
-        [findKey('Wheel Spec Position')]: 'Universal',
+        [findKey('Wheel Spec Position')]: 'Front',
         [findKey('Rim Size')]: '29"',
         [findKey('Rim ERD')]: '',
         [findKey('Weight G')]: ''
+      };
+    } else if (tab === 'nipples') {
+      newComp = {
+        ...newComp,
+        [findKey('Option 1 Name')]: 'Type',
+        [findKey('Option 1 Value')]: 'Standard'
       };
     } else if (tab === 'hubs') {
       newComp = {
@@ -2459,6 +2480,9 @@ export default function OpsDashboard() {
                         }
 
                         const formatColumnTitle = (title) => {
+                             if (title.toLowerCase().includes('metafield: custom.weight_g')) {
+                                return title.toLowerCase().includes('variant') ? 'Weight G (v)' : 'Weight G (p)';
+                             }
                             let clean = title.replace(/^Metafield:\s*custom\./i, '');
                             clean = clean.replace(/^Variant Metafield:\s*custom\./i, '');
                             clean = clean.replace(/\[.*?\]/g, '');
@@ -2522,13 +2546,13 @@ export default function OpsDashboard() {
                                      const shopifyId = row['Product ID'] || row['product_id'] || row['ID'];
                                      const isValid = isComponentValid(row, componentTab);
                                      return (
-                                     <tr key={row.id || i} className={`${isValid ? 'odd:bg-white even:bg-zinc-50/40' : 'bg-red-50 hover:bg-red-100/50'} transition-colors group cursor-pointer border-b border-zinc-50 last:border-0`} onClick={() => handleEditComponent(row)}>
+                                     <tr key={row.id || i} className={`${isValid ? 'odd:bg-white even:bg-zinc-100/30' : 'bg-red-50 hover:bg-red-100/50'} transition-colors group cursor-pointer border-b border-zinc-100 last:border-0`} onClick={() => handleEditComponent(row)}>
                                         <td 
                                            style={{ 
                                               width: componentColumnWidths[componentTab + '_name'] || 300, 
                                               minWidth: componentColumnWidths[componentTab + '_name'] || 300 
                                            }}
-                                           className={`p-4 px-6 text-xs border-r border-zinc-50 sticky left-0 z-10 truncate ${isValid ? (i % 2 === 0 ? 'bg-white' : 'bg-[#fafafa]') : 'bg-red-50'} group-hover:bg-zinc-100/50 transition-colors`}
+                                           className={`p-4 px-6 text-xs border-r border-zinc-100 sticky left-0 z-10 truncate ${isValid ? (i % 2 === 0 ? 'bg-white' : 'bg-zinc-50/50') : 'bg-red-50'} group-hover:bg-zinc-100/50 transition-colors`}
                                         >
                                            <div className="font-bold text-black flex items-center justify-between">
                                               <span className="truncate">{row.Name || row.name || row.title || row.Title || 'Unknown'}</span>
@@ -2538,7 +2562,14 @@ export default function OpsDashboard() {
                                                 </a>
                                               )}
                                            </div>
-                                           <div className="text-[9px] font-black uppercase text-zinc-400 tracking-widest mt-0.5">{row.Vendor || row.vendor || row.Brand || row.brand || ''}</div>
+                                           <div className="flex items-center gap-2 mt-0.5">
+                                              <div className="text-[9px] font-black uppercase text-zinc-400 tracking-widest">{row.Vendor || row.vendor || row.Brand || row.brand || ''}</div>
+                                              {!isValid && (
+                                                 <div className="text-[8px] font-black uppercase px-1.5 py-0.5 bg-red-100 text-red-600 rounded flex items-center gap-1 animate-pulse">
+                                                    <ShieldAlert size={8} /> Missing: {missingFields && missingFields.length > 0 ? missingFields.map(f => formatColumnTitle(f)).join(', ') : 'Required Fields'}
+                                                 </div>
+                                              )}
+                                           </div>
                                         </td>
                                         {columns.map(col => {
                                            const val = row[col];
