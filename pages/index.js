@@ -60,11 +60,18 @@ export default function OpsDashboard() {
   };
 
   const formatColumnTitle = (title) => {
+    const isVariant = title.toLowerCase().includes('variant metafield');
+    const isProduct = !isVariant && title.toLowerCase().includes('metafield:');
     let clean = title.replace(/^Metafield:\s*custom\./i, '');
     clean = clean.replace(/^Variant Metafield:\s*custom\./i, '');
     clean = clean.replace(/\[.*?\]/g, '');
     clean = clean.replace(/_/g, ' ');
-    return clean.trim().replace(/\b\w/g, l => l.toUpperCase());
+    let final = clean.trim().replace(/\b\w/g, l => l.toUpperCase());
+    if (final.toLowerCase().includes('weight g')) {
+       if (isVariant) return final + ' (v)';
+       if (isProduct) return final + ' (p)';
+    }
+    return final;
   };
 
   const spokePolish = (val) => {
@@ -522,12 +529,9 @@ export default function OpsDashboard() {
   };
 
   const MANDATORY_FIELDS = {
-    rims: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Option 2 Name', 'Option 2 Value', 'Wheel Spec Position', 'Rim Erd', 'Weight G (p)'],
+    rims: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Option 2 Name', 'Option 2 Value', 'Wheel Spec Position', 'Rim Erd', 'weight_either_or'],
     hubs: [
-      'Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter', 'Hub Lacing Policy', 'Hub Type', 'Weight G (v)', 'Wheel Spec Position',
-      'Variant Metafield: custom.hub_manual_cross_value [number_decimal]',
-      'Variant Metafield: custom.hub_lacing_cross_left [number_decimal]',
-      'Variant Metafield: custom.hub_lacing_cross_right [number_decimal]'
+      'Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter', 'Hub Type', 'weight_either_or', 'Wheel Spec Position'
     ],
     spokes: ['Name', 'Vendor', 'Spoke Type', 'Spoke Cross Section Area Mm2', 'Spoke Model Group', 'Weight G (p)', 'Spoke Diameter Spec', 'Spoke Rounding Rule'],
     nipples: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Weight G (p)']
@@ -568,18 +572,40 @@ export default function OpsDashboard() {
   const getComponentValidation = (component, tab) => {
     if (!component) return { isValid: true, missingFields: [] };
     const missing = [];
-    const required = MANDATORY_FIELDS[tab] || [];
+    const required = [...(MANDATORY_FIELDS[tab] || [])];
     
     const hubType = getComponentValue(component, 'Hub Type');
+    const lacingPolicy = getComponentValue(component, 'Hub Lacing Policy');
+
+    // Add conditional requirements for Hubs
+    if (tab === 'hubs') {
+       if (hubType === 'Straight Pull' || hubType === 'Hook Flange') {
+          if (!required.includes('Hub Lacing Policy')) required.push('Hub Lacing Policy');
+       }
+       if (lacingPolicy === 'Use Manual Override Field') {
+          ['Variant Metafield: custom.hub_manual_cross_value [number_decimal]', 
+           'Variant Metafield: custom.hub_lacing_cross_left [number_decimal]', 
+           'Variant Metafield: custom.hub_lacing_cross_right [number_decimal]'].forEach(f => {
+             if (!required.includes(f)) required.push(f);
+          });
+       }
+       if (hubType === 'Straight Pull') {
+          ['Hub SP Offset Spoke Hole Left', 'Hub SP Offset Spoke Hole Right'].forEach(f => {
+             if (!required.includes(f)) required.push(f);
+          });
+       }
+    }
     
     required.forEach(field => {
-      if (tab === 'hubs') {
-        if (field === 'Hub Offset Spoke Hole Left' || field === 'Hub Offset Spoke Hole Right' || field === 'Hub Sp Offset Spoke Hole Left' || field === 'Hub Sp Offset Spoke Hole Right') {
-          if (hubType !== 'Straight Pull') return;
-        }
-        if (field === 'Hub Lacing Policy') {
-          if (hubType !== 'Straight Pull' && hubType !== 'Hook Flange') return;
-        }
+      if (field === 'weight_either_or') {
+         const pVal = getComponentValue(component, 'Weight G (p)');
+         const vVal = getComponentValue(component, 'Weight G (v)');
+         const pEmpty = pVal === undefined || pVal === null || String(pVal).trim() === '';
+         const vEmpty = vVal === undefined || vVal === null || String(vVal).trim() === '';
+         if (pEmpty && vEmpty && pVal !== 0 && vVal !== 0 && pVal !== '0' && vVal !== '0') {
+            missing.push('Weight G (p) or (v)');
+         }
+         return;
       }
 
       const val = getComponentValue(component, field);
@@ -2475,7 +2501,7 @@ export default function OpsDashboard() {
                            : activeList.filter(item => (item.Vendor || item.vendor || item.Brand || item.brand) === componentVendorFilter);
                            
                         // Build dynamic headers based on the first item
-                        const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'Tags', 'tags'];
+                        const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand'];
                         const rawColumns = Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k));
                         
                         let columns = componentColumnOrder[componentTab] || [];
