@@ -537,32 +537,34 @@ export default function OpsDashboard() {
 
   const getComponentValue = (component, key) => {
     if (!component) return '';
-    const normKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normTarget = key.toLowerCase().replace(/[^a-z0-9]/g, '');
     
     // 1. Differentiate Product vs Variant weight specifically
-    if (normKey === 'weightgp') {
+    if (normTarget === 'weightgp') {
        return component['Weight G (p)'] || component['Metafield: custom.weight_g [number_decimal]'] || component['Metafield: custom.weight_g'] || '';
     }
-    if (normKey === 'weightgv') {
+    if (normTarget === 'weightgv') {
        return component['Weight G (v)'] || component['Variant Metafield: custom.weight_g [number_decimal]'] || component['Variant Metafield: custom.weight_g'] || '';
     }
 
     // 2. Try exact match
     if (component[key] !== undefined) return component[key];
     
-    // 3. Try normalized match across all keys
-    const foundKey = Object.keys(component).find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normKey);
+    // 3. Try normalized match across all keys (Handing Shopify suffixes like [number_decimal])
+    const foundKey = Object.keys(component).find(k => {
+        const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return nk === normTarget || (nk.startsWith(normTarget) && nk.includes('number')) || (nk.startsWith(normTarget) && nk.includes('text'));
+    });
     if (foundKey) return component[foundKey];
     
-    // 4. Technical Fallbacks (Fixes for false-positives)
-    if (normKey === 'wheelspecposition') return component['Wheel Spec Position'] || component.position || component.Position || '';
-    if (normKey === 'rimerd') return component['Rim Erd'] || component.erd || component.ERD || component.rim_erd || '';
-    if (normKey === 'weightg') return component.weight || component.Weight || component.weight_g || '';
-    if (normKey === 'hubspokeholediameter') return component['Hub Spoke Hole Diameter'] || component.hub_hole_diameter || component.hole_diameter || '';
+    // 4. Technical Fallbacks
+    if (normTarget === 'wheelspecposition') return component['Wheel Spec Position'] || component.position || component.Position || '';
+    if (normTarget === 'rimerd') return component['Rim Erd'] || component.erd || component.ERD || component.rim_erd || '';
+    if (normTarget === 'weightg') return component.weight || component.Weight || component.weight_g || '';
     
     // 5. Primary Identity Fallbacks
-    if (normKey === 'name') return component.Name || component.name || component.title || component.Title || '';
-    if (normKey === 'vendor') return component.Vendor || component.vendor || component.Brand || component.brand || '';
+    if (normTarget === 'name') return component.Name || component.name || component.title || component.Title || '';
+    if (normTarget === 'vendor') return component.Vendor || component.vendor || component.Brand || component.brand || '';
 
     return '';
   };
@@ -2671,7 +2673,7 @@ export default function OpsDashboard() {
                                 ].map(field => (
                                    <div key={field.key} className="flex gap-4">
                                       <div className="flex-grow">
-                                         <div className="text-[9px] font-black uppercase text-zinc-500/60 mb-1 ml-1 tracking-widest">{field.label}{(field.key === 'Name' || field.key === 'Vendor' || field.key === 'Variant ID') && <span className="text-red-500 ml-1 font-bold">*</span>}</div>
+                                         <div className="text-[9px] font-black uppercase text-zinc-500/60 mb-1 ml-1 tracking-widest">{field.label}{(field.key === 'Name' || field.key === 'Vendor' ||  <span className="text-red-500 ml-1 font-bold">*</span>}</div>
                                          <input 
                                             type="text" 
                                             list={`list-${field.key.replace(/\s+/g, '-')}`}
@@ -2701,7 +2703,7 @@ export default function OpsDashboard() {
                                    const specFields = Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k));
                                    
                                    return specFields.map(key => {
-                                      const isMandatory = MANDATORY_FIELDS[componentTab]?.some(f => f.toLowerCase().replace(/\s+/g, '') === key.toLowerCase().replace(/\s+/g, ''));
+                                      const isMandatory = MANDATORY_FIELDS[componentTab]?.some(f => { const nf = f.toLowerCase().replace(/[^a-z0-9]/g, ''); const nk = key.toLowerCase().replace(/[^a-z0-9]/g, ''); return nf === nk || nk.startsWith(nf); });
                                       const options = DROPDOWN_OPTIONS[key] || DROPDOWN_OPTIONS[formatColumnTitle(key)] || DROPDOWN_OPTIONS[key.toLowerCase()];
                                       
                                       return (
