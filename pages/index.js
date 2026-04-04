@@ -513,41 +513,55 @@ export default function OpsDashboard() {
     'Spoke Count': ['24h', '28h', '32h', '36h'],
     'Hub Type': ['J-Bend', 'Straight Pull', 'Hook Flange'],
     'Hub Lacing Policy': ['Standard', 'Use Manual Override Field', 'None'],
+    'Rim Washer Policy': ['None', 'Required', 'Optional'],
+    'Rim Spoke Hole Offset': ['0', '0.5', '1', '1.5', '2', '2.5', '3', '3.5', '4', '4.5', '5'],
+    'Rim Target Tension Kgf': ['100', '110', '120', '125', '130', '135'],
     'Spoke Type': ['J-Bend', 'Straight Pull'],
-    'Spoke Rounding Rule': ['Round Down', 'Standard', 'Round Up']
+    'Spoke Rounding Rule': ['Round Down', 'Standard', 'Round Up'],
+    'Hub Freehub': ['Standard', 'XD', 'XDR', 'N/A']
   };
 
   const MANDATORY_FIELDS = {
-    rims: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Option 2 Name', 'Option 2 Value', 'Wheel Spec Position', 'Rim Erd', 'Weight G'],
-    hubs: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter', 'Hub Type', 'Weight G', 'Wheel Spec Position'],
+    rims: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Wheel Spec Position', 'Rim Erd', 'Weight G', 'Rim Washer Policy', 'Rim Spoke Hole Offset', 'Rim Target Tension Kgf'],
+    hubs: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Hub Type', 'Wheel Spec Position', 'Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter', 'Weight G'],
     spokes: ['Name', 'Vendor', 'Spoke Type', 'Spoke Cross Section Area Mm2', 'Spoke Model Group', 'Weight G', 'Spoke Diameter Spec', 'Spoke Rounding Rule'],
     nipples: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Weight G']
   };
 
   const getComponentValue = (component, key) => {
     if (!component) return '';
-    // Try exact match
-    if (component[key] !== undefined) return component[key];
-    // Try normalized match (no spaces, lowercase, alpha-numeric only)
     const normKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const foundKey = Object.keys(component).find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normKey);
     
-    // Specific Fallbacks
-    if (!foundKey) {
-       if (normKey === 'name') return component.Name || component.name || component.title || component.Title || '';
-       if (normKey === 'vendor') return component.Vendor || component.vendor || component.Brand || component.brand || '';
-       if (normKey === 'weightg') return component['Weight (g)'] || component['Weight G'] || component['Weight'] || component['weight'] || '';
-    }
+    // 1. Try exact match
+    if (component[key] !== undefined) return component[key];
+    
+    // 2. Try normalized match across all keys
+    const foundKey = Object.keys(component).find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normKey);
+    if (foundKey) return component[foundKey];
+    
+    // 3. Technical Fallbacks
+    if (normKey === 'wheelspecposition') return component.position || component.Position || '';
+    if (normKey === 'rimerd') return component.erd || component.ERD || component.rim_erd || '';
+    if (normKey === 'weightg') return component.weight || component.Weight || component['Weight (g)'] || component.weight_g || '';
+    if (normKey === 'hubspokeholediameter') return component.hub_hole_diameter || component.hole_diameter || component.spoke_hole_diameter || '';
+    
+    // 4. Primary Identity Fallbacks
+    if (normKey === 'name') return component.Name || component.name || component.title || component.Title || '';
+    if (normKey === 'vendor') return component.Vendor || component.vendor || component.Brand || component.brand || '';
 
-    return foundKey ? component[foundKey] : '';
+    return '';
   };
 
   const isComponentValid = (component, tab) => {
     if (!component) return true;
     const required = MANDATORY_FIELDS[tab] || [];
     const isValid = required.every(field => {
-      // Conditional Logic
+      // Normalization: Field names in MANDATORY_FIELDS are human-friendly.
+      // getComponentValue handles the case-insensitive/underscore matching.
+      
       const type = getComponentValue(component, 'Hub Type');
+      
+      // Conditional Mandatory Logic (Based on Hub Type)
       if (field === 'Hub Sp Offset Spoke Hole Left' || field === 'Hub Sp Offset Spoke Hole Right') {
          if (type !== 'Straight Pull') return true;
       }

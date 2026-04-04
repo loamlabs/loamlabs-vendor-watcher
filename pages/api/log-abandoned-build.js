@@ -5,13 +5,6 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
-// Helper function to manually read the request body
 async function readRawBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -21,9 +14,10 @@ async function readRawBody(req) {
   });
 }
 
-export default async function handler(req, res) {
-  // Set CORS headers for the Shopify Theme
-  res.setHeader('Access-Control-Allow-Origin', 'https://loamlabsusa.com');
+const handler = async (req, res) => {
+  // RELAXED CORS: Allows standard domain and myshopify previews
+  const origin = req.headers.origin || 'https://loamlabsusa.com';
+  res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -35,22 +29,34 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       const rawBody = await readRawBody(req);
+      
+      if (!rawBody) {
+        return res.status(400).json({ message: 'Empty body' });
+      }
+
+      // We parse the JSON manually because we removed the Content-Type header
       const buildData = JSON.parse(rawBody);
       
       const dataToStore = {
           ...buildData,
           capturedAt: new Date().toISOString(),
+          source: 'abandonment_tracker'
       };
 
+      // Push to Redis
       await redis.lpush('abandoned_builds', JSON.stringify(dataToStore));
       
-      res.status(202).json({ message: 'Build data accepted.' });
+      console.log(`Successfully recorded abandoned build: ${buildData.buildId}`);
+      res.status(202).json({ message: 'Accepted' });
     } catch (error) {
-      console.error('Error in log-abandoned-build:', error);
-      res.status(202).json({ message: 'Error processed.' });
+      console.error('Error recording build:', error.message);
+      res.status(202).json({ message: 'Error handled' });
     }
     return;
   }
   
   res.status(405).json({ message: 'Method Not Allowed' });
-}
+};
+
+handler.config = { api: { bodyParser: false } };
+module.exports = handler;
