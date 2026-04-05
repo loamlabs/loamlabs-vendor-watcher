@@ -77,11 +77,11 @@ export default function OpsDashboard() {
 
   const handleBulkDelete = async () => {
     if (selectedComponents.length === 0) return;
-    if (!confirm(`⚠️ Permanently delete ${selectedComponents.length} components from the library?`)) return;
+    if (!confirm("Delete " + selectedComponents.length + " component(s)? This cannot be undone.")) return;
     const activeArray = [...(componentData[componentTab] || [])];
-    const updatedArray = activeArray.filter(item => {
-       const id = (item.id || item.shopify_product_id || item.Name);
-       return !selectedComponents.includes(id);
+    const updatedArray = activeArray.filter((item, bulkIdx) => {
+       const bulkRowId = (item.id || item.shopify_product_id || (item.Name + "_" + bulkIdx));
+       return !selectedComponents.includes(bulkRowId);
     });
     setComponentSaving(true);
     await saveComponentChanges(updatedArray);
@@ -2753,9 +2753,9 @@ export default function OpsDashboard() {
                                            <div className="flex items-center justify-end gap-2">
                                               <button onClick={() => handleDuplicateComponent(row)} title="Duplicate Line" className="p-2 bg-zinc-100 hover:bg-black hover:text-white text-zinc-400 rounded-lg transition-all"><Plus size={12} /></button>
                                               <button onClick={() => {
-                                                 if (confirm(`Delete ${row.Name || row.title}?`)) {
-                                                    const newArr = filteredList.filter((_, idx) => idx !== i);
-                                                    saveComponentChanges(newArr);
+                                                  if (confirm("Delete " + (row.Name || row.title) + "? This cannot be undone.")) {
+                                                     const delId = (row.id || row.shopify_product_id || (row.Name + "_" + i));
+                                                     const newArr = activeList.filter((item, idx) => (item.id || item.shopify_product_id || (item.Name + "_" + idx)) !== delId);
                                                  }
                                               }} className="p-2 bg-zinc-100 hover:bg-red-500 hover:text-white text-zinc-300 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Trash2 size={12}/></button>
                                            </div>
