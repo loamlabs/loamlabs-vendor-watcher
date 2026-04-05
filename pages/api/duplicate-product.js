@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+// No Supabase needed here, only Shopify GraphQL
 
 const SHOPIFY_DOMAIN = `${process.env.SHOPIFY_SHOP_NAME}.myshopify.com`;
 

@@ -1,8 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+// Initialize Supabase only if credentials exist
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
 export default async function handler(req, res) {
+  if (!supabase) {
+    console.error("Supabase configuration is missing (SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)");
+    return res.status(500).json({ 
+      error: 'Supabase configuration is missing. Please check the server environment variables.',
+      details: 'SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is undefined.'
+    });
+  }
+
   // Simple password check via Header
   if (req.headers['x-dashboard-auth'] !== process.env.DASHBOARD_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized' });

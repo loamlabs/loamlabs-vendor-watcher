@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, ChevronDown, ChevronRight, Trash2, AlertCircle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker, Edit3, Edit, Settings, ExternalLink, BarChart, Database, CheckCircle } from 'lucide-react';
 
+const COMPONENT_SUGGESTIONS = {};
+
 export default function OpsDashboard() {
   const [editingRule, setEditingRule] = useState(null);
   const [activeTab, setActiveTab] = useState('vendors');
@@ -414,10 +416,20 @@ export default function OpsDashboard() {
         }).catch(e => console.error("Meta def sync err", e));
         
       } else {
-        const err = await res.json();
-        showNotification("❌ Dashboard Error: " + (err.error || "Login Failed"), 'error');
+        let errorMsg = "Login Failed";
+        try {
+          const err = await res.json();
+          errorMsg = err.error || "Login Failed";
+          if (err.details) errorMsg += " (" + err.details + ")";
+        } catch (parseErr) {
+          errorMsg = "Server Error (Non-JSON response). Please check console and environment variables.";
+        }
+        showNotification("❌ Dashboard Error: " + errorMsg, 'error');
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error("fetchRules crash:", e);
+      showNotification("❌ Critical Error: " + e.message, 'error');
+    }
     setLoading(false);
   };
 
@@ -582,34 +594,48 @@ export default function OpsDashboard() {
     nipples: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Weight G (p)']
   };
 
-      const getComponentValue = (component, key) => {
+    const getComponentValue = (component, key) => {
     if (!component) return '';
     const normTarget = key.toLowerCase().replace(/[^a-z0-9]/g, '');
     
-    // PRIORITY 1: Strict Identity (Fix for incorrect Name/Vendor mapping)
-    if (normTarget === 'name' || normTarget === 'displayname') {
-       return component.Name || component.name || component.title || component.Title || '';
+    // PRIORITY 1: Strict Identity
+    if (normTarget === 'name' || normTarget === 'displayname' || normTarget === 'title') {
+       const exactName = component.Name || component.name || component.title || component.Title;
+       if (exactName) return exactName;
     }
     if (normTarget === 'vendor' || normTarget === 'brand') {
-       return component.Vendor || component.vendor || component.Brand || component.brand || '';
+       const exactVendor = component.Vendor || component.vendor || component.Brand || component.brand;
+       if (exactVendor) return exactVendor;
     }
 
     // PRIORITY 2: Exact Key Match
-    if (component[key] !== undefined) return component[key];
+    if (component[key] !== undefined && component[key] !== null) return component[key];
     
-    // PRIORITY 3: Normalized Metafield Match
+    // PRIORITY 3: Smart Metafield Match (Handles "Variant Metafield: custom.xxx [type]")
     const foundKey = Object.keys(component).find(k => {
-        const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-        // Exclude option keys when looking for general identity (Fix for Name -> Option Name)
+        let cleanKey = k.toLowerCase().replace(/^variant metafield: /i, '');
+        cleanKey = cleanKey.replace(/^metafield: /i, '');
+        cleanKey = cleanKey.replace(/^custom\./i, '');
+        cleanKey = cleanKey.replace(/\[.*?\]/g, ''); // Remove [number_decimal] etc.
+        const nk = cleanKey.replace(/[^a-z0-9]/g, '');
+        
+        // Exclude option keys when looking for general identity
         if ((nk.includes('optionname') || nk.includes('optionvalue')) && !normTarget.includes('option')) return false;
-        return nk === normTarget || nk.includes(normTarget);
+        return nk === normTarget; // Strict match on the cleaned key
     });
     if (foundKey) return component[foundKey];
+
+    // PRIORITY 4: Fuzzy Match (Substrings)
+    const fuzzyKey = Object.keys(component).find(k => {
+        const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return nk.includes(normTarget) && !nk.includes('option');
+    });
+    if (fuzzyKey) return component[fuzzyKey];
     
     // Technical Fallbacks
-    if (normTarget === 'wheelspecposition') return component['Wheel Spec Position'] || component.position || component.Position || '';
-    if (normTarget === 'rimerd') return component['Rim Erd'] || component.erd || component.ERD || component.rim_erd || '';
-    if (normTarget === 'weightg') return component['Weight G (p)'] || component['Weight G (v)'] || component.weight || component.Weight || '';
+    if (normTarget === 'wheelspecposition') return component['Wheel Spec Position'] || '';
+    if (normTarget === 'rimerd') return component['Rim Erd'] || component.rim_erd || '';
+    if (normTarget === 'weightg') return component['Weight G (p)'] || component['Weight G (v)'] || component.weight || '';
 
     return '';
   };
@@ -630,33 +656,33 @@ export default function OpsDashboard() {
        if (hubType === 'Straight Pull' || hubType === 'Hook Flange' || lacingPolicy === 'Use Manual Override Field') {
           ['Hub Lacing Cross Left', 'Hub Lacing Cross Right'].forEach(f => { if (!required.includes(f)) required.push(f); });
           if (!required.includes('Hub Lacing Policy')) required.push('Hub Lacing Policy');
+          
+          // Only require Manual Cross Value if left and right are the same (symmetric)
           const leftCross = getComponentValue(component, 'Hub Lacing Cross Left');
           const rightCross = getComponentValue(component, 'Hub Lacing Cross Right');
-          if (leftCross === rightCross || leftCross === '' || rightCross === '') {
-             if (!required.includes('Hub Manual Cross Value')) required.push('Hub Manual Cross Value');
+          if (leftCross === rightCross && leftCross !== '' && leftCross !== null) {
+              if (!required.includes('Hub Manual Cross Value')) required.push('Hub Manual Cross Value');
           }
        }
     }
+    
     if (tab === 'spokes' && spokeType === 'Berd') {
        const idx = required.indexOf('Spoke Cross Section Area Mm2');
        if (idx > -1) required.splice(idx, 1);
     }
     
     required.forEach(field => {
-      if (field.includes('Weight G')) {
-          const pKey = Object.keys(component).find(k => {
-              const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-              return (nk.includes('metafield') || nk.includes('weightg')) && nk.includes('weightg') && !nk.includes('variant');
-          });
-          const vKey = Object.keys(component).find(k => {
-              const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-              return (nk.includes('metafield') || nk.includes('weightg')) && nk.includes('weightg') && nk.includes('variant');
-          });
-          const pVal = component[pKey] || getComponentValue(component, 'Weight G (p)');
-          const vVal = component[vKey] || getComponentValue(component, 'Weight G (v)');
-          if (!(pVal || vVal)) missing.push('Weight (p) or (v)');
+      // Weight Either/Or Logic
+      if (field.toLowerCase().includes('weight g')) {
+          const pVal = getComponentValue(component, 'Weight G (p)');
+          const vVal = getComponentValue(component, 'Weight G (v)');
+          const genericVal = getComponentValue(component, 'weight');
+          if (!pVal && !vVal && !genericVal) {
+             missing.push('Weight (P) or (V)');
+          }
           return;
       }
+      
       const val = getComponentValue(component, field);
       if ((val === undefined || val === null || String(val).trim() === '') && val !== 0 && val !== '0') {
         missing.push(field);
@@ -2662,11 +2688,10 @@ export default function OpsDashboard() {
                                               width: componentColumnWidths[componentTab + '_name'] || 300, 
                                               minWidth: componentColumnWidths[componentTab + '_name'] || 300 
                                            }}
-                                           style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300 }}
                                            className={`p-4 px-6 text-xs border-r border-zinc-100 sticky left-[48px] z-20 truncate ${isValid ? (i % 2 === 0 ? 'bg-white' : 'bg-zinc-50') : 'bg-red-50'} group-hover:bg-zinc-100 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.05)]`}
                                         >
                                            <div className="font-bold text-black flex items-center justify-between">
-                                              <span className="truncate">{row.Name || row.name || row.title || row.Title || 'Unknown'}</span>
+                                              <span className="truncate">{getComponentValue(row, "Name") || "Unknown"}</span>
                                               {shopifyId && (
                                                 <a href={`https://admin.shopify.com/store/e6f6c8-2/products/${shopifyId}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="Open in Shopify Admin" className="p-1.5 rounded-lg bg-zinc-50 border border-zinc-100 hover:bg-black hover:text-white hover:border-black text-zinc-400 transition-all flex-shrink-0 ml-2">
                                                    <ExternalLink size={10} />
@@ -2674,7 +2699,7 @@ export default function OpsDashboard() {
                                               )}
                                            </div>
                                            <div className="flex items-center gap-2 mt-0.5">
-                                              <div className="text-[9px] font-black uppercase text-zinc-400 tracking-widest">{row.Vendor || row.vendor || row.Brand || row.brand || ''}</div>
+                                               <div className="text-[9px] font-black uppercase text-zinc-400 tracking-widest">{getComponentValue(row, "Vendor")}</div>
                                               {!isValid && (
                                                  <div className="text-[8px] font-black uppercase px-1.5 py-0.5 bg-red-100 text-red-600 rounded flex items-center gap-1 animate-pulse">
                                                     <ShieldAlert size={8} /> Missing: {missingFields && missingFields.length > 0 ? missingFields.map(f => formatColumnTitle(f)).join(', ') : 'Required Fields'}
