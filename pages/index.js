@@ -2663,10 +2663,10 @@ export default function OpsDashboard() {
                                <thead className="bg-zinc-50 sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                                    <tr>
                                       <th className="p-4 px-6 w-12 bg-zinc-50 border-r border-zinc-100 sticky left-0 z-40">
-                                         <input type="checkbox" checked={selectedComponents.length === filteredList.length && filteredList.length > 0} onChange={(e) => {
-                                            if (e.target.checked) setSelectedComponents(filteredList.map(v => (v.id || v.shopify_product_id || v.Name)));
-                                            else setSelectedComponents([]);
-                                         }} className="w-4 h-4 rounded border-zinc-300 text-black cursor-pointer" />
+                                          <input type="checkbox" checked={selectedComponents.length === filteredList.length && filteredList.length > 0} onChange={(e) => {
+                                             if (e.target.checked) setSelectedComponents(filteredList.map((v, i) => (v.id || v.shopify_product_id || (v.Name + "_" + i))));
+                                             else setSelectedComponents([]);
+                                          }} className="w-4 h-4 rounded border-zinc-300 accent-blue-600 cursor-pointer" />
                                       </th>
                                       <th 
                                          style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300, position: 'sticky', left: '48px', zIndex: 20 }}
@@ -2703,12 +2703,12 @@ export default function OpsDashboard() {
                                       const validation = getComponentValidation(row, componentTab);
                                      const { isValid, missingFields } = validation;
                                      return (
-                                     <tr key={rowId || i} className={`${isSelected ? 'bg-zinc-900 text-white' : (isValid ? 'odd:bg-white even:bg-zinc-100/30' : 'bg-red-50 hover:bg-red-100/50')} transition-colors group cursor-pointer border-b border-zinc-100 last:border-0`} onClick={(e) => {
+                                     <tr key={rowId || i} className={`${isValid ? 'odd:bg-white even:bg-zinc-100/30' : 'bg-red-50 hover:bg-red-100/50'} transition-colors group cursor-pointer border-b border-zinc-100 last:border-0 ${isSelected ? 'ring-2 ring-inset ring-blue-400' : ''}`} onClick={(e) => {
                                          if (e.target.type === 'checkbox') return;
                                          handleEditComponent(row);
                                       }}>
-                                         <td className={`p-4 px-6 w-12 border-r border-zinc-100 sticky left-0 z-30 transition-colors ${isSelected ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
-                                            <input type="checkbox" checked={isSelected} onChange={(e) => toggleComponentSelection(rowId, e, filteredList)} onClick={(e) => e.stopPropagation()} className="w-4 h-4 rounded border-zinc-300 text-black cursor-pointer" />
+                                         <td className="p-4 px-6 w-12 border-r border-zinc-100 sticky left-0 z-30 bg-zinc-50">
+                                            <input type="checkbox" checked={isSelected} onChange={(e) => toggleComponentSelection(rowId, e, filteredList)} onClick={(e) => e.stopPropagation()} className="w-4 h-4 rounded border-zinc-300 accent-blue-600 cursor-pointer" />
                                          </td>
                                         <td 
                                            style={{ 
@@ -3441,7 +3441,7 @@ export default function OpsDashboard() {
         )}
 
         {/* --- COMPONENT BULK ACTION BAR --- */}
-        {selectedComponents.length > 0 && activeTab === 'components' && (
+        {selectedComponents.length > 0 && activeTab === 'component_library' && (
           <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[150] animate-in slide-in-from-bottom duration-500">
              <div className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 p-4 px-8 rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.6)] flex items-center gap-10">
                 <div className="flex items-center gap-4 border-r border-zinc-800 pr-10">
