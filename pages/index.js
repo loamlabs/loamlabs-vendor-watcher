@@ -45,6 +45,68 @@ export default function OpsDashboard() {
   const [componentTab, setComponentTab] = useState('rims');
   const [componentVendorFilter, setComponentVendorFilter] = useState('All');
   const [componentColumnOrder, setComponentColumnOrder] = useState({});
+  const [selectedComponents, setSelectedComponents] = useState([]);
+  const [showMissingOnly, setShowMissingOnly] = useState(false);
+  const [bulkEditField, setBulkEditField] = useState(null);
+  const [bulkEditValue, setBulkEditValue] = useState("");
+  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
+  const lastCheckedComponentRef = useRef(null);
+  const toggleComponentSelection = (id, e, linearList) => {
+    const isShift = e && (e.shiftKey || (e.nativeEvent && e.nativeEvent.shiftKey));
+    if (isShift && lastCheckedComponentRef.current && linearList) {
+       const idx = linearList.findIndex(v => (v.id || v.shopify_product_id || v.Name) === id);
+       const lastIdx = linearList.findIndex(v => (v.id || v.shopify_product_id || v.Name) === lastCheckedComponentRef.current);
+       if (idx !== -1 && lastIdx !== -1) {
+          const start = Math.min(idx, lastIdx);
+          const end = Math.max(idx, lastIdx);
+          const rangeIds = linearList.slice(start, end + 1).map(v => (v.id || v.shopify_product_id || v.Name));
+          setSelectedComponents(prev => {
+             const combined = new Set([...prev, ...rangeIds]);
+             return [...combined];
+          });
+          lastCheckedComponentRef.current = id;
+          return;
+       }
+    }
+    setSelectedComponents(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
+    lastCheckedComponentRef.current = id;
+  };
+  
+  const handleBulkDelete = async () => {
+    if (selectedComponents.length === 0) return;
+    if (!confirm(`⚠️ Permanently delete ${selectedComponents.length} components from the library?`)) return;
+    
+    const activeArray = [...(componentData[componentTab] || [])];
+    const updatedArray = activeArray.filter(item => {
+       const id = (item.id || item.shopify_product_id || item.Name);
+       return !selectedComponents.includes(id);
+    });
+    
+    setComponentSaving(true);
+    await saveComponentChanges(updatedArray);
+    setSelectedComponents([]);
+    setComponentSaving(false);
+  };
+
+  const handleBulkEdit = async () => {
+    if (!bulkEditField || selectedComponents.length === 0) return;
+    const activeArray = [...(componentData[componentTab] || [])];
+    const updatedArray = activeArray.map(item => {
+       const id = (item.id || item.shopify_product_id || item.Name);
+       if (selectedComponents.includes(id)) {
+          return { ...item, [bulkEditField]: bulkEditValue };
+       }
+       return item;
+    });
+    
+    setComponentSaving(true);
+    await saveComponentChanges(updatedArray);
+    setIsBulkEditModalOpen(false);
+    setSelectedComponents([]);
+    setComponentSaving(false);
+  };
+
+
   const [componentColumnWidths, setComponentColumnWidths] = useState({});
   const [draggedColumn, setDraggedColumn] = useState(null);
   const [isComponentDrawerOpen, setIsComponentDrawerOpen] = useState(false);
@@ -576,33 +638,47 @@ export default function OpsDashboard() {
     const missing = [];
     const required = [...(MANDATORY_FIELDS[tab] || [])];
     
-    // Add Hub-specific conditional requirements
+    const hubType = getComponentValue(component, 'Hub Type');
+    const spokeType = getComponentValue(component, 'Spoke Type');
+    const lacingPolicy = getComponentValue(component, 'Hub Lacing Policy');
+
+    // Hub-specific conditional requirements
     if (tab === 'hubs') {
-       const hubType = getComponentValue(component, 'Hub Type');
-       
-       // J-Bend hubs REQUIRE Spoke Hole Diameter
        if (hubType === 'J-Bend') {
            if (!required.includes('Hub Spoke Hole Diameter')) required.push('Hub Spoke Hole Diameter');
        }
-       
-       // Straight Pull hubs REQUIRE Offset fields
        if (hubType === 'Straight Pull') {
           ['Hub SP Offset Spoke Hole Left', 'Hub SP Offset Spoke Hole Right'].forEach(f => {
              if (!required.includes(f)) required.push(f);
           });
        }
-       
-       // Straight Pull or Hook Flange REQUIRE Manual Cross / Lacing Cross fields
-       if (hubType === 'Straight Pull' || hubType === 'Hook Flange') {
-          ['Hub Manual Cross Value', 'Hub Lacing Cross Left', 'Hub Lacing Cross Right'].forEach(f => {
+       if (hubType === 'Straight Pull' || hubType === 'Hook Flange' || lacingPolicy === 'Use Manual Override Field') {
+          ['Hub Lacing Cross Left', 'Hub Lacing Cross Right'].forEach(f => {
              if (!required.includes(f)) required.push(f);
           });
           if (!required.includes('Hub Lacing Policy')) required.push('Hub Lacing Policy');
+          
+          // Manual Cross is only mandatory if the left/right crosses are NOT provided or are the same?
+          // User: "need to either make Hub Manual Cross Value not mandatory or make it not mandatory when the hub lacing cross fields are different numbers"
+          const leftCross = getComponentValue(component, 'Hub Lacing Cross Left');
+          const rightCross = getComponentValue(component, 'Hub Lacing Cross Right');
+          const hasDifferentCrosses = (leftCross !== '' && rightCross !== '' && leftCross !== rightCross);
+          
+          if (!hasDifferentCrosses) {
+             if (!required.includes('Hub Manual Cross Value')) required.push('Hub Manual Cross Value');
+          }
        }
     }
     
+    // Spoke-specific conditional (Berd)
+    if (tab === 'spokes' && spokeType === 'Berd') {
+       // "when Spoke Type is set to Berd, Spoke Cross Section Area Mm2 should NOT be mandatory"
+       const idx = required.indexOf('Spoke Cross Section Area Mm2');
+       if (idx > -1) required.splice(idx, 1);
+    }
+    
     required.forEach(field => {
-      // WEIGHT EITHER/OR CHECK (Ensuring correct mapping to Shopify Metafield keys)
+      // WEIGHT EITHER/OR CHECK
       if (field.includes('Weight G')) {
           const pKey = Object.keys(component).find(k => {
               const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -612,20 +688,15 @@ export default function OpsDashboard() {
               const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
               return (nk.includes('metafield') || nk.includes('weightg')) && nk.includes('weightg') && nk.includes('variant');
           });
-          
           const pVal = component[pKey] || getComponentValue(component, 'Weight G (p)');
           const vVal = component[vKey] || getComponentValue(component, 'Weight G (v)');
-          
           const hasWeight = (pVal !== '' && pVal !== undefined && pVal !== null) || (vVal !== '' && vVal !== undefined && vVal !== null);
-          if (!hasWeight) {
-              missing.push('Weight (p) or (v)');
-          }
+          if (!hasWeight) missing.push('Weight (p) or (v)');
           return;
       }
 
       const val = getComponentValue(component, field);
       const isEmpty = val === undefined || val === null || String(val).trim() === '';
-      
       if (isEmpty && val !== 0 && val !== '0') {
         missing.push(field);
       }
@@ -1588,1018 +1659,32 @@ export default function OpsDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
-                  {paginatedRules.map((rule) => {
-                    const isMissingUrl = !rule.vendor_url;
-                    const expectedPriceText = rule.last_price ? ((rule.last_price / 100) * (rule.price_adjustment_factor || 1.0)).toFixed(2) : '--';
-                    const shopifyPriceText = rule.current_shopify_price ? (rule.current_shopify_price / 100).toFixed(2) : '--';
-                    const priceMismatch = expectedPriceText !== '--' && shopifyPriceText !== '--' && expectedPriceText !== shopifyPriceText;
-                    
-                    const dynamicMsrp = rule.original_msrp || (rule.current_compare_at_price ? rule.current_compare_at_price / 100 : null);
-                    const isDeepSale = dynamicMsrp && (dynamicMsrp - (rule.last_price / 100)) / dynamicMsrp >= 0.10;
-
-                    return (
-                      <tr key={rule.id} className={`${rule.needs_review ? 'bg-red-500/20 shadow-inner' : isDeepSale ? 'bg-amber-100/60 hover:bg-amber-100 shadow-sm shadow-amber-500/10 border-l-4 border-l-amber-500' : rule.bti_part_number ? 'bg-blue-50/70 hover:bg-blue-100' : isMissingUrl ? 'bg-red-50/50' : selectedRules.includes(rule.id) ? 'bg-zinc-100 shadow-inner' : 'hover:bg-zinc-50'} transition-colors group cursor-pointer`} onClick={(e) => { if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'DIV') { const idx = paginatedRules.findIndex(r => r.id === rule.id); handleCheckboxClick(idx, rule.id, e); }}}>
-                        <td className="p-6 pr-0" onClick={e => e.stopPropagation()}>
-                          <input type="checkbox" className="w-4 h-4 rounded text-black focus:ring-black cursor-pointer pointer-events-auto" checked={selectedRules.includes(rule.id)} onClick={(e) => { const idx = paginatedRules.findIndex(r => r.id === rule.id); handleCheckboxClick(idx, rule.id, e); }} onChange={() => {}} />
-                        </td>
-                        <td className="p-6">
-                          <div className="flex items-center gap-2"><div className="font-bold text-zinc-900 text-base">{rule.title}</div>
-                          {rule.last_log && <div className="group/log relative pointer-events-auto"><Info size={14} className="text-zinc-300 hover:text-black transition-colors cursor-help" /><div className="absolute left-0 bottom-full mb-2 hidden group-hover/log:block w-64 bg-black text-white text-[10px] p-3 rounded-xl z-50 shadow-2xl font-mono leading-relaxed border border-zinc-800"><div className="text-zinc-500 mb-1 uppercase font-black font-sans tracking-widest">System Log:</div>{rule.last_log}</div></div>}</div>
-                          <div className="text-[10px] text-zinc-400 font-mono mt-1 truncate max-w-sm flex items-center gap-2">
-                             {isMissingUrl && <AlertCircle size={10} className="text-red-400"/>}
-                             {rule.vendor_url || 'No URL mapped - Action Required'}
-                          </div>
-                        </td>
-                        <td className="p-6 text-center">
-                          {rule.needs_review ? <span className="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-pulse uppercase tracking-tighter whitespace-nowrap">Review Required</span> : rule.last_availability ? <span className="bg-green-100 text-green-700 text-[9px] font-black px-3 py-1 rounded-full uppercase italic whitespace-nowrap">Active</span> : <span className="bg-red-100 text-red-600 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter whitespace-nowrap">Out of Stock</span>}
-                        </td>
-                        <td className="p-6 text-center text-xs">
-                          {rule.bti_inventory_active ? (
-                            <div className="flex flex-col items-center gap-1">
-                              <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase italic shadow-sm">BTI Active</span>
-                              {rule.bti_part_number && <span className="text-[7px] font-mono text-blue-400 font-bold">{rule.bti_part_number}</span>}
-                            </div>
-                          ) : rule.bti_part_number ? (
-                            <div className="flex flex-col items-center gap-1 opacity-60">
-                              <span className="bg-zinc-100 text-zinc-500 text-[8px] font-black px-2 py-0.5 rounded-full uppercase italic border border-zinc-200">Linked</span>
-                              <span className="text-[7px] font-mono text-zinc-400 font-bold">{rule.bti_part_number}</span>
-                            </div>
-                          ) : (
-                            <span className="text-zinc-200 text-[10px] font-bold">—</span>
-                          )}
-                        </td>
-                        <td className="p-6 font-mono font-bold text-lg text-zinc-700">
-                          {rule.last_price ? `$${(rule.last_price / 100).toFixed(2)}` : '--'}
-                        </td>
-                        <td className="p-6 font-mono font-bold text-lg text-blue-600">
-                          {expectedPriceText !== '--' ? `$${expectedPriceText}` : '--'}
-                        </td>
-                        <td className="p-6 font-mono font-bold text-lg">
-                          {shopifyPriceText !== '--' ? (
-                            <div className={priceMismatch ? "text-red-700 bg-red-50 inline-flex items-center gap-2 px-3 py-1 rounded-lg border border-red-200 shadow-sm" : "text-zinc-600 px-3 py-1"}>
-                               ${shopifyPriceText}
-                               {priceMismatch && (
-                                 <div className="group/price relative inline-block ml-1">
-                                   <AlertCircle size={14} className="hover:text-red-900 transition-colors cursor-help" />
-                                   <div className="absolute right-0 bottom-full mb-2 hidden group-hover/price:block w-48 bg-black text-white text-[10px] p-2.5 rounded-xl z-50 shadow-2xl leading-relaxed font-sans font-normal border border-zinc-800">
-                                      <div className="text-zinc-400 mb-1 uppercase font-black tracking-widest">Price Mismatch</div>
-                                      The price in Shopify does not match the computed Adjusted Price (${expectedPriceText}).
-                                   </div>
-                                 </div>
-                               )}
-                            </div>
-                          ) : '--'}
-                        </td>
-                        <td className="p-6 font-mono font-bold text-lg text-zinc-400">
-                          {rule.current_compare_at_price ? `$${(rule.current_compare_at_price / 100).toFixed(2)}` : '--'}
-                        </td>
-                         <td className="p-6 flex justify-end items-center gap-4 pointer-events-auto" onClick={e => e.stopPropagation()}>
-                           <button onClick={() => runSelectiveSync([rule.id])} title="Sync this item now" className="p-2 bg-zinc-100 hover:bg-black hover:text-white text-zinc-400 rounded-lg transition-all"><RefreshCcw size={14} /></button>
-                           <button onClick={() => toggleAutoSync(rule.id, rule.auto_update)} className={`w-12 h-6 rounded-full p-1 flex items-center transition-all ${rule.auto_update ? 'bg-black justify-end shadow-inner' : 'bg-zinc-300 justify-start'}`}><div className="w-4 h-4 bg-white rounded-full shadow-md"></div></button>
-                           <button onClick={() => setEditingRule(rule)} className="bg-zinc-100 hover:bg-black hover:text-white text-zinc-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase transition-all">Edit</button>
-                          <button onClick={() => deleteRule(rule.id)} className="text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={18} /></button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {filteredRules.length > visibleCount && (
-                <div className="p-12 text-center bg-zinc-50 border-t border-zinc-100">
-                    <button onClick={() => setVisibleCount(visibleCount + 100)} className="bg-white border-2 border-zinc-200 px-8 py-4 rounded-2xl font-black uppercase italic text-xs hover:border-black transition-all shadow-sm">Load More ({filteredRules.length - visibleCount} remaining)</button>
-                </div>
-              )}
-            </div>
-          </>
-        ) : activeTab === 'bti_sync' ? (
-          <>
-            {/* --- BTI REGISTRY HEADER --- */}
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">BTI Sync Management</h1>
-                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1">
-                  Managing Shopify Metafields for Distributor Integration
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button onClick={() => fetchRules()} className={`bg-blue-50 text-blue-700 p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 border border-blue-100 shadow-sm hover:bg-blue-100 transition-all ${loading ? 'opacity-50' : ''}`} disabled={loading}>
-                  <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> Distributor Feed Active
-                </button>
-              </div>
-            </div>
-
-            {/* --- BTI FILTER BAR --- */}
-            <div className="mb-10">
-              <div className="flex items-center justify-between mb-4">
-                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Filter by Vendor</label>
-                {selectedVendors.length > 0 && (
-                  <button onClick={() => setSelectedVendors([])} className="text-[10px] font-black uppercase text-red-500 hover:text-red-700 transition-all underline underline-offset-4">
-                    Clear Filters
-                  </button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2 mb-8">
-                <button 
-                  onClick={() => setSelectedVendors([])} 
-                  className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all ${selectedVendors.length === 0 ? 'bg-black text-white border-black shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
-                >
-                  All Vendors
-                </button>
-                {visibleVendorNames.map(v => {
-                  const logo = vendorLogos.find(l => l.name.toLowerCase() === v.toLowerCase());
-                  const isActive = selectedVendors.includes(v);
-                  return (
-                    <button key={v} onClick={() => { toggleVendor(v); setVisibleCount(50); }} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 transition-all ${isActive ? 'border-green-500 bg-green-50 text-green-900 shadow-sm scale-[1.02]' : 'bg-white text-zinc-500 border-zinc-100 hover:border-zinc-300'}`}>
-                      {logo?.logo_url && <img src={logo.logo_url} className="h-3 w-auto object-contain grayscale-[0.5]" alt="" />}
-                      <span className="text-[10px] font-bold uppercase tracking-tight">{v}</span>
-                      <div className={`w-2 h-2 rounded-full border ${isActive ? 'bg-green-500 border-green-600' : 'bg-zinc-100 border-zinc-200'}`}></div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex items-center justify-between mb-4 mt-10">
-                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Metafield Assignment Filter</label>
-              </div>
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex flex-wrap gap-2 flex-1">
-                  <button 
-                    onClick={() => setBtiSyncFilter('all')} 
-                    className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all ${btiSyncFilter === 'all' ? 'bg-black text-white border-black shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
-                  >
-                    All Products
-                  </button>
-                  <button 
-                    onClick={() => setBtiSyncFilter('has')} 
-                    className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all flex items-center gap-2 ${btiSyncFilter === 'has' ? 'bg-blue-600 text-white border-blue-700 shadow-lg shadow-blue-500/30 scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
-                  >
-                    <Package size={14} /> Managed (Has BTI #)
-                  </button>
-                  <button 
-                    onClick={() => setBtiSyncFilter('none')} 
-                    className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all flex items-center gap-2 ${btiSyncFilter === 'none' ? 'bg-zinc-600 text-white border-zinc-700 shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
-                  >
-                    <RefreshCcw size={14} /> Unassigned (No BTI #)
-                  </button>
-                </div>
-                <div className="relative flex-shrink-0">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300" />
-                  <input type="text" placeholder="Search BTI items..." value={btiSearch} onChange={(e) => setBtiSearch(e.target.value)} className="pl-9 pr-8 py-2 w-52 rounded-xl border-2 border-zinc-100 text-xs font-bold outline-none focus:border-black transition-all placeholder:text-zinc-300 placeholder:font-bold placeholder:italic" />
-                  {btiSearch && <button onClick={() => setBtiSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-300 hover:text-zinc-600"><X size={12} /></button>}
-                </div>
-              </div>
-            </div>
-
-            {/* --- BTI TABLE --- */}
-            {(() => {
-              const filteredRules = rules.filter(rule => {
-                const matchesVendor = selectedVendors.length === 0 || selectedVendors.includes(rule.vendor_name);
-                const matchesSyncFilter = btiSyncFilter === 'all' || (btiSyncFilter === 'has' ? !!rule.bti_part_number : !rule.bti_part_number);
-                const searchMatch = !btiSearch || rule.title.toLowerCase().includes(btiSearch.toLowerCase()) || (rule.bti_part_number && rule.bti_part_number.toLowerCase().includes(btiSearch.toLowerCase()));
-                return matchesVendor && matchesSyncFilter && searchMatch;
-              }).sort((a, b) => a.title.localeCompare(b.title));
-
-              return (
-                <div className="bg-white rounded-[2.5rem] border border-zinc-200 shadow-xl overflow-hidden mb-12">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-zinc-100 border-b text-[10px] uppercase font-black text-zinc-500 tracking-widest font-mono">
-                      <tr>
-                        <th className="p-6 italic tracking-tighter">Product / Variant</th>
-                        <th className="p-6 italic tracking-tighter">BTI Part Number</th>
-                        <th className="p-6 italic tracking-tighter text-center">Status</th>
-                        <th className="p-6 italic tracking-tighter text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-50">
-                      {filteredRules.slice(0, visibleCount).map((rule) => {
-                        const isBTI = !!rule.bti_part_number;
-                        return (
-                          <tr key={rule.id} className={`group transition-all hover:bg-zinc-50/50 ${isBTI ? 'bg-blue-50/30' : 'bg-white'}`}>
-                            <td className="p-6">
-                              <div className="font-black text-sm text-zinc-900 group-hover:text-black transition-colors">{rule.title}</div>
-                              <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight mt-0.5">{rule.vendor_name}</div>
-                            </td>
-                            <td className="p-6">
-                              <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg border font-mono font-bold text-xs ${isBTI ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-zinc-100 text-zinc-400 border-zinc-200 italic'}`}>
-                                 {rule.bti_part_number || 'none_assigned'}
-                              </div>
-                            </td>
-                            <td className="p-6 text-center">
-                               {isBTI ? (
-                                 <span className="bg-green-100 text-green-700 text-[9px] font-black px-3 py-1 rounded-full uppercase italic whitespace-nowrap">Distributor Sync Active</span>
-                               ) : (
-                                 <span className="bg-zinc-100 text-zinc-400 text-[9px] font-black px-3 py-1 rounded-full uppercase italic whitespace-nowrap">Manual Inventory Only</span>
-                               )}
-                            </td>
-                            <td className="p-6 text-right">
-                               <button onClick={() => setEditingRule(rule)} className="bg-white hover:bg-black hover:text-white text-zinc-600 border border-zinc-200 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm">Manage BTI Settings</button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  {filteredRules.length > visibleCount && (
-                    <div className="p-12 text-center bg-zinc-50 border-t border-zinc-100">
-                        <button onClick={() => setVisibleCount(visibleCount + 100)} className="bg-white border-2 border-zinc-200 px-8 py-4 rounded-2xl font-black uppercase italic text-xs hover:border-black transition-all shadow-sm">Load More ({filteredRules.length - visibleCount} remaining)</button>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </>
-        ) : activeTab === 'product_lab' ? (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <div className="flex items-center justify-between mb-8">
-               <div>
-                   <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Product Lab</h1>
-                   <p className="text-zinc-400 text-[10px] font-black uppercase tracking-widest mt-1">Catalog Architect & Batch Metafield Editor</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button onClick={syncCatalogFull} disabled={loading} title="Updates Entire Catalog: Tags, Technical Specs, and Metafield Definitions from Shopify." className={`bg-black text-white p-3 px-6 rounded-xl font-black uppercase italic text-[10px] flex items-center gap-2 hover:bg-zinc-800 transition-all shadow-xl ${loading ? 'opacity-50' : ''}`}>
-                    {loading ? <Loader2 className="animate-spin" size={14}/> : <RefreshCcw size={14}/>} Sync Catalog
-                  </button>
-                  <button className="bg-zinc-100 text-zinc-600 p-3 px-6 rounded-xl font-black uppercase italic text-[10px] hover:bg-black hover:text-white transition-all shadow-sm flex items-center gap-2">
-                    <Plus size={14} /> Create New Product
-                  </button>
-                  <button onClick={() => setActiveTab('admin')} className="bg-zinc-100 text-zinc-400 p-3 px-4 rounded-xl hover:text-black transition-all border border-transparent hover:border-zinc-200">
-                    <Settings size={14} />
-                  </button>
-                </div>
-              </div>
-             
-             {/* --- VENDOR FILTER BAR --- */}
-             <div className="mb-10">
-               <div className="flex items-center justify-between mb-4">
-                 <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Filter by Vendor</label>
-                 {selectedVendors.length > 0 && (
-                   <button onClick={() => setSelectedVendors([])} className="text-[10px] font-black uppercase text-red-500 hover:text-red-700 transition-all underline underline-offset-4">
-                     Clear Filters
-                   </button>
-                 )}
-               </div>
-               <div className="flex flex-wrap gap-2 mb-8">
-                 <button 
-                   onClick={() => setSelectedVendors([])} 
-                   className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all ${selectedVendors.length === 0 ? 'bg-black text-white border-black shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
-                 >
-                   All Vendors
-                 </button>
-                 {visibleVendorNames.map(v => {
-                   const logo = vendorLogos.find(l => l.name.toLowerCase() === v.toLowerCase());
-                   const isActive = selectedVendors.includes(v);
-                   return (
-                     <button key={v} onClick={() => { toggleVendor(v); setVisibleCount(50); }} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 transition-all ${isActive ? 'border-green-500 bg-green-50 text-green-900 shadow-sm scale-[1.02]' : 'bg-white text-zinc-500 border-zinc-100 hover:border-zinc-300'}`}>
-                       {logo?.logo_url && <img src={logo.logo_url} className="h-3 w-auto object-contain grayscale-[0.5]" alt="" />}
-                       <span className="text-[10px] font-bold uppercase tracking-tight">{v}</span>
-                       <div className={`w-2 h-2 rounded-full border ${isActive ? 'bg-green-500 border-green-600' : 'bg-zinc-100 border-zinc-200'}`}></div>
-                     </button>
-                   );
-                 })}
-               </div>
-             </div>
-             
-             {/* --- COMPONENT CATEGORY FILTER --- */}
-             <div className="mb-10">
-               <div className="flex items-center justify-between mb-4">
-                 <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Filter by Tag</label>
-                 <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300" />
-                  <input type="text" placeholder="Search Lab..." value={labSearch} onChange={(e) => setLabSearch(e.target.value)} className="pl-9 pr-8 py-2 w-52 rounded-xl border-2 border-zinc-100 text-xs font-bold outline-none focus:border-black transition-all placeholder:text-zinc-300 placeholder:font-bold placeholder:italic" />
-                  {labSearch && <button onClick={() => setLabSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-300 hover:text-zinc-600"><X size={12} /></button>}
-                </div>
-               </div>
-               <div className="flex flex-wrap gap-2 mb-8">
-                 {[
-                   { id: 'all', label: 'All Components' },
-                   { id: 'component:rim', label: 'Rims' },
-                   { id: 'component:hub', label: 'Hubs' },
-                   { id: 'component:spoke', label: 'Spokes' },
-                   { id: 'component:nipple', label: 'Nipples' },
-                   { id: 'component:valvestem', label: 'Valve Stems' },
-                   { id: 'component:freehub', label: 'Freehubs' },
-                   { id: 'addon', label: 'Addons' },
-                   { id: 'accessory', label: 'Accessories' },
-                   { id: 'handbuilt', label: 'Wheel Sets' }
-                 ].map(cat => (
-                   <button 
-                     key={cat.id} 
-                     onClick={() => setLabCategory(cat.id)} 
-                     className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all ${labCategory === cat.id ? 'bg-black text-white border-black shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
-                   >
-                     {cat.label}
-                   </button>
-                 ))}
-                <div className="flex-grow"></div>
-                <button 
-                  onClick={() => setLabDiscrepancyOnly(!labDiscrepancyOnly)}
-                  className={`px-6 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all flex items-center gap-2 ${labDiscrepancyOnly ? 'bg-red-600 text-white border-red-700 shadow-lg shadow-red-500/30 scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-red-200 hover:text-red-500'}`}
-                >
-                  <ShieldAlert size={14} /> {labDiscrepancyOnly ? 'Viewing Discrepancies Only' : 'Show Discrepancies Only'}
-                </button>
-              </div>
-            </div>
-
-             <div className="bg-white rounded-[2.5rem] border border-zinc-200 shadow-xl overflow-hidden mb-12">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-zinc-100 border-b text-[10px] uppercase font-black text-zinc-500 tracking-widest font-mono">
-                    <tr>
-                      <th className="w-12 p-6">
-                        <input 
-                          type="checkbox" 
-                          className="w-5 h-5 rounded-lg border-2 border-zinc-200 text-black focus:ring-black"
-                          checked={selectedLabProducts.length > 0} 
-                          onChange={(e) => {
-                            if (!e.target.checked) setSelectedLabProducts([]);
-                            else {
-                                // Select all currently filtered products
-                            }
-                          }}
-                        />
-                      </th>
-                      <th className="w-4 p-0"></th>
-                      <th className="p-6">Product Family (A-Z)</th>
-                      <th className="p-6">Vendor</th>
-                      <th className="p-6 text-center">Variants</th>
-                      <th className="p-6 text-center">Integrity</th>
-                      <th className="p-6 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-50">
-                    {/* Grouping variants into Product rows (Respecting Vendor Filter + Tag Filter + Sorting) */}
-                    {(() => {
-                      const filtered = Object.values(allUniqueRules.filter(r => {
-                        const matchesVendor = selectedVendors.length === 0 || selectedVendors.includes(r.vendor_name);
-                        const normalize = (str) => String(str || "").toLowerCase().replace(/×/g, 'x').replace(/\s+/g, ' ').trim();
-                        const searchString = normalize(labSearch);
-                        const searchTokens = searchString ? searchString.split(' ').filter(Boolean) : [];
-                        const searchMatch = searchTokens.length === 0 || searchTokens.every(token => 
-                           normalize(r.title).includes(token) || normalize(r.vendor_name).includes(token)
-                        );
-
-                        const labTags = ['component:hub','component:rim','component:spoke','component:nipple','component:valvestem','component:freehub', 'addon','accessory','spoke','nipple','valvestem','hub','rim','freehub', 'handbuilt'];
-                        const itemTags = Array.isArray(r.tags) ? r.tags.map(t => t.toLowerCase()) : [];
-                        
-                        if (itemTags.includes('lab-ignore')) return false;
-
-                        const isLabItem = itemTags.some(t => labTags.includes(t.toLowerCase()));
-                        const matchesCategory = labCategory === 'all' || itemTags.some(t => t.toLowerCase() === labCategory);
-                        return matchesVendor && isLabItem && matchesCategory && searchMatch;
-                      }).reduce((acc, r) => {
-                        if (!acc[r.shopify_product_id]) acc[r.shopify_product_id] = { ...r, variantCount: 0 };
-                        acc[r.shopify_product_id].variantCount++;
-                        return acc;
-                      }, {}))
-                      .filter(product => {
-                        if (!labDiscrepancyOnly) return true;
-                        const productVariants = allUniqueRules.filter(r => String(r.shopify_product_id) === String(product.shopify_product_id));
-                        return Object.keys(getProductGroupedDiscrepancies(product, productVariants)).length > 0;
-                      })
-                      .sort((a,b) => a.title.localeCompare(b.title));
-
-                      if (filtered.length === 0) {
-                        return (
-                          <tr>
-                            <td colSpan="6" className="p-20 text-center">
-                              <div className="flex flex-col items-center gap-4">
-                                {/* DATALISTS FOR AUTO-SUGGEST */}
-                                {Object.entries(COMPONENT_SUGGESTIONS).map(([key, options]) => (
-                                   <datalist id={`list-${key.replace(/\s+/g, '-')}`} key={key}>
-                                      {options.map(opt => <option key={opt} value={opt} />)}
-                                   </datalist>
-                                ))}
-
-                                <div className="p-6 bg-zinc-50 rounded-full text-zinc-300">
-                                  <Search size={40} />
-                                </div>
-                                <div className="font-black uppercase italic text-zinc-400">No matching products found</div>
-                                <p className="text-xs text-zinc-400 font-bold max-w-xs mx-auto">Click "Sync Catalog Tags" above to populate component categories for the first time.</p>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      }
-
-                      return filtered.map(product => {
-                        const isExpanded = expandedProducts.includes(product.shopify_product_id);
-                        const productVariants = allUniqueRules.filter(r => r.shopify_product_id === product.shopify_product_id);
-                        const discrepancies = getProductGroupedDiscrepancies(product, productVariants);
-                        const hasIssue = Object.keys(discrepancies).length > 0;
-
-                        return (
-                          <React.Fragment key={product.shopify_product_id}>
-                            <tr className={`hover:bg-zinc-50 transition-colors ${isExpanded ? 'bg-zinc-50/50' : ''}`}>
-                              <td className="p-6">
-                                <input 
-                                  type="checkbox" 
-                                  className="w-5 h-5 rounded-lg border-2 border-zinc-200 text-black focus:ring-black"
-                                  checked={selectedLabProducts.some(id => String(id)===String(product.shopify_product_id))}
-                                  onChange={() => toggleLabProduct(product.shopify_product_id)}
-                                />
-                              </td>
-                              <td className="p-0">
-                                <button 
-                                  onClick={() => setExpandedProducts(prev => isExpanded ? prev.filter(id => id !== product.shopify_product_id) : [...prev, product.shopify_product_id])}
-                                  className={`p-2 rounded-lg hover:bg-zinc-200 transition-all ${isExpanded ? 'rotate-90' : ''}`}
-                                >
-                                  <ChevronRight size={16} className="text-zinc-400" />
-                                </button>
-                              </td>
-                              <td className="p-6 font-black text-sm">{product.title.split('(')[0].trim()}</td>
-                              <td className="p-6 text-zinc-400 font-bold uppercase text-[10px] tracking-widest">{product.vendor_name}</td>
-                              <td className="p-6 text-center">
-                                <span className="bg-zinc-100 text-zinc-600 px-3 py-1 rounded-full font-black text-[10px]">{product.variantCount} SKUs</span>
-                              </td>
-                              <td className="p-6 text-center">
-                                {hasIssue ? (
-                                  <div className="group/integrity relative inline-block">
-                                    <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full font-black text-[9px] uppercase italic animate-pulse cursor-help border border-red-200">⚠️ Discrepancy</span>
-                                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover/integrity:block w-48 bg-black text-white text-[10px] p-3 rounded-xl z-50 shadow-2xl font-sans text-left leading-relaxed">
-                                       <div className="text-zinc-400 mb-2 uppercase font-black tracking-widest">Inconsistent Fields:</div>
-                                       {Object.keys(discrepancies).map(k => (
-                                         <div key={k} className="flex items-center justify-between gap-2 border-b border-zinc-800 last:border-0 py-1">
-                                           <span className="text-zinc-500">{metafieldRegistry.find(m=>m.key===k)?.label || k}</span>
-                                           <span className="text-red-400 font-bold">{discrepancies[k].values.length} vals</span>
-                                         </div>
-                                       ))}
-                                       <div className="mt-2 text-[8px] text-zinc-500 italic">Expand to fix individual variants</div>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span className="bg-green-50 text-green-600 px-3 py-1 rounded-full font-black text-[9px] uppercase italic border border-green-100">✓ Healthy</span>
-                                )}
-                              </td>
-                              <td className="p-6 text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  <button onClick={() => alert("Multi-Variant Edit Mode coming next.")} className="bg-zinc-100 hover:bg-black hover:text-white text-zinc-600 p-2 rounded-lg transition-all border border-transparent">
-                                    <Edit3 size={14} />
-                                  </button>
-                                  <button 
-                                    onClick={() => openDupModal(product)} 
-                                    disabled={loading}
-                                    className={`bg-zinc-100 border-2 border-transparent hover:border-black text-zinc-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex items-center gap-2 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  >
-                                    <RefreshCcw size={12} className={loading ? 'animate-spin' : ''}/>
-                                    {loading ? 'Processing...' : 'Duplicate'}
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                            {isExpanded && (
-                               <tr>
-                                 <td colSpan="6" className="p-0 bg-white shadow-inner">
-                                   <div className="divide-y divide-zinc-50 border-x border-zinc-100 mx-6 mb-6 rounded-2xl overflow-hidden border border-zinc-200 bg-zinc-50">
-                                     {(() => {
-                                        const groups = productVariants.reduce((acc, v) => {
-                                            const groupKey = getVariantGroupKey(v, product);
-                                            if (!acc[groupKey]) acc[groupKey] = [];
-                                            acc[groupKey].push(v);
-                                            return acc;
-                                        }, {});
-                                        const linearVariants = Object.entries(groups)
-                                           .sort(([ka], [kb]) => ka.localeCompare(kb, undefined, { numeric: true }))
-                                           .flatMap(([_, vArr]) => vArr.sort((a,b) => a.title.localeCompare(b.title)));
-
-                                        return Object.entries(groups)
-                                          .sort(([ka], [kb]) => ka.localeCompare(kb, undefined, { numeric: true }))
-                                          .map(([groupName, variants]) => {
-                                             const groupId = `${product.shopify_product_id}-${groupName}`;
-                                             const isGroupExpanded = expandedGroups.includes(groupId);
-                                             
-                                             return (
-                                               <div key={groupId} className="border-b border-zinc-100 last:border-0">
-                                                  <div 
-                                                    onClick={() => setExpandedGroups(prev => isGroupExpanded ? prev.filter(id => id !== groupId) : [...prev, groupId])}
-                                                    className="flex items-center justify-between p-4 bg-zinc-100/30 hover:bg-zinc-200/50 cursor-pointer transition-colors group"
-                                                  >
-                                                     <div className="flex items-center gap-4">
-                                                        <ChevronDown size={14} className={`text-zinc-400 transition-transform ${isGroupExpanded ? '' : '-rotate-90'}`} />
-                                                        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">{groupName}</div>
-                                                        <span className="text-[8px] font-black bg-white px-2 py-0.5 rounded-full border border-zinc-200 text-zinc-400">{variants.length} Variant(s)</span>
-                                                     </div>
-                                                  </div>
-                                                  {isGroupExpanded && (
-                                                    <div className="bg-white divide-y divide-zinc-50">
-                                                        {(() => {
-                                                           const groupDiscrepancies = getDiscrepancies(variants);
-                                                           return variants.sort((a,b) => a.title.localeCompare(b.title)).map(variant => {
-                                                              const pSplit = String(product.title || "").split('(')[0].trim().toLowerCase();
-                                                              let clean = variant.title;
-                                                              if (clean.toLowerCase().startsWith(pSplit)) { clean = clean.substring(pSplit.length).trim(); }
-                                                              clean = clean.replace(/^[(\s/-]+|[)\s/-]+$/g, '').trim();
-                                                              const subLabel = clean.split(/[/-]/).map(p => p.trim()).slice(1).join(' / ') || clean.split(/[/-]/)[0];
-
-                                                              const variantConstantMetafields = metafieldRegistry.filter(m => m.isConstant && m.target === 'variant');
-                                                              const tags = Array.isArray(product.tags) ? product.tags.map(t => t.toLowerCase()) : [];
-                                                              const activeConstants = variantConstantMetafields.filter(m => m.categories.some(c => 
-                                                                (c === 'RIM' && (tags.includes('rim') || tags.includes('component:rim'))) ||
-                                                                (c === 'HUB' && (tags.includes('hub') || tags.includes('component:hub'))) ||
-                                                                (c === 'SPOKE' && (tags.includes('spoke') || tags.includes('component:spoke'))) ||
-                                                                (c === 'NIPPLE' && (tags.includes('nipple') || tags.includes('component:nipple'))) ||
-                                                                (c === 'VALVESTEM' && (tags.includes('valvestem') || tags.includes('component:valvestem'))) ||
-                                                                (c === 'ACCESSORY' && (tags.includes('accessory') || tags.includes('component:accessory')))
-                                                              ));
-
-                                                          return (
-                                                          <div key={variant.shopify_variant_id} className="flex items-center justify-between p-4 pl-12 hover:bg-zinc-50 transition-colors group select-none" onClick={(e) => { if (e.target.tagName!=='INPUT' && e.target.tagName!=='BUTTON') toggleLabVariant(variant.shopify_variant_id, e, linearVariants); }}>
-                                                             <div className="flex items-center gap-4">
-                                                               <input 
-                                                                 type="checkbox" 
-                                                                 className="w-4 h-4 rounded border-2 border-zinc-200 text-black focus:ring-black cursor-pointer pointer-events-auto"
-                                                                 checked={selectedLabVariants.some(id => String(id)===String(variant.shopify_variant_id))}
-                                                                 onChange={() => {}} onClick={(e) => toggleLabVariant(variant.shopify_variant_id, e, linearVariants)}
-                                                               />
-                                                               <div className="w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100 flex items-center justify-center font-black text-[8px] text-zinc-300">SKU</div>
-                                                               <div>
-                                                                  <div className="text-[9px] font-black uppercase text-zinc-400 tracking-widest leading-none mb-1">{variant.sku || 'No SKU'}</div>
-                                                                  <div className="text-xs font-bold text-zinc-700">{subLabel}</div>
-                                                                  <div className="text-[9px] text-zinc-400 mt-0.5">{variant.title}</div>
-                                                               </div>
-                                                             </div>
-
-                                                             <div className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar ml-8 mr-8">
-                                                                  {activeConstants.map(m => {
-                                                                     let val = variant[m.key];
-                                                                     let parsedVal = val;
-                                                                     if (typeof val === 'string' && val.startsWith('[') && val.endsWith(']')) {
-                                                                        try { const arr = JSON.parse(val); if (arr.length > 0) parsedVal = arr[0]; } catch(e) {}
-                                                                     }
-                                                                     const disc = groupDiscrepancies[m.key];
-                                                                     const isMismatch = disc && val !== disc.consensus;
-                                                                     
-                                                                     return (
-                                                                       <div key={m.key} className={`group/m group flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold whitespace-nowrap transition-all ${isMismatch ? 'bg-red-50 border-red-200 text-red-600 shadow-sm' : val ? 'bg-zinc-50 border-zinc-100 text-zinc-500' : 'bg-transparent border-transparent text-zinc-300 opacity-60'}`}>
-                                                                          <span className="uppercase opacity-50 text-[8px] tracking-widest">{m.label.replace('Wheel Spec ','').replace('Rim ','')}:</span>
-                                                                          {metafieldOptionsMap[m.key] && metafieldOptionsMap[m.key].length > 0 ? (
-                                                                             <select 
-                                                                               className={`${isMismatch ? 'font-black' : ''} bg-transparent outline-none cursor-pointer hover:text-black focus:text-black leading-none pb-0 text-[10px]`}
-                                                                               style={{ width: '45px' }}
-                                                                               value={parsedVal || ''}
-                                                                               title="Select new value directly"
-                                                                               onClick={e => e.stopPropagation()}
-                                                                               onChange={async (e) => {
-                                                                                 const rawVal = e.target.value;
-                                                                                 let newVal = rawVal;
-                                                                                 if (m.type && m.type.startsWith('list.') && rawVal) {
-                                                                                    newVal = JSON.stringify([rawVal]);
-                                                                                 }
-                                                                                 if (newVal === val) return;
-                                                                                 setLoading(true);
-                                                                                 try {
-                                                                                   const auth = localStorage.getItem('loam_ops_auth');
-                                                                                   await fetch('/api/bulk-update-metafields', {
-                                                                                     method: 'POST',
-                                                                                     headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': auth },
-                                                                                     body: JSON.stringify({ ids: [String(variant.shopify_variant_id)], metafields: [{ namespace: 'custom', key: m.key, value: newVal, type: m.type }], targetType: 'ProductVariant' })
-                                                                                   });
-                                                                                   fetchRules();
-                                                                                 } catch(err) {}
-                                                                                 setLoading(false);
-                                                                               }}
-                                                                             >
-                                                                               <option value="">Clear</option>
-                                                                               {metafieldOptionsMap[m.key].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                                             </select>
-                                                                           ) : m.type === 'boolean' ? (
-                                                                             <select 
-                                                                               className={`${isMismatch ? 'font-black' : ''} bg-transparent outline-none cursor-pointer hover:text-black focus:text-black leading-none pb-0 text-[10px]`}
-                                                                               style={{ width: '45px' }}
-                                                                               value={val === 'true' || val === true ? 'true' : val === 'false' || val === false ? 'false' : ''}
-                                                                               title="Toggle boolean value"
-                                                                               onClick={e => e.stopPropagation()}
-                                                                               onChange={async (e) => {
-                                                                                 const newVal = e.target.value;
-                                                                                 if (newVal === val) return;
-                                                                                 setLoading(true);
-                                                                                 try {
-                                                                                   const auth = localStorage.getItem('loam_ops_auth');
-                                                                                   await fetch('/api/bulk-update-metafields', {
-                                                                                     method: 'POST',
-                                                                                     headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': auth },
-                                                                                     body: JSON.stringify({ ids: [String(variant.shopify_variant_id)], metafields: [{ namespace: 'custom', key: m.key, value: newVal, type: m.type }], targetType: 'ProductVariant' })
-                                                                                   });
-                                                                                   fetchRules();
-                                                                                 } catch(err) {}
-                                                                                 setLoading(false);
-                                                                               }}
-                                                                             >
-                                                                               <option value="">Clear</option>
-                                                                               <option value="true">True</option>
-                                                                               <option value="false">False</option>
-                                                                             </select>
-                                                                           ) : (
-                                                                             <span 
-                                                                                className={`${isMismatch ? 'font-black' : ''} cursor-pointer hover:text-black hover:underline decoration-dashed decoration-1 underline-offset-4 flex-1`}
-                                                                                title="Click to edit value directly"
-                                                                                onClick={async (e) => {
-                                                                                   e.stopPropagation();
-                                                                                   const newVal = window.prompt(`Update ${m.label}:\n\n(Leave blank to clear the value)`, val || '');
-                                                                                if (newVal !== null && newVal !== val) {
-                                                                                   setLoading(true);
-                                                                                   try {
-                                                                                     const auth = localStorage.getItem('loam_ops_auth');
-                                                                                     await fetch('/api/bulk-update-metafields', {
-                                                                                       method: 'POST',
-                                                                                       headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': auth },
-                                                                                       body: JSON.stringify({ 
-                                                                                         ids: [String(variant.shopify_variant_id)], 
-                                                                                         metafields: [{ namespace: 'custom', key: m.key, value: newVal, type: m.type }], 
-                                                                                         targetType: 'ProductVariant' 
-                                                                                       })
-                                                                                     });
-                                                                                     fetchRules();
-                                                                                   } catch(err) { alert("Failed to update."); }
-                                                                                   setLoading(false);
-                                                                                }
-                                                                             }}
-                                                                            >{val || '--'}</span>
-                                                                           )}
-                                                                          {val && (
-                                                                             <button 
-                                                                               onClick={(e) => { e.stopPropagation(); syncFieldToFamily(product, m.key, val); }}
-                                                                               title={`Sync ${m.label} to all variants`}
-                                                                               className="ml-1 p-1 bg-white hover:bg-black hover:text-white rounded-md border border-zinc-200 opacity-0 group-hover/m:opacity-100 transition-all shadow-sm"
-                                                                             >
-                                                                               <RefreshCcw size={10} />
-                                                                             </button>
-                                                                          )}
-                                                                       </div>
-                                                                     );
-                                                                  })}
-                                                              </div>
-
-                                                             <div className="flex items-center gap-8 text-right">
-                                                                <div>
-                                                                   <div className="text-[8px] font-black uppercase text-zinc-300 tracking-widest">Base Price</div>
-                                                                   <div className="text-xs font-mono font-bold">${(variant.last_price / 100).toFixed(2)}</div>
-                                                                </div>
-                                                                <button onClick={(e) => { e.stopPropagation(); setEditingRule(variant); }} className="opacity-0 group-hover:opacity-100 p-2 text-zinc-400 hover:text-black transition-all bg-white rounded-lg border border-zinc-100 flex items-center gap-2 ml-4">
-                                                                    <div className="text-[10px] font-mono text-zinc-300">#{variant.shopify_variant_id}</div>
-                                                                    <ExternalLink size={14}/>
-                                                                 </button>
-                                                             </div>
-                                                          </div>
-                                                          );
-                                                        })})()}
-                                                    </div>
-                                                  )}
-                                               </div>
-                                             );
-                                          });
-                                     })()}
-                                   </div>
-                                 </td>
-                               </tr>
-                             )}
-                          </React.Fragment>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                </table>
-             </div>
-          </div>
-        ) : activeTab === 'insights' ? (
-           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Operational Insights</h1>
-                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1 italic tracking-[0.2em]">Customer Behavior & Catalog Health</p>
-                </div>
-                <button onClick={runManualAuditReport} disabled={loading} className="bg-black text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] flex items-center gap-2 hover:bg-zinc-800 transition-all shadow-lg">
-                  <Activity size={14}/> Run Daily Audit & Reports
-                </button>
-              </div>
-
-              <div className="grid grid-cols-3 gap-8 mb-12">
-                 <div className="bg-white p-8 rounded-[2rem] border border-zinc-200 shadow-sm">
-                    <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Tracked Abandoned Builds</div>
-                    <div className="text-5xl font-black italic tracking-tighter">{abandonedBuilds.length}</div>
-                    <p className="text-[10px] text-zinc-400 mt-2">Captured in the last 24 hours</p>
-                 </div>
-                 <div className="bg-white p-8 rounded-[2rem] border border-zinc-200 shadow-sm">
-                    <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Negative Inventory</div>
-                    <div className="text-5xl font-black italic tracking-tighter text-red-500">{rules.filter(r => r.last_availability === false && r.last_price > 0).length}</div>
-                    <p className="text-[10px] text-zinc-400 mt-2">Active items with 0 stock</p>
-                 </div>
-                 <div className="bg-white p-8 rounded-[2rem] border border-zinc-200 shadow-sm">
-                    <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Catalog Health</div>
-                    <div className="text-5xl font-black italic tracking-tighter text-green-500">98%</div>
-                    <p className="text-[10px] text-zinc-400 mt-2">Registry Coverage Score</p>
-                 </div>
-              </div>
-
-              <div className="bg-white rounded-[2.5rem] border border-zinc-200 shadow-xl overflow-hidden">
-                 <div className="p-8 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-                    <h3 className="font-black uppercase italic tracking-tight flex items-center gap-2"><History size={18}/> Abandoned Build Activity</h3>
-                    <button onClick={fetchAbandonedBuilds} className="p-2 text-zinc-400 hover:text-black transition-colors"><RefreshCcw size={16} className={insightsLoading ? 'animate-spin' : ''}/></button>
-                 </div>
-                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                       <thead>
-                          <tr className="border-b border-zinc-100 italic">
-                             <th className="p-6 text-[10px] font-black uppercase text-zinc-400 tracking-widest">Time</th>
-                             <th className="p-6 text-[10px] font-black uppercase text-zinc-400 tracking-widest">Build Type</th>
-                             <th className="p-6 text-[10px] font-black uppercase text-zinc-400 tracking-widest">Customer</th>
-                             <th className="p-6 text-[10px] font-black uppercase text-zinc-400 tracking-widest">Subtotal</th>
-                             <th className="p-6 text-[10px] font-black uppercase text-zinc-400 tracking-widest">Components</th>
-                          </tr>
-                       </thead>
-                       <tbody className="divide-y divide-zinc-50">
-                          {abandonedBuilds.length === 0 ? (
-                             <tr><td colSpan="5" className="p-12 text-center text-zinc-400 font-bold italic">No abandoned builds captured recently.</td></tr>
-                          ) : abandonedBuilds.map((build, i) => (
-                             <tr key={i} className="hover:bg-zinc-50/50 transition-colors">
-                                <td className="p-6 text-xs text-zinc-500 font-mono italic">{new Date(build.capturedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
-                                <td className="p-6"><span className="px-3 py-1 bg-zinc-100 rounded-full text-[10px] font-black uppercase">{build.buildType}</span></td>
-                                <td className="p-6">
-                                   <div className="text-xs font-bold">{build.visitor?.isLoggedIn ? `${build.visitor.firstName} ${build.visitor.lastName}` : 'Anonymous Visitor'}</div>
-                                   <div className="text-[10px] text-zinc-400 font-mono">{build.visitor?.email || build.visitor?.anonymousId?.slice(0,8)}</div>
-                                </td>
-                                <td className="p-6 text-xs font-black italic">${((build.subtotal || 0)/100).toFixed(2)}</td>
-                                <td className="p-6 flex flex-wrap gap-2 max-w-sm">
-                                   {(build.components?.front || []).concat(build.components?.rear || []).slice(0,4).map((c, ci) => (
-                                      <div key={ci} className="text-[8px] bg-zinc-50 border border-zinc-100 px-2 py-0.5 rounded uppercase font-black text-zinc-400">{c.type}: {c.name.slice(0,15)}...</div>
-                                   ))}
-                                </td>
-                             </tr>
-                          ))}
-                       </tbody>
-                    </table>
-                 </div>
-              </div>
-           </div>
-        ) : activeTab === 'admin' ? (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <div className="flex items-center justify-between mb-8">
-               <div>
-                  <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic">Control Module</h1>
-                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1 italic tracking-[0.2em]">Dashboard Configuration</p>
-               </div>
-             </div>
-
-             <div className="flex gap-4 mb-8 border-b-2 border-zinc-100 pb-2">
-                <button onClick={() => setAdminTab('control_module')} className={`px-6 py-3 font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === 'control_module' ? 'text-black border-b-2 border-black -mb-[10px] bg-zinc-100 rounded-t-xl' : 'text-zinc-400 hover:text-zinc-600'}`}>Control Module</button>
-                <button onClick={() => setAdminTab('branding')} className={`px-6 py-3 font-black text-[10px] uppercase tracking-widest transition-all ${adminTab === 'branding' ? 'text-black border-b-2 border-black -mb-[10px] bg-zinc-100 rounded-t-xl' : 'text-zinc-400 hover:text-zinc-600'}`}>Branding Center</button>
-             </div>
-
-             {adminTab === 'control_module' && (
-                <div className="bg-white rounded-[2.5rem] border border-zinc-200 shadow-xl overflow-hidden p-12 animate-in fade-in">
-                   <div className="grid grid-cols-3 gap-12">
-                      {['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'].map(cat => (
-                        <div key={cat} className="space-y-6">
-                           <div className="flex items-center justify-between border-b-4 border-black pb-4">
-                              <h3 className="text-xl font-black italic tracking-tighter truncate pr-2">{cat.replace('VALVESTEM','VALVE STEM')}</h3>
-                              <div className="w-8 h-8 rounded-full bg-zinc-100 flex-shrink-0 flex items-center justify-center"><Activity size={14}/></div>
-                           </div>
-                           <div className="space-y-2">
-                              {metafieldRegistry.map(m => (
-                                <div key={m.key} className="flex items-center gap-2 group/row">
-                                   <label className="flex-grow flex items-center justify-between p-4 bg-zinc-50 rounded-2xl hover:bg-zinc-100 transition-all cursor-pointer group">
-                                      <div className="flex flex-col">
-                                         <span className={m.categories.includes(cat) ? "text-[11px] font-black uppercase tracking-tight text-black" : "text-[11px] font-bold uppercase tracking-tight text-zinc-300 group-hover:text-zinc-400"}>{m.label}</span>
-                                         <span className="text-[8px] font-black uppercase text-zinc-400 opacity-50">{m.target}</span>
-                                      </div>
-                                      <input 
-                                        type="checkbox" 
-                                        className="w-5 h-5 rounded-lg border-2 border-zinc-200 text-black focus:ring-black"
-                                        checked={m.categories.includes(cat)}
-                                        onChange={() => {
-                                          setMetafieldRegistry(prev => prev.map(field => {
-                                              if (field.key !== m.key) return field;
-                                              const newCats = field.categories.includes(cat) 
-                                                  ? field.categories.filter(c => c !== cat) 
-                                                  : [...field.categories, cat];
-                                              return { ...field, categories: newCats };
-                                          }));
-                                        }}
-                                      />
-                                   </label>
-                                   <button onClick={() => removeMetafield(m.key)} className="opacity-0 group-hover/row:opacity-100 p-2 text-zinc-300 hover:text-red-500 transition-all"><Trash2 size={14}/></button>
-                                 </div>
-                               ))}
-                            </div>
-                            <button onClick={() => addNewMetafield(cat)} className="w-full py-4 border-2 border-dashed border-zinc-200 rounded-2xl text-[10px] font-black uppercase text-zinc-400 hover:border-black hover:text-black transition-all flex items-center justify-center gap-2">
-                               <Plus size={14}/> Add New {cat} Metafield
-                            </button>
-                        </div>
-                      ))}
-                   </div>
-                   <div className="mt-12 pt-12 border-t border-zinc-100 bg-zinc-50 -mx-12 -mb-12 p-12">
-                      <div className="flex items-center gap-4 text-zinc-400">
-                         <ShieldCheck size={20}/>
-                         <p className="text-[10px] font-black uppercase tracking-[0.2em]">Settings are currently session-scoped. Multi-user persistence coming in update 4.12.</p>
-                      </div>
-                   </div>
-                </div>
-             )}
-
-             {adminTab === 'branding' && (
-                <div className="grid gap-4 max-w-4xl animate-in fade-in">
-                   {visibleVendorNames.map(vendor => {
-                     const logo = vendorLogos.find(l => l.name === vendor);
-                     return (
-                       <div key={vendor} className="bg-white p-6 rounded-[2rem] border border-zinc-200 flex items-center gap-8 group hover:shadow-xl transition-all">
-                         <div className="w-20 h-20 bg-zinc-50 rounded-[1.5rem] flex items-center justify-center overflow-hidden border border-zinc-100">
-                           {logo?.logo_url ? <img src={logo.logo_url} className="w-full h-full object-contain p-2" alt="" /> : <ImageIcon className="text-zinc-200" />}
-                         </div>
-                         <div className="flex-grow">
-                           <label className="text-[10px] font-black uppercase text-zinc-400 mb-2 block tracking-widest italic">{vendor}</label>
-                           <div className="relative">
-                             <input 
-                               type="text" 
-                               placeholder="Paste Shopify Logo URL..." 
-                                                      className={`w-full p-4 rounded-xl outline-none border-2 transition-all font-mono text-xs ${isMandatory && String(editingComponent[key] || '').trim() === '' && editingComponent[key] !== 0 && editingComponent[key] !== '0' ? 'bg-red-50 border-red-200 focus:border-red-500' : 'bg-zinc-50 border-transparent focus:border-black'}`}
-                               defaultValue={logo?.logo_url || ''}
-                               onBlur={(e) => handleLogoUpdate(vendor, e.target.value)}
-                             />
-                             <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                               {savingLogo === vendor ? <Loader2 className="animate-spin text-zinc-400" size={16} /> : logo?.logo_url ? <ShieldCheck className="text-green-500" size={16} /> : null}
-                             </div>
-                           </div>
-                         </div>
-                       </div>
-                     );
-                   })}
-                </div>
-             )}
-          </div>
-        ) : activeTab === 'audit' ? (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic mb-2">Shop Health</h1>
-             <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest mb-12">Automated Data Audit & Integrity Engine</p>
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-                <HealthCard title="Missing URLs" count={rules.filter(r => !r.vendor_url).length} subtitle="Items requiring configuration" icon={<AlertCircle className="text-red-500"/>}/>
-                <HealthCard title="Missing Metafields" count="--" subtitle="Items lacking engineering data" icon={<Info className="text-blue-500"/>}/>
-                <HealthCard title="Sync Conflicts" count={rules.filter(r => r.needs_review).length} subtitle="Margin safety violations" icon={<RefreshCcw className="text-orange-500"/>}/>
-             </div>
-              <div className="bg-white p-20 rounded-[3rem] border-2 border-dashed border-zinc-200 text-center">
-                <ShieldCheck size={60} className="mx-auto text-zinc-200 mb-6"/>
-                <h3 className="text-xl font-black uppercase italic">Data Audit in Progress</h3>
-                <p className="text-zinc-400 text-sm max-w-xs mx-auto mt-2">Integrating Section 4.11 from Master Notes. Reporting on Negative Inventory coming next.</p>
-             </div>
-          </div>
-        ) : null}
-
-        {/* --- COMPONENT LIBRARY TAB --- */}
-        {activeTab === 'component_library' && (
-           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-               <div className="flex items-center justify-between mb-8">
-                   <div>
-                       <h1 className="text-4xl font-black tracking-tight text-zinc-900 uppercase italic mb-2">Component Library</h1>
-                       <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest leading-relaxed max-w-2xl">
-                           Manage the master specification JSON database directly. Changes here will commit directly to the Unified Calculator Repository via GitHub API.
-                       </p>
-                   </div>
-                   <button onClick={() => handleCreateNewComponent(componentTab)} className="bg-black text-white px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-zinc-800 transition-all shadow-xl flex items-center gap-2">
-                      <Plus size={16}/> New Component
-                   </button>
-               </div>
-
-               <div className="mb-10">
-                 <div className="flex gap-4 mb-8 border-b-2 border-zinc-100 pb-2">
-                    {['rims', 'hubs', 'spokes', 'nipples'].map(tab => (
-                       <button 
-                          key={tab} 
-                          onClick={() => { setComponentTab(tab); setComponentVendorFilter('All'); }} 
-                          className={`px-6 py-3 font-black text-[10px] uppercase tracking-widest transition-all ${componentTab === tab ? 'text-black border-b-2 border-black -mb-[10px] bg-zinc-100 rounded-t-xl' : 'text-zinc-400 hover:text-zinc-600'}`}
-                       >
-                          {tab} ({componentData[tab]?.length || 0})
-                       </button>
-                    ))}
-                 </div>
-                 
-                 {/* VENDOR FILTERS OVERRIDE FOR COMPONENTS */}
-                 {(() => {
-                    const activeList = componentData[componentTab] || [];
-                    if (activeList.length === 0) return null;
-                    const vends = activeList.map(item => item.Vendor || item.vendor || item.Brand || item.brand).filter(v => typeof v === 'string' && v.trim() !== '');
-                    const uniqueVendors = [...new Set(vends)].sort((a,b) => a.localeCompare(b));
-                    
-                    if (uniqueVendors.length === 0) return null;
-
-                    return (
-                      <div className="mb-8">
-                         <div className="flex items-center justify-between mb-4">
-                           <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Filter by Component Vendor</label>
-                         </div>
-                         <div className="flex flex-wrap gap-2">
-                           <button 
-                             onClick={() => setComponentVendorFilter('All')} 
-                             className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all ${componentVendorFilter === 'All' ? 'bg-black text-white border-black shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
-                           >
-                             All Vendors
-                           </button>
-                           {uniqueVendors.map(v => (
-                              <button key={v} onClick={() => setComponentVendorFilter(v)} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 transition-all ${componentVendorFilter === v ? 'border-blue-500 bg-blue-50 text-blue-900 shadow-sm scale-[1.02]' : 'bg-white text-zinc-500 border-zinc-100 hover:border-zinc-300'}`}>
-                                <span className="text-[10px] font-bold uppercase tracking-tight">{v}</span>
-                              </button>
-                           ))}
-                         </div>
-                      </div>
-                    )
-                 })()}
-                 
-                 {/* DYNAMIC DATA GRID */}
-                 <div className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden">
-                    {(() => {
-                        const activeList = componentData[componentTab] || [];
-                        if (activeList.length === 0) return (
-                           <div className="p-12 text-center">
-                              <Loader2 className="animate-spin text-zinc-300 mx-auto mb-4" size={32}/>
-                              <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Fetching JSON Data</p>
-                           </div>
-                        );
-                        
-                        const filteredList = componentVendorFilter === 'All' 
-                           ? activeList 
-                           : activeList.filter(item => (item.Vendor || item.vendor || item.Brand || item.brand) === componentVendorFilter);
-                           
-                        // Build dynamic headers based on the first item
-                        const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'Tags', 'tags', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags'];
-                        const rawColumns = Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k));
-                        
-                        let columns = componentColumnOrder[componentTab] || [];
-                        const colCheck = columns.filter(c => rawColumns.includes(c));
-                        if (colCheck.length !== rawColumns.length) {
-                           columns = rawColumns;
-                        }
-
-                        const formatColumnTitle = (title) => {
-                             if (title.toLowerCase().includes('metafield: custom.weight_g')) {
-                                return title.toLowerCase().includes('variant') ? 'Weight G (v)' : 'Weight G (p)';
-                             }
-                            let clean = title.replace(/^Metafield:\s*custom\./i, '');
-                            clean = clean.replace(/^Variant Metafield:\s*custom\./i, '');
-                            clean = clean.replace(/\[.*?\]/g, '');
-                            clean = clean.replace(/_/g, ' ');
-                            return clean.trim().replace(/\b\w/g, l => l.toUpperCase());
-                        };
-
-                        const handleDragStart = (col) => setDraggedColumn(col);
-                        const handleDragOver = (e) => e.preventDefault();
-                        const handleDrop = (targetCol) => {
-                           if (!draggedColumn || draggedColumn === targetCol) return;
-                           const currentCols = [...columns];
-                           const srcIdx = currentCols.indexOf(draggedColumn);
-                           const tgtIdx = currentCols.indexOf(targetCol);
-                           currentCols.splice(srcIdx, 1);
-                           currentCols.splice(tgtIdx, 0, draggedColumn);
-                           const newOrderMap = { ...componentColumnOrder, [componentTab]: currentCols };
-                           setComponentColumnOrder(newOrderMap);
-                           localStorage.setItem('loamops_cols', JSON.stringify(newOrderMap));
-                           setDraggedColumn(null);
-                        };
-                        
-                        return (
-                           <div className="overflow-x-auto w-full max-h-[650px] relative scrollbar-thin rounded-2xl border border-zinc-100 shadow-inner">
-                             <table className="min-w-full text-left text-sm whitespace-nowrap select-none border-collapse">
-                               <thead className="bg-zinc-50 sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                                  <tr>
-                                     <th 
-                                        style={{ 
-                                           width: componentColumnWidths[componentTab + '_name'] || 300, 
-                                           minWidth: componentColumnWidths[componentTab + '_name'] || 300,
-                                           position: 'sticky', left: 0, zIndex: 20
-                                        }}
-                                        className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest bg-zinc-50 border-r border-zinc-100 group/h relative"
-                                     >
-                                        Name
-                                        <div onMouseDown={(e) => startResizing(e, componentTab + '_name')} className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-black/20 transition-colors z-30" />
-                                     </th>
-                                     {columns.map(col => (
-                                        <th 
-                                           key={col} 
-                                           draggable
-                                           onDragStart={() => handleDragStart(col)}
-                                           onDragOver={handleDragOver}
-                                           onDrop={() => handleDrop(col)}
-                                           style={{ 
-                                              width: componentColumnWidths[componentTab + '_' + col] || 150, 
-                                              minWidth: componentColumnWidths[componentTab + '_' + col] || 150 
-                                           }}
-                                           className="p-4 font-black text-[10px] uppercase text-zinc-400 tracking-widest cursor-grab active:cursor-grabbing hover:bg-zinc-100 transition-colors relative group/h border-r border-zinc-50"
-                                        >
-                                           {formatColumnTitle(col)}
-                                           <div onMouseDown={(e) => startResizing(e, componentTab + '_' + col)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-black/20 transition-colors z-30 opacity-0 group-hover/h:opacity-100" />
-                                        </th>
-                                      ))}
-                                      <th className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest text-right bg-zinc-50">Actions</th>
-                                   </tr>
-                               </thead>
-                               <tbody className="divide-y divide-zinc-100">
-                                  {filteredList.map((row, i) => {
+                                   {filteredList.map((row, i) => {
+                                      const rowId = (row.id || row.shopify_product_id || row.Name);
+                                      const isSelected = selectedComponents.includes(rowId);
                                      const shopifyId = row['Product ID'] || row['product_id'] || row['ID'];
                                      const validation = getComponentValidation(row, componentTab);
                                      const { isValid, missingFields } = validation;
                                      return (
-                                     <tr key={row.id || i} className={`${isValid ? 'odd:bg-white even:bg-zinc-100/30' : 'bg-red-50 hover:bg-red-100/50'} transition-colors group cursor-pointer border-b border-zinc-100 last:border-0`} onClick={() => handleEditComponent(row)}>
+                                     <tr key={rowId || i} className={`${isSelected ? 'bg-zinc-900 text-white' : (isValid ? 'odd:bg-white even:bg-zinc-100/30' : 'bg-red-50 hover:bg-red-100/50')} transition-colors group cursor-pointer border-b border-zinc-100 last:border-0`} onClick={(e) => {
+                                         if (e.target.type === 'checkbox') return;
+                                         handleEditComponent(row);
+                                      }}>
+                                         <td className={`p-4 px-6 w-12 border-r border-zinc-100 sticky left-0 z-30 transition-colors ${isSelected ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+                                            <input 
+                                               type="checkbox" 
+                                               checked={isSelected}
+                                               onChange={(e) => toggleComponentSelection(rowId, e, filteredList)}
+                                               onClick={(e) => e.stopPropagation()}
+                                               className="w-4 h-4 rounded border-zinc-300 text-black focus:ring-black cursor-pointer"
+                                            />
+                                         </td>
                                         <td 
                                            style={{ 
                                               width: componentColumnWidths[componentTab + '_name'] || 300, 
                                               minWidth: componentColumnWidths[componentTab + '_name'] || 300 
                                            }}
-                                           className={`p-4 px-6 text-xs border-r border-zinc-100 sticky left-0 z-20 truncate ${isValid ? (i % 2 === 0 ? 'bg-white' : 'bg-zinc-50') : 'bg-red-50'} group-hover:bg-zinc-100 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.05)]`}
+                                           className={`p-4 px-6 text-xs border-r border-zinc-100 sticky left-[48px] z-20 truncate ${isValid ? (i % 2 === 0 ? 'bg-white' : 'bg-zinc-50') : 'bg-red-50'} group-hover:bg-zinc-100 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.05)]`}
                                         >
                                            <div className="font-bold text-black flex items-center justify-between">
                                               <span className="truncate">{row.Name || row.name || row.title || row.Title || 'Unknown'}</span>
