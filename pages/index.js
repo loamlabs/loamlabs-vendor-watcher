@@ -82,6 +82,7 @@ export default function OpsDashboard() {
 
     const rawData = componentData[componentTab] || [];
     const updatedArray = rawData.filter((item, idx) => {
+       console.log("[Persistence Debug] Bulk filtering items", { total: rawData.length, selected: selectedComponents.length });
        const rowId = (item.id || item.shopify_product_id || (item.Name + "_" + idx));
        return !selectedComponents.includes(rowId);
     });
@@ -387,6 +388,7 @@ export default function OpsDashboard() {
   const fetchComponentLibrary = async () => {
       setLoading(true);
       try {
+      console.log("[Persistence Debug] Fetching /api/components", JSON.stringify({ [tab]: sanitizedArray }));
           const res = await fetch('/api/components', { headers: { 'x-dashboard-auth': password } });
           const data = await res.json();
           if (res.ok) setComponentData(data);
@@ -533,30 +535,35 @@ export default function OpsDashboard() {
       const { tags, Tags, ...rest } = item;
       return rest;
     });
+    console.log(`[Persistence Debug] Saving ${tab} changes. Payload length: ${sanitizedArray.length}. Tab: ${tab}`);
     setComponentSaving(true);
     try {
+      console.log("[Persistence Debug] Fetching /api/components", JSON.stringify({ [tab]: sanitizedArray }));
       const res = await fetch('/api/components', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
         body: JSON.stringify({ [tab]: sanitizedArray })
       });
       if (res.ok) {
+        console.log(`[Persistence Debug] Save SUCCESS for ${tab}. Data synced to componentData.`);
         setComponentData(prev => ({ ...prev, [tab]: sanitizedArray }));
         setIsComponentDrawerOpen(false);
         setEditingComponent(null);
         setConfirmedFields([]);
       } else {
         const err = await res.json();
+        console.error(`[Persistence Debug] Save FAILED for ${tab}:`, err);
         showNotification("Save Failed: " + (err.error || "Unknown error"), 'error');
       }
     } catch (e) {
-      console.error(e);
+      console.error(`[Persistence Debug] Network Error:`, e);
       showNotification("Network error while saving components.", 'error');
     }
     setComponentSaving(false);
   };
 
   const handleEditComponent = (component, editIdx) => {
+    console.log(`[Persistence Debug] Opening Drawer for Edit. Index: ${editIdx}, Name: ${component.Name || component.title}`);
     setEditingComponent({ ...component, _editIdx: editIdx });
     setIsDuplicateMode(false);
     setConfirmedFields([]);
@@ -2759,6 +2766,7 @@ export default function OpsDashboard() {
                                                   if (confirm("Delete " + (row.Name || row.title) + "? This cannot be undone.")) {
 
                                                      const delId = (row.id || row.shopify_product_id || (row.Name + "_" + row._rawIdx));
+                                                      console.log("[Persistence Debug] Individual DELETE", { delId, name: row.Name || row.title });
                                                       const newArrFull = activeList.filter(item => (item.id || item.shopify_product_id || (item.Name + "_" + item._rawIdx)) !== delId);
                                                       const finalArr = newArrFull.map(({ _rawIdx, ...rest }) => rest);
                                                       saveComponentChanges(finalArr);
@@ -2939,6 +2947,7 @@ export default function OpsDashboard() {
                                    disabled={!allConfirmed || componentSaving}
                                    onClick={() => {
                                       // Upsert logic - use _editIdx for direct slot replacement
+                                        console.log("[Persistence Debug] Save Button Clicked", { _editIdx: editingComponent?._editIdx, isDuplicateMode });
                                        const activeArray = [...componentData[componentTab]];
                                        const { _editIdx, ...cleanComp } = editingComponent;
                                        let existingIdx = -1;
