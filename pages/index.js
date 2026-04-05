@@ -530,7 +530,7 @@ export default function OpsDashboard() {
 
   const MANDATORY_FIELDS = {
     rims: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Option 2 Name', 'Option 2 Value', 'Wheel Spec Position', 'Rim Erd', 'Weight G (p)'],
-    hubs: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter', 'Hub Type', 'Weight G (v)', 'Wheel Spec Position'],
+    hubs: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Type', 'Weight G (v)', 'Wheel Spec Position'],
     spokes: ['Name', 'Vendor', 'Spoke Type', 'Spoke Cross Section Area Mm2', 'Spoke Model Group', 'Weight G (p)', 'Spoke Diameter Spec', 'Spoke Rounding Rule'],
     nipples: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Weight G (p)']
   };
@@ -551,11 +551,12 @@ export default function OpsDashboard() {
     if (component[key] !== undefined) return component[key];
     
     // Normalized match (Handling Shopify Metafield prefixes/suffixes)
-    // EXCLUDE "Option" keys when looking for generic "Name" or "Vendor"
     const foundKey = Object.keys(component).find(k => {
         const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
         const isOption = nk.includes('option');
         if (isOption && (normTarget === 'name' || normTarget === 'vendor')) return false;
+        
+        // Exact normalized match OR substring match for metafields like [number_decimal]
         return nk === normTarget || nk.includes(normTarget);
     });
     if (foundKey) return component[foundKey];
@@ -564,7 +565,6 @@ export default function OpsDashboard() {
     if (normTarget === 'wheelspecposition') return component['Wheel Spec Position'] || component.position || component.Position || '';
     if (normTarget === 'rimerd') return component['Rim Erd'] || component.erd || component.ERD || component.rim_erd || '';
     if (normTarget === 'weightg') {
-        // Either/Or weight check
         return component['Weight G (p)'] || component['Weight G (v)'] || component.weight || component.Weight || '';
     }
 
@@ -576,26 +576,42 @@ export default function OpsDashboard() {
     const missing = [];
     const required = [...(MANDATORY_FIELDS[tab] || [])];
     
-    // Add conditional requirements for Hubs
+    // Add Hub-specific conditional requirements
     if (tab === 'hubs') {
        const hubType = getComponentValue(component, 'Hub Type');
-       if (hubType === 'Straight Pull' || hubType === 'Hook Flange') {
-          if (!required.includes('Hub Lacing Policy')) required.push('Hub Lacing Policy');
+       
+       // J-Bend hubs REQUIRE Spoke Hole Diameter
+       if (hubType === 'J-Bend') {
+           if (!required.includes('Hub Spoke Hole Diameter')) required.push('Hub Spoke Hole Diameter');
        }
+       
+       // Straight Pull hubs REQUIRE Offset fields
        if (hubType === 'Straight Pull') {
           ['Hub SP Offset Spoke Hole Left', 'Hub SP Offset Spoke Hole Right'].forEach(f => {
              if (!required.includes(f)) required.push(f);
           });
        }
+       
+       // Straight Pull or Hook Flange REQUIRE Manual Cross / Lacing Cross fields
+       if (hubType === 'Straight Pull' || hubType === 'Hook Flange') {
+          ['Hub Manual Cross Value', 'Hub Lacing Cross Left', 'Hub Lacing Cross Right'].forEach(f => {
+             if (!required.includes(f)) required.push(f);
+          });
+          if (!required.includes('Hub Lacing Policy')) required.push('Hub Lacing Policy');
+       }
     }
     
     required.forEach(field => {
-      // WEIGHT EITHER/OR LOGIC
+      // WEIGHT EITHER/OR CHECK (Ensuring correct mapping to Shopify Metafield keys)
       if (field.includes('Weight G')) {
-          const pVal = getComponentValue(component, 'Weight G (p)');
-          const vVal = getComponentValue(component, 'Weight G (v)');
+          const pKey = Object.keys(component).find(k => k.toLowerCase().includes('metafield') && k.toLowerCase().includes('weightg') && !k.toLowerCase().includes('variant'));
+          const vKey = Object.keys(component).find(k => k.toLowerCase().includes('metafield') && k.toLowerCase().includes('weightg') && k.toLowerCase().includes('variant'));
+          
+          const pVal = component[pKey] || getComponentValue(component, 'Weight G (p)');
+          const vVal = component[vKey] || getComponentValue(component, 'Weight G (v)');
+          
           const hasWeight = (pVal !== '' && pVal !== undefined && pVal !== null) || (vVal !== '' && vVal !== undefined && vVal !== null);
-          if (!hasWeight && !missing.includes('Weight (Either/Or)')) {
+          if (!hasWeight) {
               missing.push('Weight (p) or (v)');
           }
           return;
