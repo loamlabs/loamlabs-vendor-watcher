@@ -582,11 +582,11 @@ export default function OpsDashboard() {
     nipples: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Weight G (p)']
   };
 
-    const getComponentValue = (component, key) => {
+      const getComponentValue = (component, key) => {
     if (!component) return '';
     const normTarget = key.toLowerCase().replace(/[^a-z0-9]/g, '');
     
-    // PRIORITY 1: Strict Identity
+    // PRIORITY 1: Strict Identity (Fix for incorrect Name/Vendor mapping)
     if (normTarget === 'name' || normTarget === 'displayname') {
        return component.Name || component.name || component.title || component.Title || '';
     }
@@ -600,7 +600,7 @@ export default function OpsDashboard() {
     // PRIORITY 3: Normalized Metafield Match
     const foundKey = Object.keys(component).find(k => {
         const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-        // Exclude option keys when looking for specific technical fields unless explicitly asked
+        // Exclude option keys when looking for general identity (Fix for Name -> Option Name)
         if ((nk.includes('optionname') || nk.includes('optionvalue')) && !normTarget.includes('option')) return false;
         return nk === normTarget || nk.includes(normTarget);
     });
@@ -2533,7 +2533,7 @@ export default function OpsDashboard() {
                                 <button onClick={() => setShowMissingOnly(!showMissingOnly)} className={`w-12 h-6 rounded-full transition-all relative ${showMissingOnly ? 'bg-red-500' : 'bg-zinc-200'}`}>
                                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${showMissingOnly ? 'left-7' : 'left-1'}`} />
                                 </button>
-                                <span className="text-[10px] font-black uppercase text-zinc-500 tracking-widest text-zinc-600">Show Missing Data Only</span>
+                                <span className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Show Missing Data Only</span>
                              </div>
                              {showMissingOnly && <div className="text-[10px] font-bold text-red-500 flex items-center gap-1 uppercase italic animate-pulse"><AlertTriangle size={14} /> Filtering to enrollment errors</div>}
                           </div>
