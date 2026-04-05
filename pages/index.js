@@ -560,17 +560,6 @@ export default function OpsDashboard() {
     setIsComponentDrawerOpen(true);
   };
 
-  const COMPONENT_SUGGESTIONS = {
-    'Option 1 Name': ['Size', 'Spoke Count', 'Color', 'Spacing', 'Hole Count', 'Brake Interface'],
-    'Option 2 Name': ['Spoke Count', 'Hole Count', 'Size', 'Color', 'Driver'],
-    'Vendor': ['Berd', 'DT Swiss', 'Sapim', 'Industry Nine', 'Chris King', 'Hope', 'Stan\'s NoTubes', 'Onyx', 'Shimano', 'SRAM'],
-    'Brand': ['Berd', 'DT Swiss', 'Sapim', 'Industry Nine', 'Chris King', 'Hope', 'Stan\'s NoTubes', 'Onyx', 'Shimano', 'SRAM'],
-    'Position': ['Front', 'Rear', 'Universal', 'Front/Rear'],
-    'Brake Interface': ['6-Bolt', 'Centerlock', 'Rim Brake'],
-    'Hub Spacing': ['100mm QR', '100x12mm TA', '100x15mm TA', '110x15mm Boost', '110x20mm TA', '130mm QR', '135mm QR', '142x12mm TA', '148x12mm Boost', '150x12mm TA', '157x12mm SuperBoost'],
-    'Rim Size': ['700c', '650b', '29"', '27.5"', '26"', '24"', '20"']
-  };
-
   const DROPDOWN_OPTIONS = {
     'Wheel Spec Position': ['Front', 'Rear', 'Front/Rear'],
     'Brake Interface': ['Centerlock', '6-Bolt', 'N/A', 'Rim Brake'],
@@ -593,17 +582,26 @@ export default function OpsDashboard() {
     nipples: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Weight G (p)']
   };
 
-  const getComponentValue = (component, key) => {
+    const getComponentValue = (component, key) => {
     if (!component) return '';
     const normTarget = key.toLowerCase().replace(/[^a-z0-9]/g, '');
     
-    // Exact match first
+    // PRIORITY 1: Strict Identity
+    if (normTarget === 'name' || normTarget === 'displayname') {
+       return component.Name || component.name || component.title || component.Title || '';
+    }
+    if (normTarget === 'vendor' || normTarget === 'brand') {
+       return component.Vendor || component.vendor || component.Brand || component.brand || '';
+    }
+
+    // PRIORITY 2: Exact Key Match
     if (component[key] !== undefined) return component[key];
     
-    // Normalized match (Handling Shopify Metafield prefixes/suffixes)
+    // PRIORITY 3: Normalized Metafield Match
     const foundKey = Object.keys(component).find(k => {
         const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-        // Match if the target name is contained within the raw key (e.g. "rimerd" matches "variantmetafieldcustomrimerdnumberdecimal")
+        // Exclude option keys when looking for specific technical fields unless explicitly asked
+        if ((nk.includes('optionname') || nk.includes('optionvalue')) && !normTarget.includes('option')) return false;
         return nk === normTarget || nk.includes(normTarget);
     });
     if (foundKey) return component[foundKey];
@@ -611,7 +609,7 @@ export default function OpsDashboard() {
     // Technical Fallbacks
     if (normTarget === 'wheelspecposition') return component['Wheel Spec Position'] || component.position || component.Position || '';
     if (normTarget === 'rimerd') return component['Rim Erd'] || component.erd || component.ERD || component.rim_erd || '';
-    if (normTarget === 'weightg') return component.weight || component.Weight || component.weight_g || '';
+    if (normTarget === 'weightg') return component['Weight G (p)'] || component['Weight G (v)'] || component.weight || component.Weight || '';
 
     return '';
   };
@@ -2525,11 +2523,20 @@ export default function OpsDashboard() {
                              All Vendors
                            </button>
                            {uniqueVendors.map(v => (
-                              <button key={v} onClick={() => setComponentVendorFilter(v)} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 transition-all ${componentVendorFilter === v ? 'border-blue-500 bg-blue-50 text-blue-900 shadow-sm scale-[1.02]' : 'bg-white text-zinc-500 border-zinc-100 hover:border-zinc-300'}`}>
-                                <span className="text-[10px] font-bold uppercase tracking-tight">{v}</span>
-                              </button>
-                           ))}
-                         </div>
+                               <button key={v} onClick={() => setComponentVendorFilter(v)} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 transition-all ${componentVendorFilter === v ? 'border-blue-500 bg-blue-50 text-blue-900 shadow-sm scale-[1.02]' : 'bg-white text-zinc-500 border-zinc-100 hover:border-zinc-300'}`}>
+                                 <span className="text-[10px] font-bold uppercase tracking-tight">{v}</span>
+                               </button>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-4 mt-6 p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+                             <div className="flex items-center gap-2">
+                                <button onClick={() => setShowMissingOnly(!showMissingOnly)} className={`w-12 h-6 rounded-full transition-all relative ${showMissingOnly ? 'bg-red-500' : 'bg-zinc-200'}`}>
+                                   <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${showMissingOnly ? 'left-7' : 'left-1'}`} />
+                                </button>
+                                <span className="text-[10px] font-black uppercase text-zinc-500 tracking-widest text-zinc-600">Show Missing Data Only</span>
+                             </div>
+                             {showMissingOnly && <div className="text-[10px] font-bold text-red-500 flex items-center gap-1 uppercase italic animate-pulse"><AlertTriangle size={14} /> Filtering to enrollment errors</div>}
+                          </div>
                       </div>
                     )
                  })()}
@@ -2545,9 +2552,21 @@ export default function OpsDashboard() {
                            </div>
                         );
                         
-                        const filteredList = componentVendorFilter === 'All' 
+                        let filteredList = componentVendorFilter === 'All' 
                            ? activeList 
                            : activeList.filter(item => (item.Vendor || item.vendor || item.Brand || item.brand) === componentVendorFilter);
+                        
+                        // Default Alphabetical Sort
+                        filteredList = [...filteredList].sort((a, b) => {
+                           const aN = (a.Name || a.name || a.title || a.Title || '').toLowerCase();
+                           const bN = (b.Name || b.name || b.title || b.Title || '').toLowerCase();
+                           return aN.localeCompare(bN);
+                        });
+
+                        if (showMissingOnly) {
+                           filteredList = filteredList.filter(item => !getComponentValidation(item, componentTab).isValid);
+                        }
+
                            
                         // Build dynamic headers based on the first item
                         const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'Tags', 'tags', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags'];
@@ -2589,17 +2608,19 @@ export default function OpsDashboard() {
                            <div className="overflow-x-auto max-h-[650px] relative scrollbar-thin rounded-2xl border border-zinc-100 shadow-inner">
                              <table className="min-w-full text-left text-sm whitespace-nowrap select-none border-collapse">
                                <thead className="bg-zinc-50 sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                                  <tr>
-                                     <th 
-                                        style={{ 
-                                           width: componentColumnWidths[componentTab + '_name'] || 300, 
-                                           minWidth: componentColumnWidths[componentTab + '_name'] || 300,
-                                           position: 'sticky', left: 0, zIndex: 20
-                                        }}
-                                        className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest bg-zinc-50 border-r border-zinc-100 group/h relative"
-                                     >
-                                        Name
-                                        <div onMouseDown={(e) => startResizing(e, componentTab + '_name')} className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-black/20 transition-colors z-30" />
+                                   <tr>
+                                      <th className="p-4 px-6 w-12 bg-zinc-50 border-r border-zinc-100 sticky left-0 z-40">
+                                         <input type="checkbox" checked={selectedComponents.length === filteredList.length && filteredList.length > 0} onChange={(e) => {
+                                            if (e.target.checked) setSelectedComponents(filteredList.map(v => (v.id || v.shopify_product_id || v.Name)));
+                                            else setSelectedComponents([]);
+                                         }} className="w-4 h-4 rounded border-zinc-300 text-black cursor-pointer" />
+                                      </th>
+                                      <th 
+                                         style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300, position: 'sticky', left: '48px', zIndex: 20 }}
+                                         className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest bg-zinc-50 border-r border-zinc-100 group/h relative"
+                                      >
+                                         Name
+                                         <div onMouseDown={(e) => startResizing(e, componentTab + '_name')} className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-black/20 transition-colors z-30" />
                                      </th>
                                      {columns.map(col => (
                                         <th 
@@ -2623,17 +2644,26 @@ export default function OpsDashboard() {
                                </thead>
                                <tbody className="divide-y divide-zinc-100">
                                   {filteredList.map((row, i) => {
-                                     const shopifyId = row['Product ID'] || row['product_id'] || row['ID'];
-                                     const validation = getComponentValidation(row, componentTab);
+                                      const rowId = (row.id || row.shopify_product_id || row.Name);
+                                      const isSelected = selectedComponents.includes(rowId);
+                                      const shopifyId = row['Product ID'] || row['product_id'] || row['ID'];
+                                      const validation = getComponentValidation(row, componentTab);
                                      const { isValid, missingFields } = validation;
                                      return (
-                                     <tr key={row.id || i} className={`${isValid ? 'odd:bg-white even:bg-zinc-100/30' : 'bg-red-50 hover:bg-red-100/50'} transition-colors group cursor-pointer border-b border-zinc-100 last:border-0`} onClick={() => handleEditComponent(row)}>
+                                     <tr key={rowId || i} className={`${isSelected ? 'bg-zinc-900 text-white' : (isValid ? 'odd:bg-white even:bg-zinc-100/30' : 'bg-red-50 hover:bg-red-100/50')} transition-colors group cursor-pointer border-b border-zinc-100 last:border-0`} onClick={(e) => {
+                                         if (e.target.type === 'checkbox') return;
+                                         handleEditComponent(row);
+                                      }}>
+                                         <td className={`p-4 px-6 w-12 border-r border-zinc-100 sticky left-0 z-30 transition-colors ${isSelected ? 'bg-zinc-800' : 'bg-zinc-50'}`}>
+                                            <input type="checkbox" checked={isSelected} onChange={(e) => toggleComponentSelection(rowId, e, filteredList)} onClick={(e) => e.stopPropagation()} className="w-4 h-4 rounded border-zinc-300 text-black cursor-pointer" />
+                                         </td>
                                         <td 
                                            style={{ 
                                               width: componentColumnWidths[componentTab + '_name'] || 300, 
                                               minWidth: componentColumnWidths[componentTab + '_name'] || 300 
                                            }}
-                                           className={`p-4 px-6 text-xs border-r border-zinc-100 sticky left-0 z-20 truncate ${isValid ? (i % 2 === 0 ? 'bg-white' : 'bg-zinc-50') : 'bg-red-50'} group-hover:bg-zinc-100 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.05)]`}
+                                           style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300 }}
+                                           className={`p-4 px-6 text-xs border-r border-zinc-100 sticky left-[48px] z-20 truncate ${isValid ? (i % 2 === 0 ? 'bg-white' : 'bg-zinc-50') : 'bg-red-50'} group-hover:bg-zinc-100 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.05)]`}
                                         >
                                            <div className="font-bold text-black flex items-center justify-between">
                                               <span className="truncate">{row.Name || row.name || row.title || row.Title || 'Unknown'}</span>
