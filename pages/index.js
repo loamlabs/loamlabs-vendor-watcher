@@ -136,9 +136,7 @@ export default function OpsDashboard() {
 
   const spokePolish = (val) => {
     if (!val) return val;
-    const str = String(val).trim();
-    if (/^\d+(\.\d+)?$/.test(str)) return str + 'h';
-    return str;
+    return val; // Removed problematic 'h' suffix entirely as requested
   };
 
   useEffect(() => {
@@ -577,8 +575,8 @@ export default function OpsDashboard() {
     'Brake Interface': ['Centerlock', '6-Bolt', 'N/A', 'Rim Brake'],
     'Option 1 Name': ['Size', 'Spoke Count', 'Freehub', 'Spacing', 'Color', 'Type'],
     'Option 2 Name': ['Size', 'Spoke Count', 'Freehub', 'Spacing', 'Color', 'Type'],
-    'Rim Size': ['700c', '650b', '29"', '27.5"', '26"', '24"', '20"'],
-    'Spoke Count': ['24h', '28h', '32h', '36h'],
+    'Rim Size': ['26"', '27.5"', '29"', '30"', '31"', '32"', '700c', '650b'],
+    'Spoke Count': ['16h', '18h', '20h', '24h', '28h', '32h', '36h'],
     'Hub Type': ['J-Bend', 'Straight Pull', 'Hook Flange'],
     'Hub Lacing Policy': ['Standard', 'Force 2-Cross for 28h Only', 'Force 3-Cross for 28h Only', 'Force All as 2-Cross', 'Use Manual Override Field', 'None'],
     'Rim Washer Policy': ['Optional', 'Mandatory', 'Not Compatible', 'None'],
@@ -589,14 +587,20 @@ export default function OpsDashboard() {
 
   const MANDATORY_FIELDS = {
     rims: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Option 2 Name', 'Option 2 Value', 'Wheel Spec Position', 'Rim Erd', 'Weight G (p)'],
-    hubs: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter', 'Hub Type', 'Weight G (v)', 'Wheel Spec Position'],
+    hubs: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Hub Type', 'Weight G (v)', 'Wheel Spec Position'],
     spokes: ['Name', 'Vendor', 'Spoke Type', 'Spoke Cross Section Area Mm2', 'Spoke Model Group', 'Weight G (p)', 'Spoke Diameter Spec', 'Spoke Rounding Rule'],
     nipples: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Weight G (p)']
   };
 
     const getComponentValue = (component, key) => {
     if (!component) return '';
-    const normTarget = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    let normTarget = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    // Systemic Fix: Remove (p) and (v) indicators for mapping priority
+    if (normTarget.endsWith('p') || normTarget.endsWith('v')) {
+       const base = normTarget.slice(0, -1);
+       if (base === 'weightg') normTarget = base;
+    }
     
     // PRIORITY 1: Strict Identity
     if (normTarget === 'name' || normTarget === 'displayname' || normTarget === 'title') {
@@ -649,7 +653,12 @@ export default function OpsDashboard() {
     const lacingPolicy = getComponentValue(component, 'Hub Lacing Policy');
 
     if (tab === 'hubs') {
-       if (hubType === 'J-Bend') { if (!required.includes('Hub Spoke Hole Diameter')) required.push('Hub Spoke Hole Diameter'); }
+       // Only require J-Bend specific fields if it's J-Bend
+       if (hubType === 'J-Bend') { 
+          ['Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter'].forEach(f => {
+             if (!required.includes(f)) required.push(f);
+          });
+       }
        if (hubType === 'Straight Pull') {
           ['Hub SP Offset Spoke Hole Left', 'Hub SP Offset Spoke Hole Right'].forEach(f => { if (!required.includes(f)) required.push(f); });
        }
@@ -2537,11 +2546,11 @@ export default function OpsDashboard() {
                     if (uniqueVendors.length === 0) return null;
 
                     return (
-                      <div className="mb-8">
+                      <div className="mb-8 p-8 bg-white border border-zinc-100 rounded-[2rem] shadow-sm">
                          <div className="flex items-center justify-between mb-4">
                            <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Filter by Component Vendor</label>
                          </div>
-                         <div className="flex flex-wrap gap-2">
+                         <div className="flex flex-wrap gap-2 mb-6">
                            <button 
                              onClick={() => setComponentVendorFilter('All')} 
                              className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all ${componentVendorFilter === 'All' ? 'bg-black text-white border-black shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
@@ -2553,16 +2562,14 @@ export default function OpsDashboard() {
                                  <span className="text-[10px] font-bold uppercase tracking-tight">{v}</span>
                                </button>
                             ))}
-                          </div>
-                          <div className="flex items-center gap-4 mt-6 p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
-                             <div className="flex items-center gap-2">
-                                <button onClick={() => setShowMissingOnly(!showMissingOnly)} className={`w-12 h-6 rounded-full transition-all relative ${showMissingOnly ? 'bg-red-500' : 'bg-zinc-200'}`}>
-                                   <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${showMissingOnly ? 'left-7' : 'left-1'}`} />
-                                </button>
-                                <span className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Show Missing Data Only</span>
-                             </div>
-                             {showMissingOnly && <div className="text-[10px] font-bold text-red-500 flex items-center gap-1 uppercase italic animate-pulse"><AlertTriangle size={14} /> Filtering to enrollment errors</div>}
-                          </div>
+                         </div>
+
+                         {/* Professional Filter Bar */}
+                         <div className="flex items-center gap-2 p-1 bg-zinc-100/50 rounded-2xl border border-zinc-100 w-fit">
+                            <button onClick={() => setShowMissingOnly(false)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!showMissingOnly ? "bg-white text-black shadow-sm" : "text-zinc-400 hover:text-zinc-600"}`}>All Components</button>
+                            <button onClick={() => setShowMissingOnly(true)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showMissingOnly ? "bg-red-500 text-white shadow-lg" : "text-zinc-400 hover:text-red-500"}`}>Missing Data</button>
+                            {showMissingOnly && <div className="px-4 text-[9px] font-bold text-red-500 flex items-center gap-1 uppercase italic animate-pulse"><AlertTriangle size={12} /> Enrollment Errors</div>}
+                         </div>
                       </div>
                     )
                  })()}
@@ -2670,7 +2677,7 @@ export default function OpsDashboard() {
                                </thead>
                                <tbody className="divide-y divide-zinc-100">
                                   {filteredList.map((row, i) => {
-                                      const rowId = (row.id || row.shopify_product_id || row.Name);
+                                      const rowId = (row.id || row.shopify_product_id || (row.Name + "_" + i));
                                       const isSelected = selectedComponents.includes(rowId);
                                       const shopifyId = row['Product ID'] || row['product_id'] || row['ID'];
                                       const validation = getComponentValidation(row, componentTab);
