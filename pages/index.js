@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ComponentLibraryGrid from '../components/ComponentLibraryGrid';
 import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, ChevronDown, ChevronRight, Trash2, AlertCircle, AlertTriangle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker, Edit3, Edit, Settings, ExternalLink, BarChart, Database, CheckCircle, Layers } from 'lucide-react';
 
 const COMPONENT_SUGGESTIONS = {};
@@ -771,56 +772,8 @@ export default function OpsDashboard() {
     });
   };
 
-  const EditableCell = ({ rowId, colKey, value, isDropdown, options, isFocused, isEditing, onFocus, onBlur, onChange, onKeyDown, onPaste }) => {
-    const inputRef = useRef(null);
-    useEffect(() => { if (isEditing && inputRef.current) inputRef.current.focus(); }, [isEditing]);
 
-    const getDisplayValue = () => {
-       if (value === null || value === undefined) return '';
-       return String(value);
-    };
 
-    if (isEditing) {
-       if (isDropdown) {
-          return (
-             <select 
-                ref={inputRef}
-                value={getDisplayValue()}
-                onChange={(e) => onChange(e.target.value)}
-                onBlur={onBlur}
-                className="w-full h-full bg-blue-50 border-none outline-none text-xs font-bold text-blue-700 p-0 m-0"
-             >
-                <option value="">-- Select --</option>
-                {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-             </select>
-          );
-       }
-       return (
-          <input 
-             ref={inputRef}
-             type="text"
-             value={getDisplayValue()}
-             onChange={(e) => onChange(e.target.value)}
-             onBlur={onBlur}
-             onKeyDown={onKeyDown}
-             className="w-full h-full bg-blue-50 border-none outline-none text-xs font-bold text-blue-700 p-0 m-0"
-          />
-       );
-    }
-
-    return (
-       <div 
-          onClick={onFocus}
-          onDoubleClick={() => { onFocus(); }}
-          onPaste={onPaste}
-          className={`w-full h-full min-h-[2.5rem] flex items-center px-4 cursor-cell transition-all group-hover:bg-zinc-50 ${isFocused ? 'bg-blue-50 ring-2 ring-inset ring-blue-400 z-10' : ''}`}
-       >
-          <span className={`truncate ${value ? 'text-zinc-600' : 'text-zinc-300 italic'}`}>
-             {getDisplayValue() || '(empty)'}
-          </span>
-        </div>
-     );
-  };
 
   const MANDATORY_FIELDS = {
     rims: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Option 2 Name', 'Option 2 Value', 'Wheel Spec Position', 'Rim Erd', 'Weight G (p)'],
@@ -831,13 +784,15 @@ export default function OpsDashboard() {
 
     const getComponentUniqueId = (item, index) => {
     if (!item) return `empty_${index}`;
-    // Support pre-labeled IDs or shopify IDs, with Name_idx as fallback
+    // Use raw index if available, otherwise fallback to provided index
+    const actualIdx = item._rawIdx !== undefined ? item._rawIdx : index;
+    
+    // Support pre-labeled IDs or shopify IDs
     const baseId = item.id || item.shopify_product_id || item.ID || item['Product ID'];
-    if (baseId) return String(baseId);
+    if (baseId) return `${baseId}_${actualIdx}`;
     
     const name = item.Name || item.name || item.title || "Unknown";
-    const rawIdx = item._rawIdx !== undefined ? item._rawIdx : index;
-    return `${name}_${rawIdx}`;
+    return `${name}_${actualIdx}`;
   };
 
   const getComponentValue = (component, key) => {
@@ -2927,139 +2882,33 @@ export default function OpsDashboard() {
                                     <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest italic">No {componentTab} match filters ({componentVendorFilter} / Missing Only: {showMissingOnly ? 'Yes' : 'No'})</p>
                                  </div>
                               ) : (
-                                 <div className="overflow-x-auto max-h-[650px] relative scrollbar-thin rounded-2xl border border-zinc-100 shadow-inner">
-                                    <table className="min-w-full text-left text-sm whitespace-nowrap select-none border-collapse">
-                                      <thead className="bg-zinc-50 sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                                          <tr>
-                                             <th className="p-4 px-6 w-12 bg-zinc-50 border-r border-zinc-100 sticky left-0 z-40">
-                                                 <input type="checkbox" checked={selectedComponents.length === finalFilteredList.length && finalFilteredList.length > 0} onChange={(e) => {
-                                                    if (e.target.checked) setSelectedComponents(finalFilteredList.map((v) => v._rid || getComponentUniqueId(v, activeList.indexOf(v))));
-                                                    else setSelectedComponents([]);
-                                                 }} className="w-4 h-4 rounded border-zinc-300 accent-blue-600 cursor-pointer" />
-                                             </th>
-                                             <th 
-                                                style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300, position: 'sticky', left: '48px', zIndex: 20 }}
-                                                className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest bg-zinc-50 border-r border-zinc-100 group/h relative"
-                                             >
-                                                Name
-                                                <div onMouseDown={(e) => startResizing(e, componentTab + '_name')} className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-black/20 transition-colors z-30" />
-                                            </th>
-                                            {(() => {
-                                               const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'Tags', 'tags', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags', '_rid', '_isNew', '_rawIdx'];
-                                               const rawColumns = Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k));
-                                               let columns = componentColumnOrder[componentTab] || [];
-                                               const colCheck = columns.filter(c => rawColumns.includes(c));
-                                               if (colCheck.length !== rawColumns.length) { columns = rawColumns; }
-                                               
-                                               return columns.map(col => (
-                                                 <th 
-                                                    key={col} 
-                                                    draggable
-                                                    onDragStart={() => handleDragStart(col)}
-                                                    onDragOver={handleDragOver}
-                                                    onDrop={() => handleDrop(col)}
-                                                    style={{ 
-                                                       width: componentColumnWidths[componentTab + '_' + col] || 150, 
-                                                       minWidth: componentColumnWidths[componentTab + '_' + col] || 150 
-                                                    }}
-                                                    className="p-4 font-black text-[10px] uppercase text-zinc-400 tracking-widest cursor-grab active:cursor-grabbing hover:bg-zinc-100 transition-colors relative group/h border-r border-zinc-50"
-                                                 >
-                                                    {formatColumnTitle(col)}
-                                                    <div onMouseDown={(e) => startResizing(e, componentTab + '_' + col)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-black/20 transition-colors z-30 opacity-0 group-hover/h:opacity-100" />
-                                                 </th>
-                                                ));
-                                            })()}
-                                             <th className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest text-right bg-zinc-50">Actions</th>
-                                          </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-zinc-100">
-                                         {(() => {
-                                            const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'Tags', 'tags', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags', '_rid', '_isNew', '_rawIdx'];
-                                            const rawColumns = Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k));
-                                            const columns = componentColumnOrder[componentTab] || rawColumns;
-
-                                            return finalFilteredList.map((row, i) => {
-                                               const rowId = row._rid || getComponentUniqueId(row, row._rawIdx);
-                                               const isSelected = selectedComponents.includes(rowId);
-                                               const validation = getComponentValidation(row, componentTab);
-                                               const { isValid } = validation;
-                                               const reactKey = `row_${componentTab}_${rowId}_${i}`;
-                                               const unsaved = (gridUnsavedChanges[componentTab] || {})[rowId] || {};
-                                               
-                                               return (
-                                               <tr key={reactKey} className={`${isValid ? 'odd:bg-white even:bg-zinc-100/30' : 'bg-red-50 hover:bg-red-100/50'} transition-colors group border-b border-zinc-100 last:border-0 ${isSelected ? 'ring-2 ring-inset ring-blue-400' : ''}`}>
-                                                  <td className="p-4 px-6 w-12 border-r border-zinc-100 sticky left-0 z-30 bg-zinc-50">
-                                                     <input type="checkbox" checked={isSelected} onChange={(e) => toggleComponentSelection(rowId, e, finalFilteredList)} className="w-4 h-4 rounded border-zinc-300 accent-blue-600 cursor-pointer" />
-                                                  </td>
-                                                 <td 
-                                                    style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300, position: 'sticky', left: '48px', zIndex: 20 }}
-                                                    className={`p-0 border-r border-zinc-100 truncate ${isValid ? (i % 2 === 0 ? 'bg-white' : 'bg-zinc-50') : 'bg-red-50'} group-hover:bg-zinc-100 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.05)] sm-relative`}
-                                                 >
-                                                    <EditableCell 
-                                                       rowId={rowId}
-                                                       colKey="Name"
-                                                       value={unsaved.Name !== undefined ? unsaved.Name : row.Name || row.name || row.title || ''}
-                                                       isFocused={focusedCell?.rowId === rowId && focusedCell?.colKey === 'Name'}
-                                                       isEditing={editingCell?.rowId === rowId && editingCell?.colKey === 'Name'}
-                                                       onFocus={() => setFocusedCell({ rowId, colKey: 'Name' })}
-                                                       onBlur={() => setEditingCell(null)}
-                                                       onChange={(val) => handleGridEdit(rowId, 'Name', val)}
-                                                       onDoubleClick={() => setEditingCell({ rowId, colKey: 'Name' })}
-                                                       onPaste={(e) => handleGridPaste(e, rowId, 'Name', ['Name', ...columns])}
-                                                    />
-                                                    {!isValid && (
-                                                       <div className="absolute bottom-1 left-2 pointer-events-none">
-                                                          <div className="text-[7px] font-black uppercase text-red-500 bg-white/80 px-1 rounded shadow-sm flex items-center gap-1">
-                                                             <ShieldAlert size={6} /> Error
-                                                          </div>
-                                                       </div>
-                                                    )}
-                                                 </td>
-                                                 {columns.map(col => {
-                                                    const val = unsaved[col] !== undefined ? unsaved[col] : row[col];
-                                                    const options = DROPDOWN_OPTIONS[col] || DROPDOWN_OPTIONS[formatColumnTitle(col)];
-                                                    
-                                                    return (
-                                                       <td key={col} className="p-0 border-r border-zinc-50">
-                                                          <EditableCell 
-                                                             rowId={rowId}
-                                                             colKey={col}
-                                                             value={val}
-                                                             isDropdown={!!options}
-                                                             options={options || []}
-                                                             isFocused={focusedCell?.rowId === rowId && focusedCell?.colKey === col}
-                                                             isEditing={editingCell?.rowId === rowId && editingCell?.colKey === col}
-                                                             onFocus={() => setFocusedCell({ rowId, colKey: col })}
-                                                             onBlur={() => setEditingCell(null)}
-                                                             onChange={(newVal) => handleGridEdit(rowId, col, newVal)}
-                                                             onDoubleClick={() => setEditingCell({ rowId, colKey: col })}
-                                                             onPaste={(e) => handleGridPaste(e, rowId, col, ['Name', ...columns])}
-                                                          />
-                                                       </td>
-                                                    );
-                                                 })}
-                                                 <td className="p-4 px-6 text-right" onClick={e => e.stopPropagation()}>
-                                                    <div className="flex items-center justify-end gap-2">
-                                                       <button onClick={() => {
-                                                          handleEditComponent(row, row._rawIdx);
-                                                       }} title="Advanced Edit" className="p-2 bg-zinc-100 hover:bg-black hover:text-white text-zinc-400 rounded-lg transition-all"><Edit size={12} /></button>
-                                                       <button onClick={() => {
-                                                          if (confirm("Delete " + (row.Name || row.title) + "? This cannot be undone.")) {
-                                                             const delId = row._rid || getComponentUniqueId(row, row._rawIdx);
-                                                             const rawData = componentData[componentTab] || [];
-                                                             const updatedArray = rawData.filter((item, idx) => getComponentUniqueId(item, idx) !== delId);
-                                                             saveComponentChanges(updatedArray, componentTab).catch(err => console.error("Delete failed:", err));
-                                                          }
-                                                       }} title="Trash Component" className="p-2 bg-zinc-100 hover:bg-red-500 hover:text-white text-zinc-400 rounded-lg transition-all"><Trash2 size={12} /></button>
-                                                    </div>
-                                                 </td>
-                                               </tr>
-                                               );
-                                            });
-                                         })()}
-                                      </tbody>
-                                    </table>
-                                 </div>
+                                 <ComponentLibraryGrid
+                                    componentTab={componentTab}
+                                    finalFilteredList={finalFilteredList}
+                                    selectedComponents={selectedComponents}
+                                    setSelectedComponents={setSelectedComponents}
+                                    gridUnsavedChanges={gridUnsavedChanges}
+                                    handleGridEdit={handleGridEdit}
+                                    handleGridPaste={handleGridPaste}
+                                    componentColumnWidths={componentColumnWidths}
+                                    startResizing={startResizing}
+                                    handleDragStart={handleDragStart}
+                                    handleDragOver={handleDragOver}
+                                    handleDrop={handleDrop}
+                                    formatColumnTitle={formatColumnTitle}
+                                    getComponentUniqueId={getComponentUniqueId}
+                                    getComponentValidation={getComponentValidation}
+                                    toggleComponentSelection={toggleComponentSelection}
+                                    DROPDOWN_OPTIONS={DROPDOWN_OPTIONS}
+                                    handleEditComponent={handleEditComponent}
+                                    saveComponentChanges={saveComponentChanges}
+                                    componentData={componentData}
+                                    focusedCell={focusedCell}
+                                    setFocusedCell={setFocusedCell}
+                                    editingCell={editingCell}
+                                    setEditingCell={setEditingCell}
+                                    componentSaving={componentSaving}
+                                 />
                               )}
                            </div>
                         </>
@@ -3887,4 +3736,7 @@ function SidebarLink({ icon, label, active, onClick, badge, badgeOnClick }) {
   );
 }
  
+
+
+
 
