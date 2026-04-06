@@ -2769,8 +2769,8 @@ export default function OpsDashboard() {
                     <div className="relative w-full max-w-xl bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-500">
                         <div className="p-8 border-b flex justify-between items-center bg-zinc-50 sticky top-0 z-20">
                            <div className="flex items-center gap-4">
-                              <div className={`p-4 rounded-2xl shadow-xl border-2 ${isDuplicateMode ? 'bg-amber-500 border-amber-600 text-white' : (isComponentValid(editingComponent, componentTab) ? 'bg-black text-white' : 'bg-red-500 border-red-600 text-white animate-pulse')}`}>
-                                 {isDuplicateMode ? <Plus size={24}/> : (isComponentValid(editingComponent, componentTab) ? <Database size={24}/> : <ShieldAlert size={24}/>)}
+                              <div className={`p-4 rounded-2xl shadow-xl border-2 ${isDuplicateMode ? 'bg-amber-500 border-amber-600 text-white' : (getComponentValidation(editingComponent, componentTab).isValid ? 'bg-black text-white' : 'bg-red-500 border-red-600 text-white animate-pulse')}`}>
+                                 {isDuplicateMode ? <Plus size={24}/> : (getComponentValidation(editingComponent, componentTab).isValid ? <Database size={24}/> : <ShieldAlert size={24}/>)}
                               </div>
                               <div>
                                  <h3 className="text-2xl font-black uppercase italic tracking-tighter">
@@ -2778,7 +2778,7 @@ export default function OpsDashboard() {
                                  </h3>
                                  <div className="flex items-center gap-2">
                                     <p className="text-[10px] font-black uppercase text-zinc-400 italic tracking-widest">{componentTab.slice(0, -1)} registry</p>
-                                    {!isComponentValid(editingComponent, componentTab) && (
+                                    {!getComponentValidation(editingComponent, componentTab).isValid && (
                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-red-100 text-red-600 rounded-md animate-pulse">Required Data Missing</span>
                                     )}
                                  </div>

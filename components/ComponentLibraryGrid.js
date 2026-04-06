@@ -213,16 +213,23 @@ const ComponentLibraryGrid = React.memo(({
                   className="w-4 h-4 rounded border-zinc-300 accent-blue-600 cursor-pointer" 
                 />
               </th>
+
+              <th 
+                style={{ width: 100, minWidth: 100, position: 'sticky', left: '48px', zIndex: 40 }}
+                className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest bg-zinc-50 border-r border-zinc-100"
+              >
+                Actions
+              </th>
               
               <th 
-                style={{ width: 150, minWidth: 150, position: 'sticky', left: '48px', zIndex: 20 }}
+                style={{ width: 150, minWidth: 150, position: 'sticky', left: '148px', zIndex: 20 }}
                 className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest bg-zinc-50 border-r border-zinc-100 group/h relative"
               >
                 Vendor
               </th>
 
               <th 
-                style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300, position: 'sticky', left: '198px', zIndex: 20 }}
+                style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300, position: 'sticky', left: '298px', zIndex: 20 }}
                 className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest bg-zinc-50 border-r border-zinc-100 group/h relative"
               >
                 Name
@@ -242,7 +249,6 @@ const ComponentLibraryGrid = React.memo(({
                   <div onMouseDown={(e) => startResizing(e, componentTab + '_' + col)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-black/20 transition-colors z-30 opacity-0 group-hover/h:opacity-100" />
                 </th>
               ))}
-              <th className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest text-right bg-zinc-50">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100">
@@ -260,8 +266,29 @@ const ComponentLibraryGrid = React.memo(({
                     <input type="checkbox" checked={isSelected} onChange={(e) => toggleComponentSelection(rowId, e.nativeEvent, finalFilteredList)} className="w-4 h-4 rounded border-zinc-300 accent-blue-600 cursor-pointer" />
                   </td>
 
+                  <td className="p-4 px-6 sticky left-[48px] z-30 bg-zinc-50 border-r border-zinc-100 text-right" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-2">
+                       <button onClick={() => { handleEditComponent(row, i); }} title="Advanced Edit" className="p-2 bg-zinc-100 hover:bg-black hover:text-white text-zinc-400 rounded-lg transition-all"><Edit size={12} /></button>
+                       <button onClick={() => {
+                          if (row._isNew) {
+                             handleRemoveAddedRow(rowId);
+                             return;
+                          }
+                          if (confirm("Delete " + (row.Name || row.title) + "? This cannot be undone.")) {
+                              const delId = rowId;
+                              const rawData = componentData[componentTab] || [];
+                              const updatedArray = rawData.filter((item, idx) => {
+                                 const rid = item._rid || getComponentUniqueId(item, idx);
+                                 return rid !== delId;
+                              });
+                              saveComponentChanges(updatedArray, componentTab).catch(err => console.error("Delete failed:", err));
+                          }
+                       }} title="Trash Component" className="p-2 bg-zinc-100 hover:bg-red-500 hover:text-white text-zinc-400 rounded-lg transition-all"><Trash2 size={12} /></button>
+                    </div>
+                  </td>
+
                   <td 
-                    style={{ position: 'sticky', left: '48px', zIndex: 20 }}
+                    style={{ position: 'sticky', left: '148px', zIndex: 20 }}
                     className={"p-0 border-r border-zinc-100 " + (isValid ? (i % 2 === 0 ? 'bg-white' : 'bg-zinc-50') : 'bg-red-50') + " group-hover:bg-zinc-100 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.02)]"}
                   >
                     <EditableCell 
@@ -279,7 +306,7 @@ const ComponentLibraryGrid = React.memo(({
                   </td>
 
                   <td 
-                    style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300, position: 'sticky', left: '198px', zIndex: 20 }}
+                    style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300, position: 'sticky', left: '298px', zIndex: 20 }}
                     className={"p-0 border-r border-zinc-100 " + (isValid ? (i % 2 === 0 ? 'bg-white' : 'bg-zinc-50') : 'bg-red-50') + " group-hover:bg-zinc-100 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.05)] relative"}
                   >
                     <div className="flex items-center justify-between px-2">
@@ -338,26 +365,6 @@ const ComponentLibraryGrid = React.memo(({
                       </td>
                     );
                   })}
-                  <td className="p-4 px-6 text-right" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-2">
-                       <button onClick={() => { handleEditComponent(row, i); }} title="Advanced Edit" className="p-2 bg-zinc-100 hover:bg-black hover:text-white text-zinc-400 rounded-lg transition-all"><Edit size={12} /></button>
-                       <button onClick={() => {
-                          if (row._isNew) {
-                             handleRemoveAddedRow(rowId);
-                             return;
-                          }
-                          if (confirm("Delete " + (row.Name || row.title) + "? This cannot be undone.")) {
-                              const delId = rowId;
-                              const rawData = componentData[componentTab] || [];
-                              const updatedArray = rawData.filter((item, idx) => {
-                                 const rid = item._rid || getComponentUniqueId(item, idx);
-                                 return rid !== delId;
-                              });
-                              saveComponentChanges(updatedArray, componentTab).catch(err => console.error("Delete failed:", err));
-                          }
-                       }} title="Trash Component" className="p-2 bg-zinc-100 hover:bg-red-500 hover:text-white text-zinc-400 rounded-lg transition-all"><Trash2 size={12} /></button>
-                    </div>
-                  </td>
                 </tr>
               );
             })}
