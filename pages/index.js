@@ -27,6 +27,35 @@ const MANDATORY_FIELDS = {
   nipples: ['Name', 'Vendor', 'Option 1 Name', 'Option 1 Value', 'Weight G (p)']
 };
 
+function HealthCard({ title, count, subtitle, icon }) {
+    return (
+        <div className="bg-white p-8 rounded-[2rem] border border-zinc-200 shadow-sm">
+            <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">{icon}</div>
+                <div className="text-3xl font-black italic">{count}</div>
+            </div>
+            <div className="font-black uppercase text-xs mb-1">{title}</div>
+            <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-tighter">{subtitle}</div>
+        </div>
+    );
+}
+
+function SidebarLink({ icon, label, active, onClick, badge, badgeOnClick }) {
+  return (
+    <button onClick={onClick} className={`relative w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-black text-xs uppercase tracking-tight ${active ? 'bg-white text-black shadow-xl scale-[1.03]' : 'hover:bg-zinc-900 text-zinc-600'}`}>
+      {icon} {label}
+      {badge && (
+        <div 
+          onClick={badgeOnClick}
+          className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-pulse shadow-lg shadow-red-500/20 hover:scale-110 active:scale-95 transition-transform"
+        >
+          {badge}
+        </div>
+      )}
+    </button>
+  );
+}
+
 export default function OpsDashboard() {
   const [editingRule, setEditingRule] = useState(null);
   const [activeTab, setActiveTab] = useState('vendors');
@@ -77,65 +106,8 @@ export default function OpsDashboard() {
   const [bulkEditField, setBulkEditField] = useState(null);
   const [bulkEditValue, setBulkEditValue] = useState("");
   const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
-  const lastCheckedComponentRef = useRef(null);
-  const toggleComponentSelection = React.useCallback((id, e, linearList) => {
-    const isShift = e && (e.shiftKey || (e.nativeEvent && e.nativeEvent.shiftKey));
-    if (isShift && lastCheckedComponentRef.current && linearList) {
-       const idx = linearList.findIndex((v, i) => getComponentUniqueId(v, i) === id);
-       const lastIdx = linearList.findIndex((v, i) => getComponentUniqueId(v, i) === lastCheckedComponentRef.current);
-       if (idx !== -1 && lastIdx !== -1) {
-          const start = Math.min(idx, lastIdx);
-          const end = Math.max(idx, lastIdx);
-          const rangeIds = linearList.slice(start, end + 1).map((v, i) => getComponentUniqueId(v, start + i));
-          setSelectedComponents(prev => {
-             const combined = new Set([...prev, ...rangeIds]);
-             return [...combined];
-          });
-          lastCheckedComponentRef.current = id;
-          return;
-       }
-    }
-    setSelectedComponents(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
-    lastCheckedComponentRef.current = id;
-  }, [getComponentUniqueId]);
-
-  const handleBulkDelete = React.useCallback(async () => {
-    if (selectedComponents.length === 0) return;
-    if (!confirm("Delete " + selectedComponents.length + " component(s)? This cannot be undone.")) return;
-
-    const rawData = componentData[componentTab] || [];
-    const updatedArray = rawData.filter((item, idx) => {
-       console.log("[Persistence Debug] Bulk filtering items", { total: rawData.length, selected: selectedComponents.length });
-       const rowId = getComponentUniqueId(item, idx);
-       return !selectedComponents.includes(rowId);
-    });
-
-    setComponentSaving(true);
-    await saveComponentChanges(updatedArray);
-    setSelectedComponents([]);
-    setComponentSaving(false);
-  }, [selectedComponents, componentData, componentTab, getComponentUniqueId, saveComponentChanges]);
-
-  const handleBulkEdit = React.useCallback(async () => {
-    if (!bulkEditField || selectedComponents.length === 0) return;
-    setComponentSaving(true);
-    const activeArray = [...(componentData[componentTab] || [])];
-    const updatedArray = activeArray.map((item, i) => {
-       // Sync with unique Name_i IDs
-       const rowId = getComponentUniqueId(item, i);
-       if (selectedComponents.includes(rowId)) {
-          return { ...item, [bulkEditField]: bulkEditValue };
-       }
-       return item;
-    });
-    await saveComponentChanges(updatedArray);
-    setIsBulkEditModalOpen(false);
-    setSelectedComponents([]);
-    setBulkEditValue("");
-    setComponentSaving(false);
-    setNotification({ type: 'success', msg: `Successfully updated ${selectedComponents.length} components` });
-  }, [bulkEditField, selectedComponents, componentData, componentTab, getComponentUniqueId, bulkEditValue, saveComponentChanges]);
-
+  
+  // Scoped Spreadsheet State
   const [componentColumnWidths, setComponentColumnWidths] = useState({});
   const [draggedColumn, setDraggedColumn] = useState(null);
   const [isComponentDrawerOpen, setIsComponentDrawerOpen] = useState(false);
@@ -144,121 +116,12 @@ export default function OpsDashboard() {
   const [confirmedFields, setConfirmedFields] = useState([]);
   const [componentSaving, setComponentSaving] = useState(false);
   const [notification, setNotification] = useState(null);
-
-  // --- SPREADSHEET MODE STATE ---
-  const [gridUnsavedChanges, setGridUnsavedChanges] = useState({}); // { [tab]: { [rowId]: { [col]: val } } }
+  const [gridUnsavedChanges, setGridUnsavedChanges] = useState({}); 
   const [gridAddedRows, setGridAddedRows] = useState({ hubs: [], rims: [], spokes: [], nipples: [] });
-  const [focusedCell, setFocusedCell] = useState(null); // { rowId, colKey, rowIndex, colIndex }
-  const [editingCell, setEditingCell] = useState(null); // { rowId, colKey }
-
-  // Load unsaved changes from session storage on mount
-  useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem('loamops_grid_unsaved_v1');
-      if (saved) setGridUnsavedChanges(JSON.parse(saved));
-      const savedRows = sessionStorage.getItem('loamops_grid_added_v1');
-      if (savedRows) setGridAddedRows(JSON.parse(savedRows));
-    } catch(e) {}
-  }, []);
-
-  // Sync to session storage on change
-  useEffect(() => {
-    sessionStorage.setItem('loamops_grid_unsaved_v1', JSON.stringify(gridUnsavedChanges));
-  }, [gridUnsavedChanges]);
-
-  useEffect(() => {
-    sessionStorage.setItem('loamops_grid_added_v1', JSON.stringify(gridAddedRows));
-  }, [gridAddedRows]);
-
-  // Prevent accidental navigation
-  useEffect(() => {
-    const handleBeforeUnload = (e) => {
-      const hasChanges = Object.keys(gridUnsavedChanges).some(tab => Object.keys(gridUnsavedChanges[tab]).length > 0);
-      const hasNewRows = Object.keys(gridAddedRows).some(tab => gridAddedRows[tab].length > 0);
-      if (hasChanges || hasNewRows) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [gridUnsavedChanges, gridAddedRows]);
-
-  const showNotification = (msg, type = 'success') => {
-    setNotification({ msg, type });
-    setTimeout(() => setNotification(null), 4000);
-  };
-
-  const formatColumnTitle = React.useCallback((title) => {
-    const isVariant = title.toLowerCase().includes('variant metafield');
-    const isProduct = !isVariant && title.toLowerCase().includes('metafield:');
-    let clean = title.replace(/^Metafield:\s*custom\./i, '');
-    clean = clean.replace(/^Variant Metafield:\s*custom\./i, '');
-    clean = clean.replace(/\[.*?\]/g, '');
-    clean = clean.replace(/_/g, ' ');
-    let final = clean.trim().replace(/\b\w/g, l => l.toUpperCase());
-    if (final.toLowerCase().includes('weight g')) {
-       if (isVariant) return final + ' (v)';
-       if (isProduct) return final + ' (p)';
-    }
-    return final;
-  }, []);
-
-  const spokePolish = (val) => {
-    if (!val) return val;
-    return val; // Removed problematic 'h' suffix entirely as requested
-  };
-
-  useEffect(() => {
-     try {
-       const saved = localStorage.getItem('loamops_cols');
-       if (saved) setComponentColumnOrder(JSON.parse(saved));
-       const savedWidths = localStorage.getItem('loamops_widths');
-       if (savedWidths) setComponentColumnWidths(JSON.parse(savedWidths));
-     } catch(e) {}
-  }, []);
-
-  const [resizingCol, setResizingCol] = useState(null);
-  const [startX, setStartX] = useState(0);
-  const [startWidth, setStartWidth] = useState(0);
-
-  const startResizing = React.useCallback((e, col) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setResizingCol(col);
-    setStartX(e.pageX);
-    setStartWidth(componentColumnWidths[col] || 150);
-  }, [componentColumnWidths]);
-
-  useEffect(() => {
-    if (!resizingCol) return;
-    const onMouseMove = (e) => {
-      const delta = e.pageX - startX;
-      setComponentColumnWidths(prev => ({ ...prev, [resizingCol]: Math.max(50, startWidth + delta) }));
-    };
-    const onMouseUp = () => {
-      setResizingCol(null);
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-    return () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-  }, [resizingCol, startX, startWidth]);
-
-  useEffect(() => {
-    if (Object.keys(componentColumnWidths).length > 0) {
-      localStorage.setItem('loamops_widths', JSON.stringify(componentColumnWidths));
-    }
-  }, [componentColumnWidths]);
-
-  useEffect(() => {
-     if (showMetaEditModal && selectedLabProducts.length === 0) setMetaEditTab('variant');
-  }, [showMetaEditModal, selectedLabProducts.length]);
+  const [focusedCell, setFocusedCell] = useState(null); 
+  const [editingCell, setEditingCell] = useState(null); 
   const [metaEditFields, setMetaEditFields] = useState({});
   const [metafieldRegistry, setMetafieldRegistry] = useState([
-    // VARIANT METAFIELDS
     { key: 'inventory_alert_threshold', label: 'Inventory Alert Threshold', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'hub_manual_cross_value', label: 'Hub Manual Cross Value', categories: ['HUB'], target: 'variant', type: 'decimal' },
     { key: 'weight_g', label: 'Weight (Variant)', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'decimal' },
@@ -279,8 +142,6 @@ export default function OpsDashboard() {
     { key: 'historical_order_count', label: 'Historical Order Count', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'bti_part_number', label: 'BTI Part Number', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'single_line_text_field' },
     { key: 'inventory_sync_key', label: 'Inventory Sync Key', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'single_line_text_field' },
-
-    // PRODUCT METAFIELDS
     { key: 'product_weight_g', label: 'Weight (Product)', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'decimal' },
     { key: 'included_valve_variant_id', label: 'Included Valve Variant ID', categories: ['VALVESTEM'], target: 'product', type: 'single_line_text_field' },
     { key: 'integrated_hub_name', label: 'Integrated Hub Name', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
@@ -289,99 +150,36 @@ export default function OpsDashboard() {
     { key: 'spoke_hub_interface', label: 'Spoke Hub Interface', categories: ['HUB', 'SPOKE'], target: 'product', type: 'single_line_text_field' },
     { key: 'price_adjustment_percentage', label: 'Price Adjustment Percentage', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'integer' },
     { key: 'model', label: 'Model', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'single_line_text_field' },
-    { key: 'pairing_key', label: 'Pairing Key', categories: ['RIM', 'HUB'], target: 'product', type: 'single_line_text_field' },
-    { key: 'rim_depth_mm', label: 'Rim Depth mm', categories: ['RIM'], target: 'product', type: 'decimal' },
-    { key: 'optional_addon_gids', label: 'Optional Addon GIDs', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'single_line_text_field' },
-    { key: 'lead_time_days', label: 'Lead Time Days', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'integer' },
-    { key: 'accessory_category', label: 'Accessory Category', categories: ['ACCESSORY'], target: 'product', type: 'single_line_text_field' },
-    { key: 'acc_display_columns', label: 'Accessory Display F/R Columns', categories: ['ACCESSORY'], target: 'product', type: 'boolean' },
-    { key: 'acc_unit_desc', label: 'Accessory Unit Description', categories: ['ACCESSORY'], target: 'product', type: 'single_line_text_field' },
-    { key: 'acc_requires_gid', label: 'Accessory Requires GID', categories: ['ACCESSORY'], target: 'product', type: 'single_line_text_field' },
-    { key: 'acc_excludes_if_gid', label: 'Accessory Excludes if GID Present', categories: ['ACCESSORY'], target: 'product', type: 'single_line_text_field' },
-    { key: 'freehub_type', label: 'Freehub', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
-    { key: 'freehub_variant_map', label: 'Freehub Variant Map', categories: ['HUB'], target: 'product', type: 'json' },
-    { key: 'hidden_from_seo', label: 'Hidden from SEO', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'integer' },
-    { key: 'spoke_diameter_spec', label: 'Spoke Diameter Spec', categories: ['SPOKE'], target: 'product', type: 'single_line_text_field' },
-    { key: 'out_of_stock_action', label: 'Out of Stock Action', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'single_line_text_field' },
-    { key: 'inventory_monitoring', label: 'Inventory Monitoring Enabled', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'boolean' },
-    { key: 'rim_compatible_nipples', label: 'Rim Compatible Nipple Types', categories: ['RIM'], target: 'product', type: 'single_line_text_field' },
-    { key: 'spoke_model_group', label: 'Spoke Model Group', categories: ['SPOKE'], target: 'product', type: 'single_line_text_field' },
-    { key: 'spoke_cross_section_mm2', label: 'Spoke Cross Section Area mm2', categories: ['SPOKE'], target: 'product', type: 'decimal' },
-    { key: 'rim_target_tension_kgf', label: 'Rim Target Tension (kgf)', categories: ['RIM'], target: 'product', type: 'integer' },
-    { key: 'hub_type', label: 'Hub Type', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
-    { key: 'hub_lacing_policy', label: 'Hub Lacing Policy', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
-    { key: 'rim_washer_policy', label: 'Rim Washer Policy', categories: ['RIM'], target: 'product', type: 'single_line_text_field' },
-    { key: 'rim_spoke_hole_offset', label: 'Rim Spoke Hole Offset', categories: ['RIM'], target: 'product', type: 'decimal' },
-    { key: 'nipple_washer_thickness', label: 'Nipple Washer Thickness', categories: ['NIPPLE'], target: 'product', type: 'decimal' },
-    { key: 'spoke_type', label: 'Spoke Type', categories: ['SPOKE'], target: 'product', type: 'single_line_text_field' },
-    { key: 'hub_hole_diameter', label: 'Hub Spoke Hole Diameter', categories: ['HUB'], target: 'product', type: 'decimal' },
-    { key: 'hub_flange_offset_right', label: 'Hub Flange Offset Right', categories: ['HUB'], target: 'product', type: 'decimal' },
-    { key: 'hub_flange_offset_left', label: 'Hub Flange Offset Left', categories: ['HUB'], target: 'product', type: 'decimal' },
-    { key: 'hub_flange_diameter_right', label: 'Hub Flange Diameter Right', categories: ['HUB'], target: 'product', type: 'decimal' },
-    { key: 'hub_flange_diameter_left', label: 'Hub Flange Diameter Left', categories: ['HUB'], target: 'product', type: 'decimal' },
-    { key: 'vendor_logo', label: 'Vendor Logo', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'file_reference_field' }
+    { key: 'pairing_key', label: 'Pairing Key', categories: ['RIM', 'HUB'], target: 'product', type: 'single_line_text_field' }
   ]);
+  const [resizingCol, setResizingCol] = useState(null);
+  const [startX, setStartX] = useState(0);
+  const [startWidth, setStartWidth] = useState(0);
+
+  // Refs
+  const lastCheckedIndex = useRef(null);
+  const lastCheckedComponentRef = useRef(null);
+
+  // Missing States found during cleanup
   const [expandedGroups, setExpandedGroups] = useState([]);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [syncLogs, setSyncLogs] = useState([]);
-  const lastCheckedIndex = useRef(null);
 
-  const handleDragStart = React.useCallback((col) => setDraggedColumn(col), []);
-  const handleDragOver = React.useCallback((e) => e.preventDefault(), []);
-  const handleDrop = React.useCallback((targetCol) => {
-    if (!draggedColumn || draggedColumn === targetCol) return;
-    const activeList = componentData[componentTab] || [];
-    const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'Tags', 'tags', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags'];
-    const rawColumns = Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k));
-    let currentCols = componentColumnOrder[componentTab] || rawColumns;
-    const srcIdx = currentCols.indexOf(draggedColumn);
-    const tgtIdx = currentCols.indexOf(targetCol);
-    if (srcIdx === -1 || tgtIdx === -1) return;
-    const newCols = [...currentCols];
-    newCols.splice(srcIdx, 1);
-    newCols.splice(tgtIdx, 0, draggedColumn);
-    const newOrderMap = { ...componentColumnOrder, [componentTab]: newCols };
-    setComponentColumnOrder(newOrderMap);
-    localStorage.setItem('loamops_cols', JSON.stringify(newOrderMap));
-    setDraggedColumn(null);
-  }, [draggedColumn, componentData, componentTab, componentColumnOrder]);
+  // --- DATA DERIVATIONS (Top-Down Initialization) ---
+  const visibleVendorNames = React.useMemo(() => {
+    const names = new Set(rules.map(r => r.vendor_name).filter(Boolean));
+    return Array.from(names).sort();
+  }, [rules]);
 
-  const uniqueVendors = React.useMemo(() => {
-    const activeList = (componentData[componentTab] || []).map((item, idx) => ({ ...item, _rawIdx: idx }));
-    const vends = activeList.map(item => item.Vendor || item.vendor || item.Brand || item.brand).filter(v => typeof v === 'string' && v.trim() !== '');
-    return [...new Set(vends)].sort((a,b) => a.localeCompare(b));
-  }, [componentData, componentTab]);
-
-  const finalFilteredList = React.useMemo(() => {
-    const activeList = (componentData[componentTab] || []).map((item, idx) => ({ ...item, _rawIdx: idx }));
-    const addedRows = gridAddedRows[componentTab] || [];
-    const combinedList = [...activeList, ...addedRows];
-
-    let preFilteredList = componentVendorFilter === 'All' 
-      ? combinedList 
-      : combinedList.filter(item => (item.Vendor || item.vendor || item.Brand || item.brand) === componentVendorFilter);
-
-    if (showMissingOnly) {
-      preFilteredList = preFilteredList.filter(item => {
-        try {
-          const validation = getComponentValidation(item, componentTab);
-          return !validation.isValid;
-        } catch (e) {
-          return false;
-        }
-      });
-    }
-
-    return [...preFilteredList].sort((a, b) => {
-      // Prioritize new rows at the top
-      if (a._isNew && !b._isNew) return -1;
-      if (!a._isNew && b._isNew) return 1;
-      
-      const aN = (a.Name || a.name || a.title || a.Title || '').toLowerCase();
-      const bN = (b.Name || b.name || b.title || b.Title || '').toLowerCase();
-      return aN.localeCompare(bN);
+  const allUniqueRules = React.useMemo(() => {
+    const seen = new Set();
+    return rules.filter(r => {
+      const id = String(r.shopify_variant_id);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
     });
-  }, [componentData, componentTab, gridAddedRows, componentVendorFilter, showMissingOnly, getComponentValidation]);
+  }, [rules]);
 
   const getDiscrepancies = React.useCallback((variants) => {
     if (!variants || variants.length <= 1) return {};
@@ -449,85 +247,194 @@ export default function OpsDashboard() {
     return allDiscrepancies;
   }, [getVariantGroupKey, getDiscrepancies]);
 
-  const handleCheckboxClick = (index, ruleId, e) => {
-    if (e.shiftKey && lastCheckedIndex.current !== null && lastCheckedIndex.current !== index) {
-      const start = Math.min(lastCheckedIndex.current, index);
-      const end = Math.max(lastCheckedIndex.current, index);
-      const rangeIds = paginatedRules.slice(start, end + 1).map(r => r.id);
-      setSelectedRules(prev => {
-        const newSelection = [...prev];
-        rangeIds.forEach(id => { if (!newSelection.includes(id)) newSelection.push(id); });
-        return newSelection;
-      });
-    } else {
-      setSelectedRules(prev =>
-        prev.includes(ruleId) ? prev.filter(id => id !== ruleId) : [...prev, ruleId]
-      );
-    }
-    lastCheckedIndex.current = index;
-  };
-
-  // --- DISCREPANCY NOTIFICATION LOGIC ---
-  const labGroups = React.useMemo(() => {
-    return rules.reduce((acc, rule) => {
-      const productId = rule.shopify_product_id;
-      if (!acc[productId]) acc[productId] = { ...rule, variantCount: 0 };
-      acc[productId].variantCount++;
-      return acc;
-    }, {});
-  }, [rules]);
-
   const discrepancyProducts = React.useMemo(() => {
-    return Object.values(labGroups).filter(group => {
-      const groupVariants = rules.filter(r => String(r.shopify_product_id) === String(group.shopify_product_id));
-      if (groupVariants.length <= 1) return false;
-
-      // Group variants by differentiator (e.g. Size for rims)
-      const subGroups = groupVariants.reduce((acc, v) => {
-        const gk = getVariantGroupKey(v, group);
-        if (!acc[gk]) acc[gk] = [];
-        acc[gk].push(v);
-        return acc;
-      }, {});
-
-      // A product has a discrepancy if ANY sub-group has internal mismatches
-      return Object.values(subGroups).some(variantsInGroup => {
-        return Object.keys(getDiscrepancies(variantsInGroup)).length > 0;
-      });
-    });
-  }, [labGroups, rules, metafieldRegistry]);
+    return Object.values(allUniqueRules.reduce((acc, r) => {
+       if (!acc[r.shopify_product_id]) acc[r.shopify_product_id] = { ...r, variants: [] };
+       acc[r.shopify_product_id].variants.push(r);
+       return acc;
+    }, {})).filter(p => Object.keys(getProductGroupedDiscrepancies(p, p.variants)).length > 0);
+  }, [allUniqueRules, getProductGroupedDiscrepancies]);
 
   const totalDiscrepancies = discrepancyProducts.length;
 
-  useEffect(() => {
-    const savedPass = localStorage.getItem('loam_ops_auth');
-    if (savedPass) { setPassword(savedPass); fetchRules(savedPass); }
+  const filteredRules = React.useMemo(() => {
+    return allUniqueRules.filter(rule => {
+      const matchesVendor = selectedVendors.length === 0 || selectedVendors.includes(rule.vendor_name);
+      
+      const normalize = (str) => String(str || "").toLowerCase().replace(/×/g, 'x').replace(/\s+/g, ' ').trim();
+      const searchString = normalize(registrySearch);
+      const searchTokens = searchString ? searchString.split(' ').filter(Boolean) : [];
+      const searchMatch = searchTokens.length === 0 || searchTokens.every(token => 
+         normalize(rule.title).includes(token) || normalize(rule.vendor_name).includes(token) || normalize(rule.bti_part_number).includes(token)
+      );
+
+      const matchesSync = syncFilter === 'all' 
+        ? true 
+        : syncFilter === 'on' ? rule.auto_update === true
+        : syncFilter === 'off' ? rule.auto_update === false
+        : syncFilter === 'sale' ? (rule.original_msrp && (rule.original_msrp - (rule.last_price/100))/rule.original_msrp >= 0.10)
+        : syncFilter === 'oos' ? rule.last_availability === false
+        : syncFilter === 'review' ? rule.needs_review === true
+        : true;
+
+      return matchesVendor && searchMatch && matchesSync;
+    }).sort((a, b) => a.title.localeCompare(b.title));
+  }, [allUniqueRules, selectedVendors, registrySearch, syncFilter]);
+
+  const paginatedRules = React.useMemo(() => {
+    return filteredRules.slice(0, visibleCount);
+  }, [filteredRules, visibleCount]);
+
+  // --- CORE UTILITIES (Foundation) ---
+  const showNotification = (msg, type = 'success') => {
+    setNotification({ msg, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const formatColumnTitle = React.useCallback((title) => {
+    const isVariant = title.toLowerCase().includes('variant metafield');
+    const isProduct = !isVariant && title.toLowerCase().includes('metafield:');
+    let clean = title.replace(/^Metafield:\s*custom\./i, '');
+    clean = clean.replace(/^Variant Metafield:\s*custom\./i, '');
+    clean = clean.replace(/\[.*?\]/g, '');
+    clean = clean.replace(/_/g, ' ');
+    let final = clean.trim().replace(/\b\w/g, l => l.toUpperCase());
+    if (final.toLowerCase().includes('weight g')) {
+       if (isVariant) return final + ' (v)';
+       if (isProduct) return final + ' (p)';
+    }
+    return final;
   }, []);
 
-  const fetchComponentLibrary = async () => {
-      setLoading(true);
-      try {
-          console.log("[Persistence Debug] Initial components load started.");
-          const res = await fetch('/api/components', { headers: { 'x-dashboard-auth': password } });
-          const data = await res.json();
-          if (res.ok) {
-              console.log("[Persistence Debug] Components loaded successfully.");
-              setComponentData(data);
-              setComponentsLoaded(true);
-          } else {
-              console.error("[Persistence Debug] Components load failed with status:", res.status);
+  const getComponentUniqueId = React.useCallback((item, index) => {
+    if (!item) return `empty_${index}`;
+    const actualIdx = item._rawIdx !== undefined ? item._rawIdx : index;
+    const baseId = item.id || item.shopify_product_id || item.ID || item['Product ID'];
+    if (baseId) return `${baseId}_${actualIdx}`;
+    const name = item.Name || item.name || item.title || "Unknown";
+    return `${name}_${actualIdx}`;
+  }, []);
+
+  const getComponentValue = React.useCallback((component, key) => {
+    if (!component) return '';
+    let normTarget = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    if (normTarget === 'name' || normTarget === 'displayname' || normTarget === 'title') {
+       const exactName = component.Name || component.name || component.title || component.Title;
+       if (exactName) return exactName;
+    }
+    if (normTarget === 'vendor' || normTarget === 'brand') {
+       const exactVendor = component.Vendor || component.vendor || component.Brand || component.brand;
+       if (exactVendor) return exactVendor;
+    }
+
+    if (component[key] !== undefined && component[key] !== null && component[key] !== '') return component[key];
+    
+    if (normTarget.includes('weightg')) {
+       const findWeight = (type) => {
+          return Object.keys(component).find(k => {
+             const nk = k.toLowerCase();
+             if (!nk.includes('weightg')) return false;
+             if (type === 'v' && (nk.includes('variant') || nk.includes('(v)'))) return true;
+             if (type === 'p' && (!nk.includes('variant') && (nk.includes('product') || nk.includes('(p)') || (nk.includes('metafield: custom') && !nk.includes('variant'))))) return true;
+             return false;
+          });
+       };
+
+       if (normTarget.endsWith('p')) {
+          const k = findWeight('p');
+          if (k && (component[k] || component[k] === 0)) return component[k];
+       } else if (normTarget.endsWith('v')) {
+          const k = findWeight('v');
+          if (k && (component[k] || component[k] === 0)) return component[k];
+       } else {
+          const keys = Object.keys(component).filter(k => k.toLowerCase().includes('weightg'));
+          for (let k of keys) {
+             if (component[k] || component[k] === 0 || component[k] === '0') return component[k];
           }
-      } catch (e) {
-          console.error('Fetch Component Error: ', e);
+       }
+    }
+
+    const foundKey = Object.keys(component).find(k => {
+        let cleanKey = k.toLowerCase().replace(/^variant metafield: /i, '');
+        cleanKey = cleanKey.replace(/^metafield: /i, '');
+        cleanKey = cleanKey.replace(/^custom\./i, '');
+        cleanKey = cleanKey.replace(/\[.*?\]/g, '');
+        const nk = cleanKey.replace(/[^a-z0-9]/g, '');
+        if ((nk.includes('optionname') || nk.includes('optionvalue')) && !normTarget.includes('option')) return false;
+        return nk === normTarget;
+    });
+    if (foundKey && (component[foundKey] || component[foundKey] === 0 || component[foundKey] === '0')) return component[foundKey];
+
+    const fuzzyKey = Object.keys(component).find(k => {
+        const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const val = component[k];
+        return nk.includes(normTarget) && !nk.includes('option') && (val || val === 0 || val === '0');
+    });
+    if (fuzzyKey) return component[fuzzyKey];
+    
+    if (normTarget === 'wheelspecposition') return component['Wheel Spec Position'] || '';
+    if (normTarget === 'rimerd') return component['Rim Erd'] || component.rim_erd || '';
+    if (normTarget.includes('weight')) return component['Weight G (p)'] || component['Weight G (v)'] || component.weight || '';
+
+    return '';
+  }, []);
+
+  const getComponentValidation = React.useCallback((component, tab) => {
+    if (!component) return { isValid: true, missingFields: [] };
+    const missing = [];
+    const required = [...(MANDATORY_FIELDS[tab] || [])];
+    const hubType = getComponentValue(component, 'Hub Type');
+    const spokeType = getComponentValue(component, 'Spoke Type');
+    const lacingPolicy = getComponentValue(component, 'Hub Lacing Policy');
+
+    if (tab === 'hubs') {
+       if (hubType === 'J-Bend') { 
+          ['Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter'].forEach(f => {
+             if (!required.includes(f)) required.push(f);
+          });
+       }
+       if (hubType === 'Straight Pull') {
+          ['Hub SP Offset Spoke Hole Left', 'Hub SP Offset Spoke Hole Right'].forEach(f => { if (!required.includes(f)) required.push(f); });
+       }
+       if (hubType === 'Straight Pull' || hubType === 'Hook Flange' || lacingPolicy === 'Use Manual Override Field') {
+          ['Hub Lacing Cross Left', 'Hub Lacing Cross Right'].forEach(f => { if (!required.includes(f)) required.push(f); });
+          if (!required.includes('Hub Lacing Policy')) required.push('Hub Lacing Policy');
+          const leftCross = getComponentValue(component, 'Hub Lacing Cross Left');
+          const rightCross = getComponentValue(component, 'Hub Lacing Cross Right');
+          if (leftCross === rightCross && leftCross !== '' && leftCross !== null) {
+              if (!required.includes('Hub Manual Cross Value')) required.push('Hub Manual Cross Value');
+          }
+       }
+    }
+    
+    if (tab === 'spokes' && spokeType === 'Berd') {
+       const idx = required.indexOf('Spoke Cross Section Area Mm2');
+       if (idx > -1) required.splice(idx, 1);
+    }
+    
+    required.forEach(field => {
+      if (field.toLowerCase().includes('weight g')) {
+          const pVal = getComponentValue(component, 'Weight G (p)');
+          const vVal = getComponentValue(component, 'Weight G (v)');
+          const genericVal = getComponentValue(component, 'weight');
+          if (!pVal && !vVal && !genericVal) {
+             missing.push('Weight (P) or (V)');
+          }
+          return;
       }
-      setLoading(false);
-  };
-  
-  useEffect(() => {
-     if (activeTab === 'component_library' && componentData.hubs.length === 0) {
-         fetchComponentLibrary();
-     }
-  }, [activeTab]);
+      
+      const val = getComponentValue(component, field);
+      if ((val === undefined || val === null || String(val).trim() === '') && val !== 0 && val !== '0') {
+        missing.push(field);
+      }
+    });
+
+    return { isValid: missing.length === 0, missingFields: missing };
+  }, [getComponentValue]);
+
+
+  // --- UTILITIES (Logic) ---
 
   const fetchRules = async (passToUse) => {
     const auth = passToUse || password;
@@ -543,29 +450,408 @@ export default function OpsDashboard() {
         const logoData = await logoRes.json();
         setVendorLogos(logoData.savedLogos || []);
         setIsAuthorized(true); 
-
-        // Sync metadata choices silently
         fetch('/api/get-metafield-definitions').then(r => r.json()).then(d => {
            if (d.success && d.optionsDict) setMetafieldOptionsMap(d.optionsDict);
         }).catch(e => console.error("Meta def sync err", e));
-        
       } else {
-        let errorMsg = "Login Failed";
-        try {
-          const err = await res.json();
-          errorMsg = err.error || "Login Failed";
-          if (err.details) errorMsg += " (" + err.details + ")";
-        } catch (parseErr) {
-          errorMsg = "Server Error (Non-JSON response). Please check console and environment variables.";
-        }
-        showNotification("❌ Dashboard Error: " + errorMsg, 'error');
+        showNotification("❌ Dashboard Login Failed", 'error');
       }
     } catch (e) { 
-      console.error("fetchRules crash:", e);
       showNotification("❌ Critical Error: " + e.message, 'error');
     }
     setLoading(false);
   };
+
+  const fetchComponentLibrary = async () => {
+      setLoading(true);
+      try {
+          const res = await fetch('/api/components', { headers: { 'x-dashboard-auth': password } });
+          const data = await res.json();
+          if (res.ok) {
+              setComponentData(data);
+              setComponentsLoaded(true);
+          }
+      } catch (e) { console.error('Fetch Component Error: ', e); }
+      setLoading(false);
+  };
+
+  const saveComponentChanges = React.useCallback(async (newArray, tabOverride = null) => {
+    const tab = tabOverride || componentTab;
+    if (!tab) {
+        showNotification("Save Error: No category selected", "error");
+        return;
+    }
+    const sanitizedArray = newArray.map(item => {
+      const { tags, Tags, _rawIdx, _editIdx, ...rest } = item;
+      return rest;
+    });
+    setComponentSaving(true);
+    try {
+      const res = await fetch('/api/components', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
+        body: JSON.stringify({ [tab]: sanitizedArray })
+      });
+      if (res.ok) {
+        setComponentData(prev => ({ ...prev, [tab]: sanitizedArray }));
+        setIsComponentDrawerOpen(false);
+        setEditingComponent(null);
+        setConfirmedFields([]);
+        showNotification(`${tab.toUpperCase()} data saved successfully!`, 'success');
+      } else {
+        const err = await res.json();
+        showNotification("Save Failed: " + (err.error || "Unknown error"), 'error');
+      }
+    } catch (e) { showNotification("Network error while saving components.", 'error'); }
+    setComponentSaving(false);
+  }, [componentTab, password, showNotification]);
+
+  const handleCommitBatchSave = React.useCallback(async () => {
+    const tab = componentTab;
+    const unsaved = gridUnsavedChanges[tab] || {};
+    const added = gridAddedRows[tab] || [];
+    const currentData = [...(componentData[tab] || [])];
+    let updatedArray = currentData.map((item, idx) => {
+      const rid = getComponentUniqueId(item, idx);
+      if (unsaved[rid]) return { ...item, ...unsaved[rid] };
+      return item;
+    });
+    if (added.length > 0) updatedArray = [...updatedArray, ...added];
+    setComponentSaving(true);
+    try {
+      await saveComponentChanges(updatedArray, tab);
+      setGridUnsavedChanges(prev => ({ ...prev, [tab]: {} }));
+      setGridAddedRows(prev => ({ ...prev, [tab]: [] }));
+      showNotification(`Batch sync complete for ${tab}!`, 'success');
+    } catch (e) { showNotification("Batch save failed", "error"); }
+    setComponentSaving(false);
+  }, [componentTab, gridUnsavedChanges, gridAddedRows, componentData, getComponentUniqueId, saveComponentChanges, showNotification]);
+
+  const handleAddNewRow = React.useCallback((count = 1) => {
+    const tab = componentTab;
+    const newRows = Array.from({ length: count }).map((_, i) => ({
+      _rid: `new_${Date.now()}_${i}`,
+      Name: 'New Component',
+      Vendor: 'LoamLabs',
+      _isNew: true
+    }));
+    setGridAddedRows(prev => ({
+      ...prev,
+      [tab]: [...newRows, ...(prev[tab] || [])]
+    }));
+    showNotification(`Added ${count} blank row(s)`, 'success');
+  }, [componentTab, showNotification]);
+
+  const handleGridEdit = React.useCallback((rowId, colKey, newValue) => {
+    setGridUnsavedChanges(prev => {
+      const tabChanges = prev[componentTab] || {};
+      const rowChanges = tabChanges[rowId] || {};
+      return {
+        ...prev,
+        [componentTab]: { ...tabChanges, [rowId]: { ...rowChanges, [colKey]: newValue } }
+      };
+    });
+  }, [componentTab]);
+
+  const handleGridPaste = React.useCallback((e, startRowId, startColKey, columns) => {
+    e.preventDefault();
+    const clipboardData = e.clipboardData.getData('text');
+    const rows = clipboardData.split(/\r?\n/).filter(r => r.trim() !== '');
+    const gridRows = rows.map(r => r.split('\t'));
+    const startColIndex = columns.indexOf(startColKey);
+    const visibleData = (componentData[componentTab] || []).map((item, idx) => ({ ...item, _rid: getComponentUniqueId(item, idx) }));
+    const startRowIndex = visibleData.findIndex(r => r._rid === startRowId);
+    if (startRowIndex === -1 || startColIndex === -1) return;
+    setGridUnsavedChanges(prev => {
+      const newChanges = { ...prev };
+      const tabChanges = { ...(newChanges[componentTab] || {}) };
+      gridRows.forEach((rowCells, rOffset) => {
+        const targetRow = visibleData[startRowIndex + rOffset];
+        if (!targetRow) return;
+        const rid = targetRow._rid;
+        const rowChanges = { ...(tabChanges[rid] || {}) };
+        rowCells.forEach((cellVal, cOffset) => {
+          const colKey = columns[startColIndex + cOffset];
+          if (!colKey) return;
+          rowChanges[colKey] = cellVal.trim();
+        });
+        tabChanges[rid] = rowChanges;
+      });
+      newChanges[componentTab] = tabChanges;
+      return newChanges;
+    });
+  }, [componentTab, componentData, getComponentUniqueId]);
+
+  const handleEditComponent = React.useCallback((component, editIdx) => {
+    setEditingComponent({ ...component, _editIdx: editIdx });
+    setIsDuplicateMode(false);
+    setConfirmedFields([]);
+    setIsComponentDrawerOpen(true);
+  }, []);
+
+  const handleDuplicateComponent = React.useCallback((component) => {
+    const newComp = { ...component };
+    if (newComp.Name) newComp.Name += " (Copy)"; 
+    if (componentTab === "nipples") newComp["Option 1 Name"] = "Type"; 
+    else if (componentTab === "hubs") newComp["Hub Pairing Policy"] = "None";
+    else if (newComp.name) newComp.name += " (Copy)";
+    else if (newComp.title) newComp.title += " (Copy)";
+    if (newComp.id) delete newComp.id;
+    if (newComp.ID) delete newComp.ID;
+    setEditingComponent(newComp);
+    setIsDuplicateMode(true);
+    setConfirmedFields([]); 
+    setIsComponentDrawerOpen(true);
+  }, [componentTab]);
+
+  // --- CORE HOOKS ---
+  const toggleComponentSelection = React.useCallback((id, e, linearList) => {
+    const isShift = e && (e.shiftKey || (e.nativeEvent && e.nativeEvent.shiftKey));
+    if (isShift && lastCheckedComponentRef.current && linearList) {
+       const idx = linearList.findIndex((v, i) => getComponentUniqueId(v, i) === id);
+       const lastIdx = linearList.findIndex((v, i) => getComponentUniqueId(v, i) === lastCheckedComponentRef.current);
+       if (idx !== -1 && lastIdx !== -1) {
+          const start = Math.min(idx, lastIdx);
+          const end = Math.max(idx, lastIdx);
+          const rangeIds = linearList.slice(start, end + 1).map((v, i) => getComponentUniqueId(v, start + i));
+          setSelectedComponents(prev => {
+             const combined = new Set([...prev, ...rangeIds]);
+             return [...combined];
+          });
+          lastCheckedComponentRef.current = id;
+          return;
+       }
+    }
+    setSelectedComponents(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
+    lastCheckedComponentRef.current = id;
+  }, [getComponentUniqueId]);
+
+
+
+  // Load unsaved changes from session storage on mount
+
+  // Load unsaved changes from session storage on mount
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('loamops_grid_unsaved_v1');
+      if (saved) setGridUnsavedChanges(JSON.parse(saved));
+      const savedRows = sessionStorage.getItem('loamops_grid_added_v1');
+      if (savedRows) setGridAddedRows(JSON.parse(savedRows));
+    } catch(e) {}
+  }, []);
+
+  // Sync to session storage on change
+  useEffect(() => {
+    sessionStorage.setItem('loamops_grid_unsaved_v1', JSON.stringify(gridUnsavedChanges));
+  }, [gridUnsavedChanges]);
+
+  useEffect(() => {
+    sessionStorage.setItem('loamops_grid_added_v1', JSON.stringify(gridAddedRows));
+  }, [gridAddedRows]);
+
+  // Prevent accidental navigation
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      const hasChanges = Object.keys(gridUnsavedChanges).some(tab => Object.keys(gridUnsavedChanges[tab]).length > 0);
+      const hasNewRows = Object.keys(gridAddedRows).some(tab => gridAddedRows[tab].length > 0);
+      if (hasChanges || hasNewRows) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [gridUnsavedChanges, gridAddedRows]);
+
+
+
+  const spokePolish = (val) => {
+    if (!val) return val;
+    return val; // Removed problematic 'h' suffix entirely as requested
+  };
+
+  useEffect(() => {
+     try {
+       const saved = localStorage.getItem('loamops_cols');
+       if (saved) setComponentColumnOrder(JSON.parse(saved));
+       const savedWidths = localStorage.getItem('loamops_widths');
+       if (savedWidths) setComponentColumnWidths(JSON.parse(savedWidths));
+     } catch(e) {}
+  }, []);
+
+  const startResizing = React.useCallback((e, col) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizingCol(col);
+    setStartX(e.pageX);
+    setStartWidth(componentColumnWidths[col] || 150);
+  }, [componentColumnWidths]);
+
+  useEffect(() => {
+    if (!resizingCol) return;
+    const onMouseMove = (e) => {
+      const delta = e.pageX - startX;
+      setComponentColumnWidths(prev => ({ ...prev, [resizingCol]: Math.max(50, startWidth + delta) }));
+    };
+    const onMouseUp = () => {
+      setResizingCol(null);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [resizingCol, startX, startWidth]);
+
+  useEffect(() => {
+    if (Object.keys(componentColumnWidths).length > 0) {
+      localStorage.setItem('loamops_widths', JSON.stringify(componentColumnWidths));
+    }
+  }, [componentColumnWidths]);
+
+  useEffect(() => {
+     if (showMetaEditModal && selectedLabProducts.length === 0) setMetaEditTab('variant');
+  }, [showMetaEditModal, selectedLabProducts.length]);
+  const handleDragStart = React.useCallback((col) => setDraggedColumn(col), []);
+  const handleDragOver = React.useCallback((e) => e.preventDefault(), []);
+  const handleDrop = React.useCallback((targetCol) => {
+    if (!draggedColumn || draggedColumn === targetCol) return;
+    const activeList = componentData[componentTab] || [];
+    const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'Tags', 'tags', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags'];
+    const rawColumns = Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k));
+    let currentCols = componentColumnOrder[componentTab] || rawColumns;
+    const srcIdx = currentCols.indexOf(draggedColumn);
+    const tgtIdx = currentCols.indexOf(targetCol);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const newCols = [...currentCols];
+    newCols.splice(srcIdx, 1);
+    newCols.splice(tgtIdx, 0, draggedColumn);
+    const newOrderMap = { ...componentColumnOrder, [componentTab]: newCols };
+    setComponentColumnOrder(newOrderMap);
+    localStorage.setItem('loamops_cols', JSON.stringify(newOrderMap));
+    setDraggedColumn(null);
+  }, [draggedColumn, componentData, componentTab, componentColumnOrder]);
+
+  const uniqueVendors = React.useMemo(() => {
+    const activeList = (componentData[componentTab] || []).map((item, idx) => ({ ...item, _rawIdx: idx }));
+    const vends = activeList.map(item => item.Vendor || item.vendor || item.Brand || item.brand).filter(v => typeof v === 'string' && v.trim() !== '');
+    return [...new Set(vends)].sort((a,b) => a.localeCompare(b));
+  }, [componentData, componentTab]);
+
+  const finalFilteredList = React.useMemo(() => {
+    const activeList = (componentData[componentTab] || []).map((item, idx) => ({ ...item, _rawIdx: idx }));
+    const addedRows = gridAddedRows[componentTab] || [];
+    const combinedList = [...activeList, ...addedRows];
+
+    let preFilteredList = componentVendorFilter === 'All' 
+      ? combinedList 
+      : combinedList.filter(item => (item.Vendor || item.vendor || item.Brand || item.brand) === componentVendorFilter);
+
+    if (showMissingOnly) {
+      preFilteredList = preFilteredList.filter(item => {
+        try {
+          const validation = getComponentValidation(item, componentTab);
+          return !validation.isValid;
+        } catch (e) {
+          return false;
+        }
+      });
+    }
+
+    return [...preFilteredList].sort((a, b) => {
+      // Prioritize new rows at the top
+      if (a._isNew && !b._isNew) return -1;
+      if (!a._isNew && b._isNew) return 1;
+      
+      const aN = (a.Name || a.name || a.title || a.Title || '').toLowerCase();
+      const bN = (b.Name || b.name || b.title || b.Title || '').toLowerCase();
+      return aN.localeCompare(bN);
+    });
+  }, [componentData, componentTab, gridAddedRows, componentVendorFilter, showMissingOnly, getComponentValidation]);
+
+  const handleCreateNewComponent = React.useCallback((tab) => {
+    const activeList = componentData[tab] || [];
+    const firstItem = activeList[0] || {};
+    const findKey = (search) => {
+      const normSearch = search.toLowerCase().replace(/\s+/g, '').replace(/_/g, '');
+      const found = Object.keys(firstItem).find(k => k.toLowerCase().replace(/\s+/g, '').replace(/_/g, '') === normSearch);
+      return found || search;
+    };
+    let newComp = { [findKey('Vendor')]: componentVendorFilter !== 'All' ? componentVendorFilter : '' };
+    if (tab === 'rims') {
+      newComp = { ...newComp, [findKey('Option 1 Name')]: 'Size', [findKey('Option 2 Name')]: 'Spoke Count', [findKey('Wheel Spec Position')]: '', [findKey('Rim Size')]: '29"', [findKey('Rim ERD')]: '', [findKey('Weight G')]: '' };
+    } else if (tab === 'nipples') {
+      newComp = { ...newComp, [findKey('Option 1 Name')]: 'Type', [findKey('Option 1 Value')]: '' };
+    } else if (tab === 'hubs') {
+      newComp = { ...newComp, [findKey('Option 1 Name')]: 'Spoke Count', [findKey('Option 2 Name')]: 'Spacing', [findKey('Wheel Spec Position')]: '', [findKey('Brake Interface')]: 'Centerlock', [findKey('Hub Type')]: 'J-Bend', [findKey('Hub Pairing Policy')]: 'None' };
+    } else if (tab === 'spokes') {
+        newComp = { ...newComp, [findKey('Option 1 Name')]: 'Color', [findKey('Option 2 Name')]: 'Size', [findKey('Spoke Type')]: 'J-Bend' };
+    }
+    setEditingComponent(newComp);
+    setIsDuplicateMode(false);
+    setConfirmedFields([]);
+    setIsComponentDrawerOpen(true);
+  }, [componentData, componentVendorFilter]);
+
+  const toggleFieldConfirmation = React.useCallback((key) => {
+    setConfirmedFields(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  }, []);
+
+  const syncTags = async () => {
+    setLoading(true);
+    try {
+      const auth = localStorage.getItem('loam_ops_auth');
+      const res = await fetch('/api/import-catalog', { method: 'POST', headers: { 'x-dashboard-auth': auth, 'Content-Type': 'application/json' } });
+      if (res.ok) { showNotification("✅ Catalog Tags Synced Successfully!"); fetchRules(); }
+      else { const err = await res.json(); showNotification("❌ Sync Failed: " + (err.error || "Unknown Error"), 'error'); }
+    } catch (e) { showNotification("❌ Sync Failed: " + e.message, 'error'); }
+    setLoading(false);
+  };
+
+  const handleCheckboxClick = (index, ruleId, e) => {
+    if (e.shiftKey && lastCheckedIndex.current !== null && lastCheckedIndex.current !== index) {
+      const start = Math.min(lastCheckedIndex.current, index);
+      const end = Math.max(lastCheckedIndex.current, index);
+      const rangeIds = paginatedRules.slice(start, end + 1).map(r => r.id);
+      setSelectedRules(prev => {
+        const newSelection = [...prev];
+        rangeIds.forEach(id => { if (!newSelection.includes(id)) newSelection.push(id); });
+        return newSelection;
+      });
+    } else {
+      setSelectedRules(prev => prev.includes(ruleId) ? prev.filter(id => id !== ruleId) : [...prev, ruleId]);
+    }
+    lastCheckedIndex.current = index;
+  };
+
+  const handleBulkDelete = React.useCallback(async () => {
+    if (selectedComponents.length === 0) return;
+    if (!confirm("Delete " + selectedComponents.length + " component(s)? This cannot be undone.")) return;
+    const rawData = componentData[componentTab] || [];
+    const updatedArray = rawData.filter((item, idx) => !selectedComponents.includes(getComponentUniqueId(item, idx)));
+    setComponentSaving(true);
+    await saveComponentChanges(updatedArray);
+    setSelectedComponents([]);
+    setComponentSaving(false);
+  }, [selectedComponents, componentData, componentTab, getComponentUniqueId, saveComponentChanges]);
+
+  const handleBulkEdit = React.useCallback(async () => {
+    if (!bulkEditField || selectedComponents.length === 0) return;
+    setComponentSaving(true);
+    const activeArray = [...(componentData[componentTab] || [])];
+    const updatedArray = activeArray.map((item, i) => {
+       const rowId = getComponentUniqueId(item, i);
+       if (selectedComponents.includes(rowId)) return { ...item, [bulkEditField]: bulkEditValue };
+       return item;
+    });
+    await saveComponentChanges(updatedArray);
+    setIsBulkEditModalOpen(false);
+    setSelectedComponents([]);
+    setBulkEditValue("");
+    setComponentSaving(false);
+    showNotification(`Successfully updated ${selectedComponents.length} components`);
+  }, [bulkEditField, selectedComponents, componentData, componentTab, getComponentUniqueId, bulkEditValue, saveComponentChanges, showNotification]);
 
   const fetchLogs = async () => {
     try {
@@ -590,16 +876,9 @@ export default function OpsDashboard() {
     if (!confirm("Update Entire Catalog? This will sync all Tags, Technical Specs, and Metafield Definitions from Shopify.")) return;
     setLoading(true);
     try {
-      // 1. Sync Catalog (Tags + Metafields)
-      const res1 = await fetch('/api/import-catalog', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password } 
-      });
+      const res1 = await fetch('/api/import-catalog', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password } });
       const d1 = await res1.json();
-      
-      // 2. Sync Metafield Definitions (Options)
       await fetch('/api/get-metafield-definitions', { headers: { 'x-dashboard-auth': password } });
-      
       showNotification(`Sync Complete. Imported/Updated ${d1.count} variants.`);
       fetchRules();
     } catch (e) { showNotification("Sync Failed: " + e.message, 'error'); }
@@ -610,484 +889,36 @@ export default function OpsDashboard() {
     if (!confirm("Trigger Manual Data Audit & Abandoned Build Email Report?")) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/run-daily-tasks', { 
-        method: 'POST',
-        headers: { 'x-dashboard-auth': password } 
-      });
+      const res = await fetch('/api/run-daily-tasks', { method: 'POST', headers: { 'x-dashboard-auth': password } });
       const data = await res.json();
       showNotification("Status: " + data.message);
     } catch (e) { showNotification("Failed to run audit.", 'error'); }
     setLoading(false);
   };
 
-
   const updateRule = async (id, updates) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/update-rule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
-        body: JSON.stringify({ id, updates })
-      });
-      if (res.ok) {
-        setEditingRule(null);
-        fetchRules();
-      }
+      const res = await fetch('/api/update-rule', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password }, body: JSON.stringify({ id, updates }) });
+      if (res.ok) { setEditingRule(null); fetchRules(); }
     } catch (e) { console.error(e); }
     setLoading(false);
   };
 
   const deleteRule = async (id) => {
     if (!confirm("⚠️ PERMANENT ACTION: Remove this item from the Registry?")) return;
-    await fetch('/api/delete-rule', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
-      body: JSON.stringify({ id })
-    });
+    await fetch('/api/delete-rule', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password }, body: JSON.stringify({ id }) });
     fetchRules();
   };
 
   const toggleAutoSync = async (id, currentState) => {
-    await fetch('/api/update-rule', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
-      body: JSON.stringify({ id, updates: { auto_update: !currentState } })
-    });
+    await fetch('/api/update-rule', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password }, body: JSON.stringify({ id, updates: { auto_update: !currentState } }) });
     fetchRules();
-  };
-
-  const saveComponentChanges = React.useCallback(async (newArray, tabOverride = null) => {
-    const tab = tabOverride || componentTab;
-    if (!tab) {
-        console.error("[Persistence Debug] CANNOT SAVE: No tab identified.");
-        showNotification("Save Error: No category selected", "error");
-        return;
-    }
-    const sanitizedArray = newArray.map(item => {
-      const { tags, Tags, _rawIdx, _editIdx, ...rest } = item;
-      return rest;
-    });
-    console.log(`[Persistence Debug] Saving ${tab} changes. Payload length: ${sanitizedArray.length}. Tab: ${tab}`);
-    setComponentSaving(true);
-    try {
-      console.log("[Persistence Debug] Initial components load started.");
-      const res = await fetch('/api/components', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
-        body: JSON.stringify({ [tab]: sanitizedArray })
-      });
-      if (res.ok) {
-        console.log(`[Persistence Debug] Save SUCCESS for ${tab}. Data synced to componentData.`);
-        setComponentData(prev => ({ ...prev, [tab]: sanitizedArray }));
-        setIsComponentDrawerOpen(false);
-        setEditingComponent(null);
-        setConfirmedFields([]);
-        showNotification(`${tab.toUpperCase()} data saved successfully!`, 'success');
-      } else {
-        const err = await res.json();
-        console.error(`[Persistence Debug] Save FAILED for ${tab}:`, err);
-        showNotification("Save Failed: " + (err.error || "Unknown error"), 'error');
-      }
-    } catch (e) {
-      console.error(`[Persistence Debug] Network Error:`, e);
-      showNotification("Network error while saving components.", 'error');
-    }
-    setComponentSaving(false);
-  }, [componentTab, password, showNotification]);
-
-  const handleEditComponent = React.useCallback((component, editIdx) => {
-    console.log(`[Persistence Debug] Opening Drawer for Edit. Index: ${editIdx}, Name: ${component.Name || component.title}`);
-    setEditingComponent({ ...component, _editIdx: editIdx });
-    setIsDuplicateMode(false);
-    setConfirmedFields([]);
-    setIsComponentDrawerOpen(true);
-  }, []);
-
-  const handleDuplicateComponent = React.useCallback((component) => {
-    const newComp = { ...component };
-    if (newComp.Name) newComp.Name += " (Copy)"; 
-    if (componentTab === "nipples") newComp["Option 1 Name"] = "Type"; 
-    else if (componentTab === "hubs") newComp["Hub Pairing Policy"] = "None";
-    else if (newComp.name) newComp.name += " (Copy)";
-    else if (newComp.title) newComp.title += " (Copy)";
-    if (newComp.id) delete newComp.id;
-    if (newComp.ID) delete newComp.ID;
-
-    setEditingComponent(newComp);
-    setIsDuplicateMode(true);
-    setConfirmedFields([]); 
-    setIsComponentDrawerOpen(true);
-  }, [componentTab]);
-
-
-  const handleGridEdit = React.useCallback((rowId, colKey, newValue) => {
-    setGridUnsavedChanges(prev => {
-      const tabChanges = prev[componentTab] || {};
-      const rowChanges = tabChanges[rowId] || {};
-      return {
-        ...prev,
-        [componentTab]: {
-          ...tabChanges,
-          [rowId]: { ...rowChanges, [colKey]: newValue }
-        }
-      };
-    });
-  }, [componentTab]);
-
-  const handleAddNewRow = React.useCallback((count = 1) => {
-    const tab = componentTab;
-    const newRows = Array.from({ length: count }).map((_, i) => ({
-      _rid: `new_${Date.now()}_${i}`,
-      Name: 'New Component',
-      Vendor: 'LoamLabs',
-      _isNew: true
-    }));
-    setGridAddedRows(prev => ({
-      ...prev,
-      [tab]: [...(prev[tab] || []), ...newRows]
-    }));
-    showNotification(`Added ${count} blank row(s)`, 'success');
-  }, [componentTab, showNotification]);
-
-  const handleBatchDuplicate = React.useCallback(() => {
-     if (selectedComponents.length === 0) return;
-     const tab = componentTab;
-     const sourceData = [...(componentData[tab] || [])];
-     const itemsToDup = sourceData.filter((item, idx) => selectedComponents.includes(getComponentUniqueId(item, idx)));
-     
-     const duplicated = itemsToDup.map((item, i) => {
-        const { id, shopify_product_id, ID, ...rest } = item;
-        return {
-           ...rest,
-           _rid: `dup_${Date.now()}_${i}`,
-           Name: (item.Name || item.name || "Copy") + " (Duplicated)",
-           _isNew: true
-        };
-     });
-
-     setGridAddedRows(prev => ({
-        ...prev,
-        [tab]: [...(prev[tab] || []), ...duplicated]
-     }));
-     showNotification(`Duplicated ${duplicated.length} components into pending rows`, 'success');
-     setSelectedComponents([]);
-  }, [selectedComponents, componentTab, componentData, getComponentUniqueId, showNotification]);
-
-  const handleCommitBatchSave = React.useCallback(async () => {
-    const tab = componentTab;
-    const unsaved = gridUnsavedChanges[tab] || {};
-    const added = gridAddedRows[tab] || [];
-    const currentData = [...(componentData[tab] || [])];
-    
-    // 1. Merge Edits
-    let updatedArray = currentData.map((item, idx) => {
-      const rid = getComponentUniqueId(item, idx);
-      if (unsaved[rid]) return { ...item, ...unsaved[rid] };
-      return item;
-    });
-
-    // 2. Append New Rows
-    if (added.length > 0) {
-       updatedArray = [...updatedArray, ...added];
-    }
-
-    setComponentSaving(true);
-    try {
-      await saveComponentChanges(updatedArray, tab);
-      // Clear tracking on success
-      setGridUnsavedChanges(prev => ({ ...prev, [tab]: {} }));
-      setGridAddedRows(prev => ({ ...prev, [tab]: [] }));
-      showNotification(`Batch sync complete for ${tab}!`, 'success');
-    } catch (e) {
-      showNotification("Batch save failed", "error");
-    }
-    setComponentSaving(false);
-  }, [componentTab, gridUnsavedChanges, gridAddedRows, componentData, getComponentUniqueId, saveComponentChanges, showNotification]);
-
-  const handleGridPaste = React.useCallback((e, startRowId, startColKey, columns) => {
-    e.preventDefault();
-    const clipboardData = e.clipboardData.getData('text');
-    const rows = clipboardData.split(/\r?\n/).filter(r => r.trim() !== '');
-    const gridRows = rows.map(r => r.split('\t'));
-
-    const startColIndex = columns.indexOf(startColKey);
-    const visibleData = (componentData[componentTab] || []).map((item, idx) => ({ ...item, _rid: getComponentUniqueId(item, idx) }));
-    const startRowIndex = visibleData.findIndex(r => r._rid === startRowId);
-
-    if (startRowIndex === -1 || startColIndex === -1) return;
-
-    setGridUnsavedChanges(prev => {
-      const newChanges = { ...prev };
-      const tabChanges = { ...(newChanges[componentTab] || {}) };
-
-      gridRows.forEach((rowCells, rOffset) => {
-        const targetRow = visibleData[startRowIndex + rOffset];
-        if (!targetRow) return;
-        const rid = targetRow._rid;
-        const rowChanges = { ...(tabChanges[rid] || {}) };
-        
-        rowCells.forEach((cellVal, cOffset) => {
-          const colKey = columns[startColIndex + cOffset];
-          if (!colKey) return;
-          rowChanges[colKey] = cellVal.trim();
-        });
-        tabChanges[rid] = rowChanges;
-      });
-
-      newChanges[componentTab] = tabChanges;
-      return newChanges;
-    });
-  }, [componentTab, componentData, getComponentUniqueId]);
-
-
-
-
-
-  const getComponentUniqueId = React.useCallback((item, index) => {
-    if (!item) return `empty_${index}`;
-    // Use raw index if available, otherwise fallback to provided index
-    const actualIdx = item._rawIdx !== undefined ? item._rawIdx : index;
-    
-    // Support pre-labeled IDs or shopify IDs
-    const baseId = item.id || item.shopify_product_id || item.ID || item['Product ID'];
-    if (baseId) return `${baseId}_${actualIdx}`;
-    
-    const name = item.Name || item.name || item.title || "Unknown";
-    return `${name}_${actualIdx}`;
-  }, []);
-
-  const getComponentValue = React.useCallback((component, key) => {
-    if (!component) return '';
-    let normTarget = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-    
-    // PRIORITY 1: Strict Identity
-    if (normTarget === 'name' || normTarget === 'displayname' || normTarget === 'title') {
-       const exactName = component.Name || component.name || component.title || component.Title;
-       if (exactName) return exactName;
-    }
-    if (normTarget === 'vendor' || normTarget === 'brand') {
-       const exactVendor = component.Vendor || component.vendor || component.Brand || component.brand;
-       if (exactVendor) return exactVendor;
-    }
-
-    // PRIORITY 2: Exact Key Match
-    if (component[key] !== undefined && component[key] !== null && component[key] !== '') return component[key];
-    
-    // PRIORITY 3: Weight-Specific Logic (Handles (p) and (v))
-    if (normTarget.includes('weightg')) {
-       // If specifically asking for (p) or (v), try to find the match that strictly corresponds
-       const findWeight = (type) => {
-          return Object.keys(component).find(k => {
-             const nk = k.toLowerCase();
-             if (!nk.includes('weightg')) return false;
-             if (type === 'v' && (nk.includes('variant') || nk.includes('(v)'))) return true;
-             if (type === 'p' && (!nk.includes('variant') && (nk.includes('product') || nk.includes('(p)') || (nk.includes('metafield: custom') && !nk.includes('variant'))))) return true;
-             return false;
-          });
-       };
-
-       if (normTarget.endsWith('p')) {
-          const k = findWeight('p');
-          if (k && (component[k] || component[k] === 0)) return component[k];
-       } else if (normTarget.endsWith('v')) {
-          const k = findWeight('v');
-          if (k && (component[k] || component[k] === 0)) return component[k];
-       } else {
-          // If generic weight requested, find the first non-empty weight
-          const keys = Object.keys(component).filter(k => k.toLowerCase().includes('weightg'));
-          for (let k of keys) {
-             if (component[k] || component[k] === 0 || component[k] === '0') return component[k];
-          }
-       }
-    }
-
-    // PRIORITY 4: Smart Metafield Match (Handles "Variant Metafield: custom.xxx [type]")
-    const foundKey = Object.keys(component).find(k => {
-        let cleanKey = k.toLowerCase().replace(/^variant metafield: /i, '');
-        cleanKey = cleanKey.replace(/^metafield: /i, '');
-        cleanKey = cleanKey.replace(/^custom\./i, '');
-        cleanKey = cleanKey.replace(/\[.*?\]/g, ''); // Remove [number_decimal] etc.
-        const nk = cleanKey.replace(/[^a-z0-9]/g, '');
-        
-        // Exclude option keys when looking for general identity
-        if ((nk.includes('optionname') || nk.includes('optionvalue')) && !normTarget.includes('option')) return false;
-        
-        // When checking metafields, if it's already a weight check, it should match the weight logic above mostly
-        // but this handles other fields like "rim_erd"
-        return nk === normTarget;
-    });
-    if (foundKey && (component[foundKey] || component[foundKey] === 0 || component[foundKey] === '0')) return component[foundKey];
-
-    // PRIORITY 5: Fuzzy Match (Substrings, Skip empty)
-    const fuzzyKey = Object.keys(component).find(k => {
-        const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const val = component[k];
-        return nk.includes(normTarget) && !nk.includes('option') && (val || val === 0 || val === '0');
-    });
-    if (fuzzyKey) return component[fuzzyKey];
-    
-    // Technical Fallbacks
-    if (normTarget === 'wheelspecposition') return component['Wheel Spec Position'] || '';
-    if (normTarget === 'rimerd') return component['Rim Erd'] || component.rim_erd || '';
-    
-    // Generic weight fallback if everything else failed
-    if (normTarget.includes('weight')) return component['Weight G (p)'] || component['Weight G (v)'] || component.weight || '';
-
-    return '';
-  }, []);
-
-  const getComponentValidation = React.useCallback((component, tab) => {
-    if (!component) return { isValid: true, missingFields: [] };
-    const missing = [];
-    const required = [...(MANDATORY_FIELDS[tab] || [])];
-    const hubType = getComponentValue(component, 'Hub Type');
-    const spokeType = getComponentValue(component, 'Spoke Type');
-    const lacingPolicy = getComponentValue(component, 'Hub Lacing Policy');
-
-    if (tab === 'hubs') {
-       // Only require J-Bend specific fields if it's J-Bend
-       if (hubType === 'J-Bend') { 
-          ['Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter'].forEach(f => {
-             if (!required.includes(f)) required.push(f);
-          });
-       }
-       if (hubType === 'Straight Pull') {
-          ['Hub SP Offset Spoke Hole Left', 'Hub SP Offset Spoke Hole Right'].forEach(f => { if (!required.includes(f)) required.push(f); });
-       }
-       if (hubType === 'Straight Pull' || hubType === 'Hook Flange' || lacingPolicy === 'Use Manual Override Field') {
-          ['Hub Lacing Cross Left', 'Hub Lacing Cross Right'].forEach(f => { if (!required.includes(f)) required.push(f); });
-          if (!required.includes('Hub Lacing Policy')) required.push('Hub Lacing Policy');
-          
-          // Only require Manual Cross Value if left and right are the same (symmetric)
-          const leftCross = getComponentValue(component, 'Hub Lacing Cross Left');
-          const rightCross = getComponentValue(component, 'Hub Lacing Cross Right');
-          if (leftCross === rightCross && leftCross !== '' && leftCross !== null) {
-              if (!required.includes('Hub Manual Cross Value')) required.push('Hub Manual Cross Value');
-          }
-       }
-    }
-    
-    if (tab === 'spokes' && spokeType === 'Berd') {
-       const idx = required.indexOf('Spoke Cross Section Area Mm2');
-       if (idx > -1) required.splice(idx, 1);
-    }
-    
-    required.forEach(field => {
-      // Weight Either/Or Logic
-      if (field.toLowerCase().includes('weight g')) {
-          const pVal = getComponentValue(component, 'Weight G (p)');
-          const vVal = getComponentValue(component, 'Weight G (v)');
-          const genericVal = getComponentValue(component, 'weight');
-          if (!pVal && !vVal && !genericVal) {
-             missing.push('Weight (P) or (V)');
-          }
-          return;
-      }
-      
-      const val = getComponentValue(component, field);
-      if ((val === undefined || val === null || String(val).trim() === '') && val !== 0 && val !== '0') {
-        missing.push(field);
-      }
-    });
-
-    return { isValid: missing.length === 0, missingFields: missing };
-  }, [getComponentValue]);
-
-  const isComponentValid = React.useCallback((component, tab) => getComponentValidation(component, tab).isValid, [getComponentValidation]);
-
-  const handleCreateNewComponent = React.useCallback((tab) => {
-    const activeList = componentData[tab] || [];
-    const firstItem = activeList[0] || {};
-    
-    const findKey = (search) => {
-      const normSearch = search.toLowerCase().replace(/\s+/g, '').replace(/_/g, '');
-      const found = Object.keys(firstItem).find(k => k.toLowerCase().replace(/\s+/g, '').replace(/_/g, '') === normSearch);
-      return found || search;
-    };
-
-    let newComp = { [findKey('Vendor')]: componentVendorFilter !== 'All' ? componentVendorFilter : '' };
-    if (tab === 'rims') {
-      newComp = { 
-        ...newComp,
-        [findKey('Option 1 Name')]: 'Size', 
-        [findKey('Option 2 Name')]: 'Spoke Count',
-        [findKey('Wheel Spec Position')]: '',
-        [findKey('Rim Size')]: '29"',
-        [findKey('Rim ERD')]: '',
-        [findKey('Weight G')]: ''
-      };
-    } else if (tab === 'nipples') {
-      newComp = {
-        ...newComp,
-        [findKey('Option 1 Name')]: 'Type',
-        [findKey('Option 1 Value')]: '',
-      };
-    } else if (tab === 'hubs') {
-      newComp = {
-        ...newComp,
-        [findKey('Option 1 Name')]: 'Spoke Count',
-        [findKey('Option 2 Name')]: 'Spacing',
-        [findKey('Wheel Spec Position')]: '',
-        [findKey('Brake Interface')]: 'Centerlock',
-        [findKey('Hub Type')]: 'J-Bend',
-        [findKey('Hub Pairing Policy')]: 'None'
-      };
-    } else if (tab === 'spokes') {
-        newComp = {
-          ...newComp,
-          [findKey('Option 1 Name')]: 'Color',
-          [findKey('Option 2 Name')]: 'Size',
-          [findKey('Spoke Type')]: 'J-Bend'
-        };
-    } else if (tab === 'nipples') {
-        newComp = {
-          ...newComp,
-          [findKey('Option 1 Name')]: 'Type',
-          [findKey('Option 1 Value')]: ''
-        };
-    }
-    setEditingComponent(newComp);
-    setIsDuplicateMode(false);
-    setConfirmedFields([]);
-    setIsComponentDrawerOpen(true);
-  }, [componentData, componentVendorFilter]);
-
-  const toggleFieldConfirmation = React.useCallback((key) => {
-    setConfirmedFields(prev => 
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    );
-  }, []);
-
-  const syncTags = async () => {
-    setLoading(true);
-    try {
-      const auth = localStorage.getItem('loam_ops_auth');
-      const res = await fetch('/api/import-catalog', { 
-        method: 'POST',
-        headers: { 
-          'x-dashboard-auth': auth,
-          'Content-Type': 'application/json'
-        } 
-      });
-      if (res.ok) {
-        showNotification("✅ Catalog Tags Synced Successfully!");
-        fetchRules();
-      } else {
-        const err = await res.json();
-        showNotification("❌ Sync Failed: " + (err.error || "Unknown Error"), 'error');
-      }
-    } catch (e) { showNotification("❌ Sync Failed: " + e.message, 'error'); }
-    setLoading(false);
   };
 
   const openDupModal = (product) => {
     setDupSourceProduct(product);
-    setDupOptions({
-      newTitle: `${product.title.split('(')[0].trim()} (CLONE)`,
-      includeMedia: true,
-      includeInventory: true,
-      status: 'ACTIVE'
-    });
+    setDupOptions({ newTitle: `${product.title.split('(')[0].trim()} (CLONE)`, includeMedia: true, includeInventory: true, status: 'ACTIVE' });
     setShowDupModal(true);
   };
 
@@ -1095,39 +926,19 @@ export default function OpsDashboard() {
     if (!dupSourceProduct) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/duplicate-product', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
-        body: JSON.stringify({ 
-          productId: `gid://shopify/Product/${dupSourceProduct.shopify_product_id}`,
-          options: dupOptions
-        })
-      });
+      const res = await fetch('/api/duplicate-product', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password }, body: JSON.stringify({ productId: `gid://shopify/Product/${dupSourceProduct.shopify_product_id}`, options: dupOptions }) });
       const data = await res.json();
-      if (res.ok) {
-        showNotification("✅ " + data.message);
-        setShowDupModal(false);
-        fetchRules(); 
-      } else {
-        showNotification("❌ Error: " + data.error, 'error');
-      }
-    } catch (e) {
-      console.error(e);
-      showNotification("❌ Critical Error during duplication.", 'error');
-    }
+      if (res.ok) { showNotification("✅ " + data.message); setShowDupModal(false); fetchRules(); }
+      else { showNotification("❌ Error: " + data.error, 'error'); }
+    } catch (e) { console.error(e); showNotification("❌ Critical Error during duplication.", 'error'); }
     setLoading(false);
   };
 
   const bulkSetAutoSync = async (state) => {
     setLoading(true);
     try {
-      await Promise.all(selectedRules.map(id => fetch('/api/update-rule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
-        body: JSON.stringify({ id, updates: { auto_update: state } })
-      })));
-      fetchRules();
-      setSelectedRules([]);
+      await Promise.all(selectedRules.map(id => fetch('/api/update-rule', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password }, body: JSON.stringify({ id, updates: { auto_update: state } }) })));
+      fetchRules(); setSelectedRules([]);
     } catch(e) { console.error(e); }
     setLoading(false);
   };
@@ -1135,15 +946,8 @@ export default function OpsDashboard() {
   const executeBulkEdit = async () => {
     setLoading(true);
     try {
-      await Promise.all(selectedRules.map(id => fetch('/api/update-rule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
-        body: JSON.stringify({ id, updates: { vendor_url: bulkEditUrl } })
-      })));
-      setShowBulkEditModal(false);
-      setBulkEditUrl('');
-      fetchRules();
-      setSelectedRules([]);
+      await Promise.all(selectedRules.map(id => fetch('/api/update-rule', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password }, body: JSON.stringify({ id, updates: { vendor_url: bulkEditUrl } }) })));
+      setShowBulkEditModal(false); setBulkEditUrl(''); fetchRules(); setSelectedRules([]);
     } catch(e) { console.error(e); }
     setLoading(false);
   };
@@ -1152,13 +956,8 @@ export default function OpsDashboard() {
     if (!confirm(`⚠️ PERMANENT ACTION: Delete ${selectedRules.length} items from the Registry?`)) return;
     setLoading(true);
     try {
-      await Promise.all(selectedRules.map(id => fetch('/api/delete-rule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
-        body: JSON.stringify({ id })
-      })));
-      setSelectedRules([]);
-      fetchRules();
+      await Promise.all(selectedRules.map(id => fetch('/api/delete-rule', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password }, body: JSON.stringify({ id }) })));
+      setSelectedRules([]); fetchRules();
     } catch(e) { console.error(e); }
     setLoading(false);
   };
@@ -1168,16 +967,30 @@ export default function OpsDashboard() {
     setLoading(true);
     try {
       const productIds = [...new Set(selectedRules.map(id => rules.find(r => r.id === id)?.shopify_product_id).filter(Boolean))];
-      await fetch('/api/ignore-product', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
-        body: JSON.stringify({ product_ids: productIds })
-      });
-      setSelectedRules([]);
-      fetchRules();
+      await fetch('/api/ignore-product', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password }, body: JSON.stringify({ product_ids: productIds }) });
+      setSelectedRules([]); fetchRules();
     } catch(e) { console.error(e); }
     setLoading(false);
   };
+
+  // --- DISCREPANCY NOTIFICATION LOGIC ---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   const bulkApprovePrices = async () => {
     setLoading(true);
@@ -1618,66 +1431,6 @@ export default function OpsDashboard() {
       prev.includes(name) ? prev.filter(v => v !== name) : [...prev, name]
     );
   };
-
-  // 1. Unified variable name to prevent the crash
-  const visibleVendorNames = [...new Set(rules.map(r => r.vendor_name).filter(Boolean))].sort();
-
-  // Global Deduplication: Ensure each variant only appears once
-  const uniqueRulesMap = new Map();
-  rules.forEach(r => {
-     if (!uniqueRulesMap.has(r.shopify_variant_id)) uniqueRulesMap.set(r.shopify_variant_id, r);
-  });
-  const allUniqueRules = Array.from(uniqueRulesMap.values());
-
-  // 2. Sorting: Alphabetical by Vendor, then by Product Title
-  const filteredRules = allUniqueRules.filter(r => {
-    if (!r) return false;
-    const normalize = (str) => String(str || "").toLowerCase().replace(/×/g, 'x').replace(/\s+/g, ' ').trim();
-    
-    // Search is universal
-    const searchString = normalize(registrySearch);
-    const searchTokens = searchString ? searchString.split(' ').filter(Boolean) : [];
-    const searchMatch = searchTokens.length === 0 || searchTokens.every(token => 
-       normalize(r.title).includes(token) || normalize(r.vendor_name).includes(token)
-    );
-
-    const vendorMatch = selectedVendors.length === 0 || 
-      selectedVendors.some(v => normalize(v) === normalize(r.vendor_name));
-
-    const itemTags = Array.isArray(r.tags) ? r.tags.map(t => t.toLowerCase()) : [];
-    
-    if (activeTab === 'bti_sync') {
-      if (itemTags.includes('bti-sync-ignore')) return false;
-      let btiMatch = true;
-      if (btiSyncFilter === 'has') btiMatch = !!r.bti_part_number;
-      if (btiSyncFilter === 'none') btiMatch = !r.bti_part_number;
-      return searchMatch && btiMatch && vendorMatch;
-    }
-
-    // Default 'vendors' tab logic
-    if (activeTab === 'vendors' && itemTags.includes('watcher-ignore')) return false;
-    
-    let syncMatch = true;
-    if (syncFilter === 'on') syncMatch = r.auto_update === true;
-    if (syncFilter === 'off') syncMatch = r.auto_update === false;
-    if (syncFilter === 'review') syncMatch = r.needs_review === true;
-    if (syncFilter === 'sale') {
-      const msrp = r.original_msrp || 0;
-      const price = (r.last_price || 0) / 100;
-      syncMatch = msrp > 0 && (msrp - price) / msrp >= 0.10;
-    }
-    if (syncFilter === 'oos') syncMatch = r.last_availability === false;
-    
-    return searchMatch && syncMatch && vendorMatch;
-  }).sort((a, b) => {
-    const vendorA = String(a.vendor_name || "");
-    const vendorB = String(b.vendor_name || "");
-    const vendorSort = vendorA.localeCompare(vendorB);
-    if (vendorSort !== 0) return vendorSort;
-    return String(a.title || "").localeCompare(String(b.title || ""));
-  });
-
-  const paginatedRules = filteredRules.slice(0, visibleCount);
 
   if (!isAuthorized) {
     return (
@@ -3700,34 +3453,7 @@ export default function OpsDashboard() {
   );
 }
 
-function HealthCard({ title, count, subtitle, icon }) {
-    return (
-        <div className="bg-white p-8 rounded-[2rem] border border-zinc-200 shadow-sm">
-            <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">{icon}</div>
-                <div className="text-3xl font-black italic">{count}</div>
-            </div>
-            <div className="font-black uppercase text-xs mb-1">{title}</div>
-            <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-tighter">{subtitle}</div>
-        </div>
-    );
-}
-
-function SidebarLink({ icon, label, active, onClick, badge, badgeOnClick }) {
-  return (
-    <button onClick={onClick} className={`relative w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-black text-xs uppercase tracking-tight ${active ? 'bg-white text-black shadow-xl scale-[1.03]' : 'hover:bg-zinc-900 text-zinc-600'}`}>
-      {icon} {label}
-      {badge && (
-        <div 
-          onClick={badgeOnClick}
-          className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-pulse shadow-lg shadow-red-500/20 hover:scale-110 active:scale-95 transition-transform"
-        >
-          {badge}
-        </div>
-      )}
-    </button>
-  );
-}
+ 
  
 
 
