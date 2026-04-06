@@ -465,15 +465,45 @@ export default function OpsDashboard() {
   const fetchComponentLibrary = async () => {
       setLoading(true);
       try {
-          const res = await fetch('/api/components', { headers: { 'x-dashboard-auth': password } });
-          const data = await res.json();
+          const auth = password || localStorage.getItem('loam_ops_auth');
+          if (!auth) return;
+          const res = await fetch('/api/components', { headers: { 'x-dashboard-auth': auth } });
           if (res.ok) {
+              const data = await res.json();
               setComponentData(data);
               setComponentsLoaded(true);
           }
       } catch (e) { console.error('Fetch Component Error: ', e); }
       setLoading(false);
   };
+
+  // --- LIFECYCLE EFFECTS (Restored) ---
+
+  // 1. Auth Bootloader (Persisted Login)
+  useEffect(() => {
+    const auth = localStorage.getItem('loam_ops_auth');
+    if (auth) {
+      setPassword(auth);
+      fetchRules(auth);
+    }
+  }, []);
+
+  // 2. Component Library Data Fetcher
+  useEffect(() => {
+    const auth = password || localStorage.getItem('loam_ops_auth');
+    if (auth && activeTab === 'library' && !componentsLoaded) {
+      fetchComponentLibrary();
+    }
+  }, [password, componentsLoaded, activeTab]);
+
+  // 3. Periodic Data Refresh (Registry Sync)
+  useEffect(() => {
+    if (!isAuthorized) return;
+    const interval = setInterval(() => {
+      fetchRules();
+    }, 120000); // 2 minutes
+    return () => clearInterval(interval);
+  }, [isAuthorized]);
 
   const saveComponentChanges = React.useCallback(async (newArray, tabOverride = null) => {
     const tab = tabOverride || componentTab;
