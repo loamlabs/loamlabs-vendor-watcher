@@ -307,13 +307,15 @@ export default function OpsDashboard() {
   }, []);
 
   const getComponentUniqueId = React.useCallback((item, index) => {
-    if (!item) return `empty_${index}`;
+    if (!item) return `empty_${index || 'unknown'}`;
+    // Priority 1: Use the permanent stable _rid
     if (item._rid) return item._rid;
-    const actualIdx = item._rawIdx !== undefined ? item._rawIdx : index;
-    const baseId = item.id || item.shopify_product_id || item.ID || item['Product ID'];
-    if (baseId) return `${baseId}_${actualIdx}`;
+    // Priority 2: Use native database IDs
+    const baseId = item.id || item.shopify_product_id || item.ID || item['Product ID'] || item['Variant ID'];
+    if (baseId) return String(baseId);
+    // Priority 3: Use row index only as a last resort during initial render (this should be rare after hydration)
     const name = item.Name || item.name || item.title || "Unknown";
-    return `${name}_${actualIdx}`;
+    return `${name}_${item._rawIdx !== undefined ? item._rawIdx : index}`;
   }, []);
 
   const getComponentValue = React.useCallback((component, key) => {
@@ -472,7 +474,17 @@ export default function OpsDashboard() {
           const res = await fetch(`/api/components?cb=${cb}`, { headers: { 'x-dashboard-auth': auth } });
           if (res.ok) {
               const data = await res.json();
-              setComponentData(data);
+              // Hydrate missing _rid fields to ensure stable identity
+              const hydrated = {};
+              Object.keys(data).forEach(tab => {
+                  hydrated[tab] = (data[tab] || []).map((item, idx) => {
+                      if (item._rid) return item;
+                      // Fallback: If it has zero unique IDs, we MUST generate an _rid and SAVE it back later
+                      const baseId = item.id || item.shopify_product_id || item.ID || item['Product ID'];
+                      return { ...item, _rid: item._rid || baseId || `comp_${tab}_${idx}_${Date.now().toString(36)}` };
+                  });
+              });
+              setComponentData(hydrated);
               setComponentsLoaded(true);
           }
       } catch (e) { console.error('Fetch Component Error: ', e); }
