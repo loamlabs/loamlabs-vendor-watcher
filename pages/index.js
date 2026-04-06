@@ -634,12 +634,6 @@ export default function OpsDashboard() {
     if (!component) return '';
     let normTarget = key.toLowerCase().replace(/[^a-z0-9]/g, '');
     
-    // Systemic Fix: Remove (p) and (v) indicators for mapping priority
-    if (normTarget.endsWith('p') || normTarget.endsWith('v')) {
-       const base = normTarget.slice(0, -1);
-       if (base === 'weightg') normTarget = base;
-    }
-    
     // PRIORITY 1: Strict Identity
     if (normTarget === 'name' || normTarget === 'displayname' || normTarget === 'title') {
        const exactName = component.Name || component.name || component.title || component.Title;
@@ -651,9 +645,37 @@ export default function OpsDashboard() {
     }
 
     // PRIORITY 2: Exact Key Match
-    if (component[key] !== undefined && component[key] !== null) return component[key];
+    if (component[key] !== undefined && component[key] !== null && component[key] !== '') return component[key];
     
-    // PRIORITY 3: Smart Metafield Match (Handles "Variant Metafield: custom.xxx [type]")
+    // PRIORITY 3: Weight-Specific Logic (Handles (p) and (v))
+    if (normTarget.includes('weightg')) {
+       // If specifically asking for (p) or (v), try to find the match that strictly corresponds
+       const findWeight = (type) => {
+          return Object.keys(component).find(k => {
+             const nk = k.toLowerCase();
+             if (!nk.includes('weightg')) return false;
+             if (type === 'v' && (nk.includes('variant') || nk.includes('(v)'))) return true;
+             if (type === 'p' && (!nk.includes('variant') && (nk.includes('product') || nk.includes('(p)') || (nk.includes('metafield: custom') && !nk.includes('variant'))))) return true;
+             return false;
+          });
+       };
+
+       if (normTarget.endsWith('p')) {
+          const k = findWeight('p');
+          if (k && (component[k] || component[k] === 0)) return component[k];
+       } else if (normTarget.endsWith('v')) {
+          const k = findWeight('v');
+          if (k && (component[k] || component[k] === 0)) return component[k];
+       } else {
+          // If generic weight requested, find the first non-empty weight
+          const keys = Object.keys(component).filter(k => k.toLowerCase().includes('weightg'));
+          for (let k of keys) {
+             if (component[k] || component[k] === 0 || component[k] === '0') return component[k];
+          }
+       }
+    }
+
+    // PRIORITY 4: Smart Metafield Match (Handles "Variant Metafield: custom.xxx [type]")
     const foundKey = Object.keys(component).find(k => {
         let cleanKey = k.toLowerCase().replace(/^variant metafield: /i, '');
         cleanKey = cleanKey.replace(/^metafield: /i, '');
@@ -663,21 +685,27 @@ export default function OpsDashboard() {
         
         // Exclude option keys when looking for general identity
         if ((nk.includes('optionname') || nk.includes('optionvalue')) && !normTarget.includes('option')) return false;
-        return nk === normTarget; // Strict match on the cleaned key
+        
+        // When checking metafields, if it's already a weight check, it should match the weight logic above mostly
+        // but this handles other fields like "rim_erd"
+        return nk === normTarget;
     });
-    if (foundKey) return component[foundKey];
+    if (foundKey && (component[foundKey] || component[foundKey] === 0 || component[foundKey] === '0')) return component[foundKey];
 
-    // PRIORITY 4: Fuzzy Match (Substrings)
+    // PRIORITY 5: Fuzzy Match (Substrings, Skip empty)
     const fuzzyKey = Object.keys(component).find(k => {
         const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-        return nk.includes(normTarget) && !nk.includes('option');
+        const val = component[k];
+        return nk.includes(normTarget) && !nk.includes('option') && (val || val === 0 || val === '0');
     });
     if (fuzzyKey) return component[fuzzyKey];
     
     // Technical Fallbacks
     if (normTarget === 'wheelspecposition') return component['Wheel Spec Position'] || '';
     if (normTarget === 'rimerd') return component['Rim Erd'] || component.rim_erd || '';
-    if (normTarget === 'weightg') return component['Weight G (p)'] || component['Weight G (v)'] || component.weight || '';
+    
+    // Generic weight fallback if everything else failed
+    if (normTarget.includes('weight')) return component['Weight G (p)'] || component['Weight G (v)'] || component.weight || '';
 
     return '';
   };
