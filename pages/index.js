@@ -308,6 +308,7 @@ export default function OpsDashboard() {
 
   const getComponentUniqueId = React.useCallback((item, index) => {
     if (!item) return `empty_${index}`;
+    if (item._rid) return item._rid;
     const actualIdx = item._rawIdx !== undefined ? item._rawIdx : index;
     const baseId = item.id || item.shopify_product_id || item.ID || item['Product ID'];
     if (baseId) return `${baseId}_${actualIdx}`;
@@ -530,7 +531,12 @@ export default function OpsDashboard() {
       });
       console.log(`[Persistence Debug] ${tab.toUpperCase()} SAVE Status: ${res.status} ${res.statusText}`);
       if (res.ok) {
-        setComponentData(prev => ({ ...prev, [tab]: newArray })); // Keep internal IDs for next edit
+        // Transition items: strip _isNew flag now that they are successfully committed
+        const transitionedArray = newArray.map(item => {
+           const { _isNew, ...rest } = item;
+           return rest;
+        });
+        setComponentData(prev => ({ ...prev, [tab]: transitionedArray })); 
         setIsComponentDrawerOpen(false);
         setEditingComponent(null);
         setConfirmedFields([]);
@@ -676,13 +682,14 @@ export default function OpsDashboard() {
   }, [componentTab, componentData, getComponentUniqueId]);
 
   const handleEditComponent = (comp, idx) => {
-    // If it's a new row, we need to find it in gridAddedRows
+    // If it's a new row that hasn't been saved yet, it's still in gridAddedRows
     let componentToEdit = comp;
     if (comp._isNew) {
         const added = gridAddedRows[componentTab] || [];
         const found = added.find(r => r._rid === comp._rid);
         if (found) componentToEdit = found;
     }
+    // Else it is either a legacy component or a newly SAVED component (which no longer has _isNew)
     setEditingComponent({ ...componentToEdit, _editIdx: idx });
     setIsDuplicateMode(false);
     setConfirmedFields([]);
