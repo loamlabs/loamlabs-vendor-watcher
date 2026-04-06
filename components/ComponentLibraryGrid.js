@@ -102,7 +102,8 @@ const ComponentLibraryGrid = React.memo(({
   setFocusedCell,
   editingCell,
   setEditingCell,
-  componentSaving
+  componentSaving,
+  handleRemoveAddedRow
 }) => {
   const tableRef = useRef(null);
 
@@ -256,7 +257,7 @@ const ComponentLibraryGrid = React.memo(({
               return (
                 <tr key={reactKey} className={(isValid ? 'odd:bg-white even:bg-zinc-100/30' : 'bg-red-50 hover:bg-red-100/50') + ' transition-colors group border-b border-zinc-100 last:border-0 ' + (isSelected ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : '')}>
                   <td className="p-4 px-6 w-12 border-r border-zinc-100 sticky left-0 z-30 bg-zinc-50">
-                    <input type="checkbox" checked={isSelected} onChange={(e) => toggleComponentSelection(rowId, e, finalFilteredList)} className="w-4 h-4 rounded border-zinc-300 accent-blue-600 cursor-pointer" />
+                    <input type="checkbox" checked={isSelected} onChange={(e) => toggleComponentSelection(rowId, e.nativeEvent, finalFilteredList)} className="w-4 h-4 rounded border-zinc-300 accent-blue-600 cursor-pointer" />
                   </td>
 
                   <td 
@@ -341,6 +342,10 @@ const ComponentLibraryGrid = React.memo(({
                     <div className="flex items-center justify-end gap-2">
                        <button onClick={() => { handleEditComponent(row, i); }} title="Advanced Edit" className="p-2 bg-zinc-100 hover:bg-black hover:text-white text-zinc-400 rounded-lg transition-all"><Edit size={12} /></button>
                        <button onClick={() => {
+                          if (row._isNew) {
+                             handleRemoveAddedRow(rowId);
+                             return;
+                          }
                           if (confirm("Delete " + (row.Name || row.title) + "? This cannot be undone.")) {
                               const delId = rowId;
                               const rawData = componentData[componentTab] || [];

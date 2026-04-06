@@ -563,13 +563,20 @@ export default function OpsDashboard() {
       return item;
     });
     
-    // 2. Append new rows
-    if (added.length > 0) updatedArray = [...updatedArray, ...added];
+    // 2. Map over added rows and apply any unsaved edits to them!
+    const finalAdded = added.map((item, idx) => {
+        const rid = item._rid; // New rows MUST have a _rid
+        if (rid && unsaved[rid]) return { ...item, ...unsaved[rid] };
+        return item;
+    });
     
-    // 3. Attempt to save
+    // 3. Append new rows
+    if (finalAdded.length > 0) updatedArray = [...updatedArray, ...finalAdded];
+    
+    // 4. Attempt to save
     const success = await saveComponentChanges(updatedArray, tab);
     
-    // 4. ONLY clear draft if the server confirmed success
+    // 5. ONLY clear draft if the server confirmed success
     if (success) {
       setGridUnsavedChanges(prev => ({ ...prev, [tab]: {} }));
       setGridAddedRows(prev => ({ ...prev, [tab]: [] }));
@@ -605,6 +612,40 @@ export default function OpsDashboard() {
     });
   }, [componentTab]);
 
+  const toggleComponentSelection = React.useCallback((rowId, e, list = []) => {
+    const isShift = e && (e.shiftKey || (e.nativeEvent && e.nativeEvent.shiftKey));
+    
+    if (isShift && lastCheckedComponentRef.current && list.length > 0) {
+        const currentIdx = list.findIndex(r => (r._rid || getComponentUniqueId(r)) === rowId);
+        const lastIdx = list.findIndex(r => (r._rid || getComponentUniqueId(r)) === lastCheckedComponentRef.current);
+        
+        if (currentIdx !== -1 && lastIdx !== -1) {
+            const start = Math.min(currentIdx, lastIdx);
+            const end = Math.max(currentIdx, lastIdx);
+            const rangeIds = list.slice(start, end + 1).map(r => r._rid || getComponentUniqueId(r));
+            
+            setSelectedComponents(prev => {
+                const combined = new Set([...prev, ...rangeIds]);
+                return [...combined];
+            });
+            lastCheckedComponentRef.current = rowId;
+            return;
+        }
+    }
+
+    setSelectedComponents(prev => 
+      prev.includes(rowId) ? prev.filter(id => id !== rowId) : [...prev, rowId]
+    );
+    lastCheckedComponentRef.current = rowId;
+  }, [getComponentUniqueId]);
+
+  const handleRemoveAddedRow = React.useCallback((rid) => {
+    setGridAddedRows(prev => ({
+        ...prev,
+        [componentTab]: prev[componentTab].filter(r => r._rid !== rid)
+    }));
+  }, [componentTab]);
+
   const handleGridPaste = React.useCallback((e, startRowId, startColKey, columns) => {
     e.preventDefault();
     const clipboardData = e.clipboardData.getData('text');
@@ -634,12 +675,19 @@ export default function OpsDashboard() {
     });
   }, [componentTab, componentData, getComponentUniqueId]);
 
-  const handleEditComponent = React.useCallback((component, editIdx) => {
-    setEditingComponent({ ...component, _editIdx: editIdx });
+  const handleEditComponent = (comp, idx) => {
+    // If it's a new row, we need to find it in gridAddedRows
+    let componentToEdit = comp;
+    if (comp._isNew) {
+        const added = gridAddedRows[componentTab] || [];
+        const found = added.find(r => r._rid === comp._rid);
+        if (found) componentToEdit = found;
+    }
+    setEditingComponent({ ...componentToEdit, _editIdx: idx });
     setIsDuplicateMode(false);
     setConfirmedFields([]);
     setIsComponentDrawerOpen(true);
-  }, []);
+  };
 
   const handleDuplicateComponent = React.useCallback((component) => {
     const newComp = { ...component };
@@ -657,26 +705,6 @@ export default function OpsDashboard() {
   }, [componentTab]);
 
   // --- CORE HOOKS ---
-  const toggleComponentSelection = React.useCallback((id, e, linearList) => {
-    const isShift = e && (e.shiftKey || (e.nativeEvent && e.nativeEvent.shiftKey));
-    if (isShift && lastCheckedComponentRef.current && linearList) {
-       const idx = linearList.findIndex((v, i) => getComponentUniqueId(v, i) === id);
-       const lastIdx = linearList.findIndex((v, i) => getComponentUniqueId(v, i) === lastCheckedComponentRef.current);
-       if (idx !== -1 && lastIdx !== -1) {
-          const start = Math.min(idx, lastIdx);
-          const end = Math.max(idx, lastIdx);
-          const rangeIds = linearList.slice(start, end + 1).map((v, i) => getComponentUniqueId(v, start + i));
-          setSelectedComponents(prev => {
-             const combined = new Set([...prev, ...rangeIds]);
-             return [...combined];
-          });
-          lastCheckedComponentRef.current = id;
-          return;
-       }
-    }
-    setSelectedComponents(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
-    lastCheckedComponentRef.current = id;
-  }, [getComponentUniqueId]);
 
 
 
@@ -2700,6 +2728,7 @@ export default function OpsDashboard() {
                             getComponentUniqueId={getComponentUniqueId}
                             getComponentValidation={getComponentValidation}
                             toggleComponentSelection={toggleComponentSelection}
+                            handleRemoveAddedRow={handleRemoveAddedRow}
                             DROPDOWN_OPTIONS={DROPDOWN_OPTIONS}
                             handleEditComponent={handleEditComponent}
                             saveComponentChanges={saveComponentChanges}
