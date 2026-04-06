@@ -512,7 +512,7 @@ export default function OpsDashboard() {
     const tab = tabOverride || componentTab;
     if (!tab) {
         showNotification("Save Error: No category selected", "error");
-        return;
+        return false;
     }
     const sanitizedArray = newArray.map(item => {
       const { tags, Tags, _rawIdx, _editIdx, ...rest } = item;
@@ -520,23 +520,32 @@ export default function OpsDashboard() {
     });
     setComponentSaving(true);
     try {
+      const auth = password || localStorage.getItem('loam_ops_auth');
+      console.log(`[Persistence] Saving ${tab.toUpperCase()} (${sanitizedArray.length} items)...`);
       const res = await fetch('/api/components', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password },
+        headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': auth },
         body: JSON.stringify({ [tab]: sanitizedArray })
       });
       if (res.ok) {
-        setComponentData(prev => ({ ...prev, [tab]: sanitizedArray }));
+        setComponentData(prev => ({ ...prev, [tab]: newArray })); // Keep internal IDs for next edit
         setIsComponentDrawerOpen(false);
         setEditingComponent(null);
         setConfirmedFields([]);
         showNotification(`${tab.toUpperCase()} data saved successfully!`, 'success');
+        setComponentSaving(false);
+        return true;
       } else {
         const err = await res.json();
         showNotification("Save Failed: " + (err.error || "Unknown error"), 'error');
+        setComponentSaving(false);
+        return false;
       }
-    } catch (e) { showNotification("Network error while saving components.", 'error'); }
-    setComponentSaving(false);
+    } catch (e) { 
+      showNotification("Network error while saving components.", 'error'); 
+      setComponentSaving(false);
+      return false;
+    }
   }, [componentTab, password, showNotification]);
 
   const handleCommitBatchSave = React.useCallback(async () => {
@@ -544,20 +553,28 @@ export default function OpsDashboard() {
     const unsaved = gridUnsavedChanges[tab] || {};
     const added = gridAddedRows[tab] || [];
     const currentData = [...(componentData[tab] || [])];
+    
+    // 1. Build the updated array using stable identification
     let updatedArray = currentData.map((item, idx) => {
       const rid = getComponentUniqueId(item, idx);
       if (unsaved[rid]) return { ...item, ...unsaved[rid] };
       return item;
     });
+    
+    // 2. Append new rows
     if (added.length > 0) updatedArray = [...updatedArray, ...added];
-    setComponentSaving(true);
-    try {
-      await saveComponentChanges(updatedArray, tab);
+    
+    // 3. Attempt to save
+    const success = await saveComponentChanges(updatedArray, tab);
+    
+    // 4. ONLY clear draft if the server confirmed success
+    if (success) {
       setGridUnsavedChanges(prev => ({ ...prev, [tab]: {} }));
       setGridAddedRows(prev => ({ ...prev, [tab]: [] }));
       showNotification(`Batch sync complete for ${tab}!`, 'success');
-    } catch (e) { showNotification("Batch save failed", "error"); }
-    setComponentSaving(false);
+    } else {
+      showNotification(`Batch sync failed! Your edits are still in the grid.`, 'error');
+    }
   }, [componentTab, gridUnsavedChanges, gridAddedRows, componentData, getComponentUniqueId, saveComponentChanges, showNotification]);
 
   const handleAddNewRow = React.useCallback((count = 1) => {
@@ -2858,19 +2875,24 @@ export default function OpsDashboard() {
                                         const { _editIdx, ...cleanComp } = editingComponent;
                                         
                                         let existingIdx = -1;
-                                        if (_editIdx !== undefined && _editIdx >= 0 && _editIdx < activeArray.length) {
+                                        // Enforce stable identification via _rid for the master list
+                                        const targetId = editingComponent._rid;
+                                        if (targetId) {
+                                           existingIdx = activeArray.findIndex((item, i) => (item._rid === targetId) || (getComponentUniqueId(item, i) === targetId));
+                                        } else if (_editIdx !== undefined && _editIdx >= 0 && _editIdx < activeArray.length) {
+                                           // Fallback for objects missing _rid but having a valid local index context
                                            existingIdx = _editIdx;
-                                        } else {
-                                           // Fallback to ID matching if _editIdx is lost
-                                           const targetId = getComponentUniqueId(cleanComp);
-                                           existingIdx = activeArray.findIndex((item, i) => getComponentUniqueId(item, i) === targetId);
                                         }
 
                                         if (existingIdx >= 0 && !isDuplicateMode) {
                                            activeArray[existingIdx] = cleanComp;
                                         } else {
-                                           activeArray.unshift(cleanComp);
+                                           // Ensure new items get a stable ID immediately
+                                           const newComp = { ...cleanComp, _rid: `new_${Date.now()}` };
+                                           activeArray.unshift(newComp);
                                         }
+                                        
+                                        console.log(`[Persistence Debug] Saving Drawer Edit: ${targetId} at master index ${existingIdx}`);
                                         saveComponentChanges(activeArray).catch(err => console.error("[Persistence Error] Save failed:", err));
                                    }}
                                    className={`flex-[2] py-5 font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 ${allConfirmed && !componentSaving ? 'bg-black text-white hover:bg-zinc-800' : 'bg-zinc-200 text-zinc-400 cursor-not-allowed shadow-none'}`}
