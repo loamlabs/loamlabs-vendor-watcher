@@ -342,10 +342,13 @@ const ComponentLibraryGrid = React.memo(({
                        <button onClick={() => { handleEditComponent(row, i); }} title="Advanced Edit" className="p-2 bg-zinc-100 hover:bg-black hover:text-white text-zinc-400 rounded-lg transition-all"><Edit size={12} /></button>
                        <button onClick={() => {
                           if (confirm("Delete " + (row.Name || row.title) + "? This cannot be undone.")) {
-                             const delId = rowId;
-                             const rawData = componentData[componentTab] || [];
-                             const updatedArray = rawData.filter((item, idx) => getComponentUniqueId(item, idx) !== delId);
-                             saveComponentChanges(updatedArray, componentTab).catch(err => console.error("Delete failed:", err));
+                              const delId = rowId;
+                              const rawData = componentData[componentTab] || [];
+                              const updatedArray = rawData.filter((item, idx) => {
+                                 const rid = item._rid || getComponentUniqueId(item, idx);
+                                 return rid !== delId;
+                              });
+                              saveComponentChanges(updatedArray, componentTab).catch(err => console.error("Delete failed:", err));
                           }
                        }} title="Trash Component" className="p-2 bg-zinc-100 hover:bg-red-500 hover:text-white text-zinc-400 rounded-lg transition-all"><Trash2 size={12} /></button>
                     </div>
