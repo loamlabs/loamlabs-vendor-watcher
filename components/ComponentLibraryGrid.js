@@ -223,7 +223,19 @@ const ComponentLibraryGrid = React.memo(({
     const row = finalFilteredList.find(r => (r._rid || getComponentUniqueId(r)) === rowId);
     if (!row) return '';
     const unsaved = (gridUnsavedChanges[componentTab] || {})[rowId] || {};
-    const val = unsaved[colKey] !== undefined ? unsaved[colKey] : row[colKey];
+    let val = unsaved[colKey];
+    
+    // If no unsaved edit, check row with smart fallbacks for aliased keys
+    if (val === undefined) {
+      if (colKey === 'Name') {
+        val = row.Name || row.name || row.title || row.Title || '';
+      } else if (colKey === 'Vendor') {
+        val = row.Vendor || row.vendor || row.Brand || row.brand || '';
+      } else {
+        val = row[colKey];
+      }
+    }
+    
     return val === null || val === undefined ? '' : String(val);
   };
 
