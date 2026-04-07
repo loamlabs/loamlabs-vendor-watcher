@@ -121,32 +121,7 @@ export default function OpsDashboard() {
   const [focusedCell, setFocusedCell] = useState(null); 
   const [editingCell, setEditingCell] = useState(null); 
 
-  const handleDeleteComponent = React.useCallback(async (item) => {
-      const rowId = item._rid || getComponentUniqueId(item);
-      const isNew = !!item._isNew;
-      
-      if (isNew) {
-          handleRemoveAddedRow(rowId);
-          return;
-      }
-
-      const name = item.Name || item.name || item.title || "Unknown";
-      if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
-
-      const rawData = componentData[componentTab] || [];
-      const updatedArray = rawData.filter(i => {
-          const rid = i._rid || getComponentUniqueId(i);
-          return rid !== rowId;
-      });
-
-      const success = await saveComponentChanges(updatedArray, componentTab);
-      if (success) {
-          showNotification(`Successfully deleted ${name}`, 'success');
-      } else {
-          showNotification(`Failed to delete ${name}`, 'error');
-      }
-  }, [componentTab, componentData, saveComponentChanges]);
-  const [metaEditFields, setMetaEditFields] = useState({});
+   const [metaEditFields, setMetaEditFields] = useState({});
   const [metafieldRegistry, setMetafieldRegistry] = useState([
     { key: 'inventory_alert_threshold', label: 'Inventory Alert Threshold', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'hub_manual_cross_value', label: 'Hub Manual Cross Value', categories: ['HUB'], target: 'variant', type: 'decimal' },
@@ -705,6 +680,32 @@ export default function OpsDashboard() {
         [componentTab]: prev[componentTab].filter(r => r._rid !== rid)
     }));
   }, [componentTab]);
+
+  const handleDeleteComponent = React.useCallback(async (item) => {
+      const rowId = item._rid || getComponentUniqueId(item);
+      const isNew = !!item._isNew;
+      
+      if (isNew) {
+          handleRemoveAddedRow(rowId);
+          return;
+      }
+
+      const name = item.Name || item.name || item.title || "Unknown";
+      if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+
+      const rawData = componentData[componentTab] || [];
+      const updatedArray = rawData.filter(i => {
+          const rid = i._rid || getComponentUniqueId(i);
+          return rid !== rowId;
+      });
+
+      const success = await saveComponentChanges(updatedArray, componentTab);
+      if (success) {
+          showNotification(`Successfully deleted ${name}`, 'success');
+      } else {
+          showNotification(`Failed to delete ${name}`, 'error');
+      }
+  }, [componentTab, componentData, saveComponentChanges]);
 
   const handleGridPaste = React.useCallback((e, startRowId, startColKey, columns) => {
     const clipboardData = e.clipboardData.getData('text');
