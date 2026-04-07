@@ -637,6 +637,13 @@ export default function OpsDashboard() {
   };
 
   const handleGridEdit = React.useCallback((rowId, colKey, newValue) => {
+    // Validation: Check if this column is a dropdown and if the value is allowed
+    const options = DROPDOWN_OPTIONS[colKey] || DROPDOWN_OPTIONS[formatColumnTitle(colKey)];
+    if (options && newValue !== '' && !options.includes(newValue)) {
+       showNotification(`Invalid option for ${colKey}: "${newValue}"`, 'error');
+       return;
+    }
+
     setGridUnsavedChanges(prev => {
       const tabChanges = prev[componentTab] || {};
       const rowChanges = tabChanges[rowId] || {};
@@ -645,28 +652,44 @@ export default function OpsDashboard() {
         [componentTab]: { ...tabChanges, [rowId]: { ...rowChanges, [colKey]: newValue } }
       };
     });
-  }, [componentTab]);
+  }, [componentTab, showNotification, formatColumnTitle]);
 
   const handleBulkPaste = React.useCallback(() => {
     if (clipboardValue === null || selectedCells.length === 0) return;
     
+    let pasteCount = 0;
+    let skipCount = 0;
+
     setGridUnsavedChanges(prev => {
       const newChanges = { ...prev };
       const tabChanges = { ...(newChanges[componentTab] || {}) };
       
       selectedCells.forEach(cellId => {
         const [rowId, colKey] = cellId.split('|');
+        
+        // Validation check for each cell
+        const options = DROPDOWN_OPTIONS[colKey] || DROPDOWN_OPTIONS[formatColumnTitle(colKey)];
+        if (options && clipboardValue !== '' && !options.includes(clipboardValue)) {
+           skipCount++;
+           return;
+        }
+
         const rowChanges = { ...(tabChanges[rowId] || {}) };
         rowChanges[colKey] = clipboardValue;
         tabChanges[rowId] = rowChanges;
+        pasteCount++;
       });
       
       newChanges[componentTab] = tabChanges;
       return newChanges;
     });
     
-    showNotification(`Pasted values into ${selectedCells.length} cells`, 'success');
-  }, [componentTab, clipboardValue, selectedCells, showNotification]);
+    if (skipCount > 0) {
+       showNotification(`Pasted ${pasteCount} cells. Skipped ${skipCount} invalid values.`, 'error');
+    } else {
+       showNotification(`Pasted values into ${pasteCount} cells`, 'success');
+    }
+  }, [componentTab, clipboardValue, selectedCells, showNotification, formatColumnTitle]);
 
   const toggleComponentSelection = React.useCallback((rowId, e, list = []) => {
     const isShift = e && (e.shiftKey || (e.nativeEvent && e.nativeEvent.shiftKey));
@@ -739,6 +762,9 @@ export default function OpsDashboard() {
     const visibleData = (componentData[componentTab] || []).map((item, idx) => ({ ...item, _rid: getComponentUniqueId(item, idx) }));
     const startRowIndex = visibleData.findIndex(r => r._rid === startRowId);
     if (startRowIndex === -1 || startColIndex === -1) return;
+    
+    let skipCount = 0;
+
     setGridUnsavedChanges(prev => {
       const newChanges = { ...prev };
       const tabChanges = { ...(newChanges[componentTab] || {}) };
@@ -750,14 +776,28 @@ export default function OpsDashboard() {
         rowCells.forEach((cellVal, cOffset) => {
           const colKey = columns[startColIndex + cOffset];
           if (!colKey) return;
-          rowChanges[colKey] = cellVal.trim();
+          
+          const val = cellVal.trim();
+          
+          // Validation: Check options
+          const options = DROPDOWN_OPTIONS[colKey] || DROPDOWN_OPTIONS[formatColumnTitle(colKey)];
+          if (options && val !== '' && !options.includes(val)) {
+             skipCount++;
+             return;
+          }
+
+          rowChanges[colKey] = val;
         });
         tabChanges[rid] = rowChanges;
       });
       newChanges[componentTab] = tabChanges;
       return newChanges;
     });
-  }, [componentTab, componentData, getComponentUniqueId]);
+
+    if (skipCount > 0) {
+       showNotification(`Paste completed. ${skipCount} invalid dropdown values were skipped.`, 'error');
+    }
+  }, [componentTab, componentData, getComponentUniqueId, formatColumnTitle, showNotification]);
 
   const handleEditComponent = (comp, idx) => {
     let componentToEdit = comp;
@@ -2787,6 +2827,7 @@ export default function OpsDashboard() {
                             editingCell={editingCell}
                             setEditingCell={setEditingCell}
                             componentSaving={componentSaving}
+                            componentColumnOrder={componentColumnOrder}
                          />
                       )}
                    </div>

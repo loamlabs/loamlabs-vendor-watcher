@@ -116,7 +116,8 @@ const ComponentLibraryGrid = React.memo(({
   onPaste,
   componentSaving,
   handleRemoveAddedRow,
-  handleDeleteComponent
+  handleDeleteComponent,
+  componentColumnOrder
 }) => {
   const tableRef = useRef(null);
   const scrollRef = useRef(null);
@@ -133,7 +134,21 @@ const ComponentLibraryGrid = React.memo(({
       });
     });
     
-    return ['Vendor', 'Name', ...Array.from(allKeys)];
+    // Sort based on componentColumnOrder if available
+    const specCols = Array.from(allKeys);
+    const order = componentColumnOrder?.[componentTab];
+    if (order && Array.isArray(order)) {
+      specCols.sort((a, b) => {
+        const aIdx = order.indexOf(a);
+        const bIdx = order.indexOf(b);
+        if (aIdx === -1 && bIdx === -1) return 0;
+        if (aIdx === -1) return 1;
+        if (bIdx === -1) return -1;
+        return aIdx - bIdx;
+      });
+    }
+    
+    return ['Vendor', 'Name', ...specCols];
   };
 
   const getRectangularRange = (startCell, endCell) => {
@@ -175,6 +190,12 @@ const ComponentLibraryGrid = React.memo(({
     } else {
       setSelectedCells([cellId]);
       setFocusedCell({ rowId, colKey });
+      
+      // Feature Upgrade: If it's a dropdown column, start editing immediately on click
+      const options = DROPDOWN_OPTIONS[colKey] || DROPDOWN_OPTIONS[formatColumnTitle(colKey)];
+      if (options) {
+        setEditingCell({ rowId, colKey });
+      }
     }
   };
 
@@ -342,6 +363,10 @@ const ComponentLibraryGrid = React.memo(({
               {biologicalCols.slice(2).map(col => (
                 <th 
                   key={col} 
+                  draggable="true"
+                  onDragStart={() => handleDragStart(col)}
+                  onDragOver={(e) => handleDragOver(e)}
+                  onDrop={() => handleDrop(col)}
                   style={{ 
                     position: 'sticky',
                     top: 0,
@@ -349,9 +374,12 @@ const ComponentLibraryGrid = React.memo(({
                     minWidth: componentColumnWidths[componentTab + '_' + col] || 150,
                     zIndex: 100
                   }}
-                  className="p-4 font-black text-[10px] uppercase text-zinc-400 tracking-widest hover:bg-zinc-100 transition-colors relative group/h border-r border-b border-zinc-50 bg-zinc-50"
+                  className="p-4 font-black text-[10px] uppercase text-zinc-400 tracking-widest hover:bg-zinc-100 transition-colors relative group/h border-r border-b border-zinc-50 bg-zinc-50 cursor-grab active:cursor-grabbing"
                 >
-                  {formatColumnTitle(col)}
+                  <div className="flex items-center gap-2">
+                    <Layers size={10} className="text-zinc-300 opacity-0 group-hover/h:opacity-100 transition-opacity" />
+                    {formatColumnTitle(col)}
+                  </div>
                   <div onMouseDown={(e) => startResizing(e, componentTab + '_' + col)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-black/20 transition-colors z-30 opacity-0 group-hover/h:opacity-100" />
                 </th>
               ))}
