@@ -479,27 +479,19 @@ export default function OpsDashboard() {
               
               Object.keys(data).forEach(tab => {
                   const rawList = data[tab] || [];
-                  const uniqueSet = new Map();
-                  
-                  rawList.forEach((item, idx) => {
-                      // 1. Generate a content fingerprint if _rid is missing
+                  const hydratedList = rawList.map((item, idx) => {
                       const baseId = item.id || item.shopify_product_id || item.ID || item['Product ID'];
                       const name = item.Name || item.name || item.title || "NoName";
                       const vendor = item.Vendor || item.vendor || item.Brand || item.brand || "NoVendor";
-                      // Robust fingerprint: Include all spec keys to distinguish variants (hole count, size, etc.)
                       const specKeys = Object.keys(item).filter(k => !['_rid', '_rawIdx', '_editIdx', '_isNew', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID'].includes(k)).sort();
                       const specs = specKeys.map(k => `${k}:${item[k]}`).join('|');
                       const hash = `${name}_${vendor}_${specs}`.toLowerCase().replace(/[^a-z0-9]/g, '');
                       
                       const stableRid = item._rid || baseId || `hash_${hash}`;
-                      
-                      // 2. Deduplicate: First one with this ID wins
-                      if (!uniqueSet.has(stableRid)) {
-                          uniqueSet.set(stableRid, { ...item, _rid: stableRid });
-                      }
+                      return { ...item, _rid: stableRid, _rawIdx: idx };
                   });
                   
-                  hydrated[tab] = Array.from(uniqueSet.values());
+                  hydrated[tab] = hydratedList;
               });
               
               setComponentData(hydrated);

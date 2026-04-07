@@ -199,11 +199,11 @@ const ComponentLibraryGrid = React.memo(({
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      <div className="overflow-x-auto max-h-[650px] relative scrollbar-thin rounded-2xl border border-zinc-100 shadow-inner">
+      <div className="overflow-x-auto overflow-y-auto max-h-[650px] relative scrollbar-thin rounded-2xl border border-zinc-100 shadow-inner">
         <table className="min-w-full text-left text-sm whitespace-nowrap select-none border-collapse" ref={tableRef}>
-          <thead className="bg-zinc-50 sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+          <thead className="bg-zinc-50 sticky top-0 z-40 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
             <tr>
-              <th className="p-4 px-6 w-12 bg-zinc-50 border-r border-zinc-100 sticky top-0 left-0 z-50">
+              <th className="p-4 px-6 w-12 bg-zinc-50 border-r border-zinc-100 sticky top-0 left-0 z-60">
                 <input 
                   type="checkbox" 
                   checked={selectedComponents.length === finalFilteredList.length && finalFilteredList.length > 0} 
@@ -216,21 +216,21 @@ const ComponentLibraryGrid = React.memo(({
               </th>
 
               <th 
-                style={{ width: 100, minWidth: 100, position: 'sticky', top: 0, left: '48px', zIndex: 50 }}
+                style={{ width: 100, minWidth: 100, position: 'sticky', top: 0, left: '48px', zIndex: 60 }}
                 className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest bg-zinc-50 border-r border-zinc-100 shadow-sm"
               >
                 Actions
               </th>
               
               <th 
-                style={{ width: 150, minWidth: 150, position: 'sticky', top: 0, left: '148px', zIndex: 50 }}
+                style={{ width: 150, minWidth: 150, position: 'sticky', top: 0, left: '148px', zIndex: 60 }}
                 className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest bg-zinc-50 border-r border-zinc-100 group/h relative shadow-sm"
               >
                 Vendor
               </th>
  
               <th 
-                style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300, position: 'sticky', top: 0, left: '298px', zIndex: 50 }}
+                style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300, position: 'sticky', top: 0, left: '298px', zIndex: 60 }}
                 className="p-4 px-6 font-black text-[10px] uppercase text-zinc-400 tracking-widest bg-zinc-50 border-r border-zinc-100 group/h relative shadow-sm"
               >
                 Name
@@ -263,11 +263,11 @@ const ComponentLibraryGrid = React.memo(({
               
               return (
                 <tr key={reactKey} className={(isValid ? 'odd:bg-white even:bg-zinc-100/30' : 'bg-red-50 hover:bg-red-100/50') + ' transition-colors group border-b border-zinc-100 last:border-0 ' + (isSelected ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : '')}>
-                  <td className="p-4 px-6 w-12 border-r border-zinc-100 sticky left-0 z-30 bg-zinc-50">
+                  <td className="p-4 px-6 w-12 border-r border-zinc-100 sticky left-0 z-60 bg-zinc-50">
                     <input type="checkbox" checked={isSelected} onChange={(e) => toggleComponentSelection(rowId, e.nativeEvent, finalFilteredList)} className="w-4 h-4 rounded border-zinc-300 accent-blue-600 cursor-pointer" />
                   </td>
 
-                  <td className="p-4 px-6 sticky left-[48px] z-30 bg-zinc-50 border-r border-zinc-100 text-right" onClick={e => e.stopPropagation()}>
+                  <td className="p-4 px-6 sticky left-[48px] z-60 bg-zinc-50 border-r border-zinc-100 text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-2">
                        <button onClick={() => { handleEditComponent(row, i); }} title="Advanced Edit" className="p-2 bg-zinc-100 hover:bg-black hover:text-white text-zinc-400 rounded-lg transition-all"><Edit size={12} /></button>
                        <button onClick={() => handleDeleteComponent(row)} title="Trash Component" className="p-2 bg-zinc-100 hover:bg-red-500 hover:text-white text-zinc-400 rounded-lg transition-all"><Trash2 size={12} /></button>
@@ -275,7 +275,7 @@ const ComponentLibraryGrid = React.memo(({
                   </td>
 
                   <td 
-                    style={{ position: 'sticky', left: '148px', zIndex: 30 }}
+                    style={{ position: 'sticky', left: '148px', zIndex: 60 }}
                     className={"p-0 border-r border-zinc-100 " + (isValid ? (i % 2 === 0 ? 'bg-white' : 'bg-zinc-50') : 'bg-red-50') + " group-hover:bg-zinc-100 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.02)]"}
                   >
                     <EditableCell 
@@ -293,7 +293,7 @@ const ComponentLibraryGrid = React.memo(({
                   </td>
 
                   <td 
-                    style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300, position: 'sticky', left: '298px', zIndex: 20 }}
+                    style={{ width: componentColumnWidths[componentTab + '_name'] || 300, minWidth: componentColumnWidths[componentTab + '_name'] || 300, position: 'sticky', left: '298px', zIndex: 60 }}
                     className={"p-0 border-r border-zinc-100 " + (isValid ? (i % 2 === 0 ? 'bg-white' : 'bg-zinc-50') : 'bg-red-50') + " group-hover:bg-zinc-100 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.05)] relative"}
                   >
                     <div className="flex items-center justify-between px-2">
