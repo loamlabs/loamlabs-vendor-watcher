@@ -119,8 +119,53 @@ const ComponentLibraryGrid = React.memo(({
   handleDeleteComponent,
   componentColumnOrder
 }) => {
-  const tableRef = useRef(null);
+  const [startWidth, setStartWidth] = useState(0);
   const scrollRef = useRef(null);
+  const tableRef = useRef(null);
+
+  // --- AUTO-SCROLL LOGIC ---
+  useEffect(() => {
+    if (!focusedCell || !scrollRef.current) return;
+    
+    const { colKey } = focusedCell;
+    const allCols = getBiologicalCols();
+    const colIndex = allCols.indexOf(colKey);
+    if (colIndex === -1) return;
+
+    // Sticky columns: Checkbox(48) + Actions(100) + Vendor(150) + Name(300)
+    // The spec columns start after the Name column. 
+    // We only need to auto-scroll for columns that aren't the sticky ones.
+    const stickyWidth = 48 + 100 + 150 + (componentColumnWidths[componentTab + '_name'] || 300);
+    
+    // Calculate the start position of this column
+    let colStart = 48 + 100 + 150 + (componentColumnWidths[componentTab + '_name'] || 300);
+    for (let i = 2; i < colIndex; i++) {
+      const key = allCols[i];
+      colStart += (componentColumnWidths[componentTab + '_' + key] || 150);
+    }
+    const colWidth = (componentColumnWidths[componentTab + '_' + colKey] || 150);
+    const colEnd = colStart + colWidth;
+
+    const currentScroll = scrollRef.current.scrollLeft;
+    const viewportWidth = scrollRef.current.offsetWidth;
+    const visibleStart = currentScroll + stickyWidth;
+    const visibleEnd = currentScroll + viewportWidth;
+
+    // If cell is to the left of visible area (hidden by sticky cols)
+    if (colStart < visibleStart && colIndex >= 2) {
+      scrollRef.current.scrollTo({
+        left: colStart - stickyWidth,
+        behavior: 'smooth'
+      });
+    } 
+    // If cell is to the right of visible area
+    else if (colEnd > visibleEnd) {
+      scrollRef.current.scrollTo({
+        left: colEnd - viewportWidth,
+        behavior: 'smooth'
+      });
+    }
+  }, [focusedCell, componentTab, componentColumnWidths]);
 
   const getBiologicalCols = () => {
     const rawData = componentData[componentTab] || [];

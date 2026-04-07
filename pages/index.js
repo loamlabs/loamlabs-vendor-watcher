@@ -1033,6 +1033,27 @@ export default function OpsDashboard() {
     setComponentSaving(false);
   }, [selectedComponents, componentData, componentTab, getComponentUniqueId, saveComponentChanges]);
 
+  const handleOpenMassEdit = React.useCallback(() => {
+     const activeList = componentData[componentTab] || [];
+     const selectedItems = activeList.filter((item, i) => selectedComponents.includes(getComponentUniqueId(item, i)));
+    
+     const initialValues = {};
+     if (selectedItems.length > 0) {
+       const keys = Array.from(new Set(selectedItems.flatMap(item => Object.keys(item))));
+       keys.forEach(key => {
+         const uniqueValues = new Set(selectedItems.map(item => {
+            const val = item[key];
+            return (val === null || val === undefined) ? '' : val;
+         }));
+         if (uniqueValues.size === 1) {
+           initialValues[key] = Array.from(uniqueValues)[0];
+         }
+       });
+     }
+     setBulkEditComponent(initialValues);
+     setIsBulkEditDrawerOpen(true);
+   }, [componentData, componentTab, selectedComponents, getComponentUniqueId]);
+
   const handleBulkEdit = React.useCallback(async () => {
     if (Object.keys(bulkEditComponent).length === 0 || selectedComponents.length === 0) return;
     
@@ -1109,7 +1130,7 @@ export default function OpsDashboard() {
     if (!confirm("Trigger Manual Data Audit & Abandoned Build Email Report?")) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/run-daily-tasks', { method: 'POST', headers: { 'x-dashboard-auth': password } });
+      const res = await fetch('/api/run-daily-tasks', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': password } });
       const data = await res.json();
       showNotification("Status: " + data.message);
     } catch (e) { showNotification("Failed to run audit.", 'error'); }
@@ -2935,7 +2956,7 @@ export default function OpsDashboard() {
                                       const isMandatory = MANDATORY_FIELDS[componentTab]?.some(f => { 
                                           const nf = f.toLowerCase().replace(/[^a-z0-9]/g, ''); 
                                           const nk = key.toLowerCase().replace(/[^a-z0-9]/g, ''); 
-                                          return nf === nk || nk.startsWith(nf) || nf.startsWith(nk); 
+                                          return nf === nk || nk.startsWith(nf) || nf.startsWith(nk) || nk.includes(nf) || nf.includes(nk); 
                                        });
                                       const options = DROPDOWN_OPTIONS[key] || DROPDOWN_OPTIONS[formatColumnTitle(key)] || DROPDOWN_OPTIONS[key.toLowerCase()];
                                       
@@ -3113,7 +3134,7 @@ export default function OpsDashboard() {
                                        const isMandatory = MANDATORY_FIELDS[componentTab]?.some(f => { 
                                           const nf = f.toLowerCase().replace(/[^a-z0-9]/g, ''); 
                                           const nk = key.toLowerCase().replace(/[^a-z0-9]/g, ''); 
-                                          return nf === nk || nk.startsWith(nf) || nf.startsWith(nk); 
+                                          return nf === nk || nk.startsWith(nf) || nf.startsWith(nk) || nk.includes(nf) || nf.includes(nk); 
                                        });
                                        const options = DROPDOWN_OPTIONS[key] || DROPDOWN_OPTIONS[formatColumnTitle(key)] || DROPDOWN_OPTIONS[key.toLowerCase()];
                                        
@@ -3603,10 +3624,7 @@ export default function OpsDashboard() {
 
                 <div className="flex items-center gap-4">
                    <button 
-                     onClick={() => {
-                        setBulkEditComponent({});
-                        setIsBulkEditDrawerOpen(true);
-                     }}
+                     onClick={handleOpenMassEdit}
                      disabled={componentSaving}
                      className={`flex items-center gap-2 px-6 py-3 bg-zinc-800 hover:bg-white hover:text-black text-zinc-300 rounded-xl transition-all border border-zinc-700/50 group shadow-lg ${componentSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
                    >
