@@ -486,8 +486,9 @@ export default function OpsDashboard() {
                       const baseId = item.id || item.shopify_product_id || item.ID || item['Product ID'];
                       const name = item.Name || item.name || item.title || "NoName";
                       const vendor = item.Vendor || item.vendor || item.Brand || item.brand || "NoVendor";
-                      // Deterministic hash of name + vendor + 2 specs
-                      const specs = Object.entries(item).filter(([k]) => !['id','_rid','_rawIdx','ID','shopify_product_id'].includes(k)).slice(0, 3).map(e => e[1]).join('|');
+                      // Robust fingerprint: Include all spec keys to distinguish variants (hole count, size, etc.)
+                      const specKeys = Object.keys(item).filter(k => !['_rid', '_rawIdx', '_editIdx', '_isNew', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID'].includes(k)).sort();
+                      const specs = specKeys.map(k => `${k}:${item[k]}`).join('|');
                       const hash = `${name}_${vendor}_${specs}`.toLowerCase().replace(/[^a-z0-9]/g, '');
                       
                       const stableRid = item._rid || baseId || `hash_${hash}`;
@@ -682,10 +683,13 @@ export default function OpsDashboard() {
   }, [componentTab]);
 
   const handleDeleteComponent = React.useCallback(async (item) => {
+      console.log("[Delete Debug] Row Clicked:", item);
       const rowId = item._rid || getComponentUniqueId(item);
       const isNew = !!item._isNew;
+      console.log(`[Delete Debug] ID=${rowId}, isNew=${isNew}`);
       
       if (isNew) {
+          console.log("[Delete Debug] Calling handleRemoveAddedRow for:", rowId);
           handleRemoveAddedRow(rowId);
           return;
       }
@@ -705,7 +709,7 @@ export default function OpsDashboard() {
       } else {
           showNotification(`Failed to delete ${name}`, 'error');
       }
-  }, [componentTab, componentData, saveComponentChanges]);
+  }, [componentTab, componentData, saveComponentChanges, handleRemoveAddedRow, getComponentUniqueId, showNotification]);
 
   const handleGridPaste = React.useCallback((e, startRowId, startColKey, columns) => {
     const clipboardData = e.clipboardData.getData('text');
@@ -877,17 +881,9 @@ export default function OpsDashboard() {
     const addedRows = gridAddedRows[componentTab] || [];
     const combinedList = [...activeList, ...addedRows];
 
-    const seen = new Set();
-    const uniqueList = combinedList.filter(item => {
-        const id = item._rid || getComponentUniqueId(item);
-        if (seen.has(id)) return false;
-        seen.add(id);
-        return true;
-    });
-
     let preFilteredList = componentVendorFilter === 'All' 
-      ? uniqueList 
-      : uniqueList.filter(item => {
+      ? combinedList 
+      : combinedList.filter(item => {
           const v = item.Vendor || item.vendor || item.Brand || item.brand;
           return v === componentVendorFilter;
       });
