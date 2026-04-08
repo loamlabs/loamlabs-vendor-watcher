@@ -407,20 +407,20 @@ export default function OpsDashboard() {
         const d = component['Rim Size'] || component['size'] || component['Size'] || component['Diameter'];
         if (d) return d;
         // Fallback to Option columns
-        const o1n = (component['Option 1 Name'] || "").toLowerCase();
-        const o2n = (component['Option 2 Name'] || "").toLowerCase();
-        if (o1n.includes('size') || o1n.includes('diameter')) return component['Option 1 Value'];
-        if (o2n.includes('size') || o2n.includes('diameter')) return component['Option 2 Value'];
+        const o1n = (component['Option 1 Name'] || component['Option1 Name'] || "").toLowerCase();
+        const o2n = (component['Option 2 Name'] || component['Option2 Name'] || "").toLowerCase();
+        if (o1n.includes('size') || o1n.includes('diameter')) return component['Option 1 Value'] || component['Option1 Value'];
+        if (o2n.includes('size') || o2n.includes('diameter')) return component['Option 2 Value'] || component['Option2 Value'];
     }
 
     if (normTarget === 'holecount' || normTarget === 'holes' || normTarget === 'spokecount') {
         const h = component['Hole Count'] || component['Spoke Count'] || component['holes'];
         if (h) return h;
         // Fallback to Option columns
-        const o1n = (component['Option 1 Name'] || "").toLowerCase();
-        const o2n = (component['Option 2 Name'] || "").toLowerCase();
-        if (o1n.includes('hole') || o1n.includes('spoke')) return component['Option 1 Value'];
-        if (o2n.includes('hole') || o2n.includes('spoke')) return component['Option 2 Value'];
+        const o1n = (component['Option 1 Name'] || component['Option1 Name'] || "").toLowerCase();
+        const o2n = (component['Option 2 Name'] || component['Option2 Name'] || "").toLowerCase();
+        if (o1n.includes('hole') || o1n.includes('spoke')) return component['Option 1 Value'] || component['Option1 Value'];
+        if (o2n.includes('hole') || o2n.includes('spoke')) return component['Option 2 Value'] || component['Option2 Value'];
     }
 
     if (normTarget.includes('weight')) return component['Weight G (p)'] || component['Weight G (v)'] || component.weight || '';
@@ -760,13 +760,14 @@ export default function OpsDashboard() {
          const componentsForPid = candidates.filter(c => getCleanShopifyId(getComponentValue(c, 'shopify_product_id')) === pid);
          
          for (const comp of componentsForPid) {
-            console.group(`[Discovery] Scanning: ${comp.Name || 'Unnamed Component'}`);
+            const compName = getComponentValue(comp, 'Name') || comp.Name || 'Unnamed';
+            console.group(`[Discovery] Scanning: ${compName}`);
             
             // MATCHING ENGINE (Category-Aware)
             let matchIdx = -1;
             const match = localVariantPool.find((v, idx) => {
                 const norm = (val) => String(val || "").toLowerCase().replace(/["'\\]/g, '').trim();
-                const vOpts = Object.values(v.options).map(norm);
+                const vOpts = Object.values(v.options || {}).map(norm);
                 
                 // Helper to find a color-like value in the component
                 const getCompColor = () => {
@@ -791,7 +792,12 @@ export default function OpsDashboard() {
                    const holeMatch = vOpts.some(vo => vo.replace(/\D/g, '') === cHoles);
                    const colorMatch = !cColor || vOpts.some(vo => vo === cColor || vo.includes(cColor));
 
-                   if (sizeMatch && holeMatch && colorMatch) { matchIdx = idx; return true; }
+                   if (sizeMatch && holeMatch && colorMatch) { 
+                      console.log(`✅ MATCH FOUND for ${compName}: ${v.title}`);
+                      matchIdx = idx; 
+                      return true; 
+                   }
+                   return false;
                 }
                 
                 // 2. HUB LOGIC: Spoke Count + Color
