@@ -335,8 +335,10 @@ export default function OpsDashboard() {
     const baseId = item.id || item.shopify_product_id || item.ID || item['Product ID'] || item['Variant ID'];
     if (baseId) return String(baseId);
     // Priority 3: Use row index only as a last resort during initial render (this should be rare after hydration)
-    const name = item.Name || item.name || item.title || "Unknown";
-    return `${name}_${item._rawIdx !== undefined ? item._rawIdx : index}`;
+    const name = (item.Name || item.name || item.title || "Unknown").trim();
+    const vendor = (item.Vendor || item.vendor || item.Brand || item.brand || "Unknown").trim();
+    const cleanName = `${vendor}_${name}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return `${cleanName}_${item._rawIdx !== undefined ? item._rawIdx : index}`;
   }, []);
 
   const getCleanShopifyId = React.useCallback((val) => {
@@ -352,7 +354,7 @@ export default function OpsDashboard() {
     if (typeof v === 'string' && v.startsWith('[') && v.endsWith(']')) {
        try {
           const parsed = JSON.parse(v);
-          if (Array.isArray(parsed) && parsed.length > 0) val = parsed[0];
+          if (Array.isArray(parsed)) return parsed; // Return the whole array for the audit engine
        } catch (e) { /* Not JSON, keep original */ }
     }
     return val;
@@ -458,7 +460,7 @@ export default function OpsDashboard() {
      const processItem = (item) => {
         const newItem = { ...item };
         const mappings = {
-           'Rim Size': ['rim_size', 'RIM SIZE', 'Rim size', 'Option1 Value'],
+           'Rim Size': ['rim_size', 'RIM SIZE', 'Rim size'], // REMOVED Option1 Value to respect user request
            'Rim Erd': ['rim_erd', 'RIM ERD', 'Rim erd'],
            'Weight G (v)': ['weight', 'Weight (V)', 'Weight G(v)', 'weight_g'],
            'Hole Count': ['holes', 'HOLES', 'Hole count', 'Spoke Count'],
@@ -467,12 +469,17 @@ export default function OpsDashboard() {
 
         Object.entries(mappings).forEach(([official, aliases]) => {
            aliases.forEach(alias => {
-              if (newItem[alias] !== undefined && newItem[alias] !== null && newItem[alias] !== '') {
-                 if (newItem[official] === undefined || newItem[official] === null || newItem[official] === '') {
+              // Capture value from ghost column
+              if (newItem[alias] !== undefined && newItem[alias] !== null && String(newItem[alias]).trim() !== "" && newItem[alias] !== "(empty)") {
+                 // Migrate to official if official is empty
+                 if (newItem[official] === undefined || newItem[official] === null || String(newItem[official]).trim() === "" || newItem[official] === "(empty)") {
                     newItem[official] = newItem[alias];
                  }
-                 // Only delete if it's a truly redundant "Ghost" column
-                 if (alias !== 'Option1 Value') delete newItem[alias];
+              }
+              // NUCLEAR CLEANUP: Explicitly delete the zombie key from the object
+              if (alias !== 'Option1 Value' && newItem.hasOwnProperty(alias)) {
+                 delete newItem[alias];
+                 // console.log(`[Janitor] Purged zombie key: ${alias}`);
               }
            });
         });
@@ -669,8 +676,8 @@ export default function OpsDashboard() {
       });
       console.log(`[Persistence Debug] ${tab.toUpperCase()} SAVE Status: ${res.status} ${res.statusText}`);
       if (res.ok) {
-        // Transition items: strip _isNew flag now that they are successfully committed
-        const transitionedArray = newArray.map(item => {
+        // Transition items: strip _isNew flag from CLEANED data
+        const transitionedArray = cleanArray.map(item => {
            const { _isNew, ...rest } = item;
            return rest;
         });
@@ -1776,20 +1783,30 @@ export default function OpsDashboard() {
 
                     // 5. Comparison
                     const normalize = (v) => {
-                       const cleanValue = cleanShopifyValue(v);
-                       if (cleanValue === null || cleanValue === undefined || cleanValue === "") return "";
+                       const raw = String(v || "").trim();
+                       if (raw === "" || raw === "null" || raw === "undefined" || raw === "(empty)") return "";
                        
-                       // Robust Numeric Comparison: "420.0" vs "420"
-                       const n = Number(cleanValue);
-                       if (!isNaN(n) && String(cleanValue).trim() !== "") {
-                          return String(n); // "420.0" -> "420", "420" -> "420"
+                       // Nuclear Quote Normalization
+                       // Covers: Straight ("), Left Smart (“), Right Smart (”), Straight ('), Left Smart (‘), Right Smart (’), Prime (′), Double Prime (″)
+                       const clean = raw.replace(/["”″“′'‘’]/g, '').trim();
+                       
+                       const n = Number(clean);
+                       if (!isNaN(n) && clean !== "") {
+                          return String(n);
                        }
-                       
-                       return String(cleanValue).toLowerCase().trim();
+                       return clean.toLowerCase();
                     };
 
                     const ncVal = normalize(cVal);
-                    const nsVal = normalize(shopifyVal);
+                    let nsVal = "";
+                    
+                    if (Array.isArray(shopifyVal)) {
+                       // Support for Shopify "List" metafields: Match if any item in the list matches the grid
+                       const shopValsNorm = shopifyVal.map(v => normalize(v));
+                       nsVal = shopValsNorm.includes(ncVal) ? ncVal : shopValsNorm[0] || "";
+                    } else {
+                       nsVal = normalize(shopifyVal);
+                    }
 
                     // Debug: Log every check so we can see it happening
                     // console.log(`Checking [${regField.label}] | Lib: "${ncVal}" vs Shop: "${nsVal}" (${source})`);
