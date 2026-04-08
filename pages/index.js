@@ -514,8 +514,12 @@ export default function OpsDashboard() {
                        const specs = specKeys.map(k => `${k}:${item[k]}`).join('|');
                        const hash = `${name}_${vendor}_${specs}`.toLowerCase().replace(/[^a-z0-9]/g, '');
                        
-                       // RID is internal and unique; always priority hash if already present, else use baseId or generate new hash
-                       let rid = item._rid || `rid_${hash}`;
+                       let rid = item._rid;
+                       // If RID is numeric (looks like a Shopify ID), prioritize the internal hash for separation
+                       if (!rid || /^\d+$/.test(String(rid))) {
+                          rid = `rid_${hash}`;
+                       }
+
                        if (seenRids.has(rid)) {
                           rid = `${rid}_${idx}`;
                        }
@@ -730,8 +734,11 @@ export default function OpsDashboard() {
                   const h = norm(holes).replace(/\D/g, '');
                   holeMatch = vOpts.some(vo => vo.replace(/\D/g, '') === h);
                }
-
-               return sizeMatch && holeMatch && (comp['Rim Size'] || holes);
+               const isMatch = sizeMatch && holeMatch && (comp['Rim Size'] || holes);
+               if (!isMatch && pid === '9227932926259') {
+                  console.log(`[Discovery Debug] Mismatch for ${comp.Name}:`, { sizeMatch, holeMatch, compSize: comp['Rim Size'], compHoles: holes, vOpts });
+               }
+               return isMatch;
             });
 
             if (match) {
@@ -3244,39 +3251,6 @@ export default function OpsDashboard() {
                           </div>
                        </div>
 
-                                                     {/* SYSTEM METADATA */}
-                              <div className="px-8 pb-8">
-                                 <div className="pt-8 border-t border-zinc-100">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-300 block italic mb-4">System Metadata (Internal Reference)</label>
-                                    <div className="grid grid-cols-2 gap-4 opacity-40 hover:opacity-100 transition-opacity">
-                                       <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-100/50">
-                                          <div className="text-[7px] font-black uppercase text-zinc-400 mb-1 tracking-tighter">Internal RID</div>
-                                          <div className="font-mono text-[9px] truncate text-zinc-500" title={editingComponent._rid || editingComponent.RID}>{editingComponent._rid || editingComponent.RID || 'N/A'}</div>
-                                       </div>
-                                       <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-100/50">
-                                          <div className="text-[7px] font-black uppercase text-zinc-400 mb-1 tracking-tighter">Raw List Index</div>
-                                          <div className="font-mono text-[9px] text-zinc-500">{editingComponent._rawIdx ?? editingComponent.RAWIDX ?? 'New'}</div>
-                                       </div>
-                                    </div>
-                                 </div>
-                              </div>
-
-                                     {/* SYSTEM METADATA */}
-                              <div className="px-8 pb-8">
-                                 <div className="pt-8 border-t border-zinc-100">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-300 block italic mb-4">System Metadata (Internal Reference)</label>
-                                    <div className="grid grid-cols-2 gap-4 opacity-40 hover:opacity-100 transition-opacity text-zinc-400">
-                                       <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-100/50">
-                                          <div className="text-[7px] font-black uppercase text-zinc-300 mb-1 tracking-tighter">Internal RID</div>
-                                          <div className="font-mono text-[9px] truncate" title={editingComponent._rid || editingComponent.RID}>{editingComponent._rid || editingComponent.RID || 'N/A'}</div>
-                                       </div>
-                                       <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-100/50">
-                                          <div className="text-[7px] font-black uppercase text-zinc-300 mb-1 tracking-tighter">Raw List Index</div>
-                                          <div className="font-mono text-[9px]">{editingComponent._rawIdx ?? editingComponent.RAWIDX ?? 'New'}</div>
-                                       </div>
-                                    </div>
-                                 </div>
-                              </div>
 
                               <div className="p-8 bg-zinc-50 border-t border-zinc-100 flex items-center gap-4">
                           <button 
@@ -3418,7 +3392,7 @@ export default function OpsDashboard() {
                                     const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx'];
                                     const specFields = Array.from(new Set(activeList.slice(0, 10).flatMap(item => Object.keys(item)))).filter(k => !excludeKeys.includes(k));
                                     
-                                    return specFields.map(key => {
+                                    const nodes = specFields.map(key => {
                                        const isMandatory = MANDATORY_FIELDS[componentTab]?.some(f => { 
                                           const nf = f.toLowerCase().replace(/[^a-z0-9]/g, ''); 
                                           const nk = key.toLowerCase().replace(/[^a-z0-9]/g, ''); 
@@ -3456,6 +3430,23 @@ export default function OpsDashboard() {
                                           </div>
                                        );
                                     });
+                                    // RECLAIMED SPACE: System Metadata at bottom of scrollable list
+                                    const metadata = (
+                                       <div className="mt-12 pt-6 border-t border-zinc-100 opacity-40 hover:opacity-100 transition-opacity">
+                                          <label className="text-[9px] font-black uppercase tracking-widest text-zinc-300 block italic mb-3">System Metadata (Internal Reference)</label>
+                                          <div className="grid grid-cols-2 gap-3">
+                                             <div className="bg-zinc-50/50 p-3 rounded-xl border border-zinc-100/30">
+                                                <div className="text-[7px] font-black uppercase text-zinc-400 mb-0.5">Internal RID</div>
+                                                <div className="font-mono text-[8px] truncate text-zinc-500" title={editingComponent._rid}>{editingComponent._rid || "N/A"}</div>
+                                             </div>
+                                             <div className="bg-zinc-50/50 p-3 rounded-xl border border-zinc-100/30">
+                                                <div className="text-[7px] font-black uppercase text-zinc-400 mb-0.5">Raw Index</div>
+                                                <div className="font-mono text-[8px] text-zinc-500">{editingComponent._rawIdx ?? "New"}</div>
+                                             </div>
+                                          </div>
+                                       </div>
+                                    );
+                                    return <>{nodes}{metadata}</>;
                                  })()}
                               </div>
                            </div>
