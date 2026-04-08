@@ -170,7 +170,7 @@ export default function OpsDashboard() {
     { key: 'preconfigured_wheel_rules', label: 'Pre-configured Wheel Rules', categories: ['RIM', 'HUB'], target: 'product', type: 'json' },
     { key: 'spoke_hub_interface', label: 'Spoke Hub Interface', categories: ['HUB', 'SPOKE'], target: 'product', type: 'single_line_text_field' },
     { key: 'price_adjustment_percentage', label: 'Price Adjustment Percentage', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'integer' },
-    { key: 'model', label: 'Model', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'single_line_text_field' },
+    { key: 'model', label: 'Model', categories: ['RIM', 'HUB', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'single_line_text_field' },
     { key: 'pairing_key', label: 'Pairing Key', categories: ['RIM', 'HUB'], target: 'product', type: 'single_line_text_field' }
   ]);
   const [resizingCol, setResizingCol] = useState(null);
@@ -1680,9 +1680,10 @@ export default function OpsDashboard() {
 
                  // --- REGISTRY-DRIVEN AUDIT (Robust Helper) ---
                  metafieldRegistry.forEach(regField => {
-                    // Skip product-level checks for variant items if you prefer, 
-                    // but usually, we check both for full data integrity.
-                    
+                    // 0. Category Check: Only audit fields applicable to this component type
+                    const activeCategory = componentTab.toUpperCase().replace(/S$/, ''); // rims -> RIM, spokes -> SPOKE
+                    if (!regField.categories.includes(activeCategory)) return;
+
                     // 1. Get value from Grid (Using robust helper)
                     const cValRaw = getComponentValue(comp, regField.label);
                     // Filter out fields not present in this category/item
@@ -2214,7 +2215,13 @@ export default function OpsDashboard() {
           )}
           <SidebarLink icon={<BarChart size={18}/>} label="Insights & Analytics" active={activeTab === 'insights'} onClick={() => { setActiveTab('insights'); fetchAbandonedBuilds(); }} />
           <SidebarLink icon={<ShieldCheck size={18}/>} label="Shop Health" active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} />
-          <SidebarLink icon={<Database size={18}/>} label="Component Library" active={activeTab === 'component_library'} onClick={() => setActiveTab('component_library')} />
+          <SidebarLink 
+             icon={<Database size={18}/>} 
+             label="Component Library" 
+             active={activeTab === 'component_library'} 
+             onClick={() => setActiveTab('component_library')} 
+             badge={Object.keys(syncMismatches).length > 0 ? "!" : null}
+          />
         </nav>
         <div className="relative mt-auto border-t border-zinc-800 pt-6">
            {showUserMenu && (
