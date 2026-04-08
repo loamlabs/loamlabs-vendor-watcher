@@ -398,10 +398,23 @@ export default function OpsDashboard() {
     if (fuzzyKey) return component[fuzzyKey];
     
     if (normTarget === 'rimsize' || normTarget === 'diameter' || normTarget === 'size') {
-        return component['Rim Size'] || component.size || component.diameter || '';
+        const d = component['Rim Size'] || component['size'] || component['Size'] || component['Diameter'];
+        if (d) return d;
+        // Fallback to Option columns
+        const o1n = (component['Option 1 Name'] || "").toLowerCase();
+        const o2n = (component['Option 2 Name'] || "").toLowerCase();
+        if (o1n.includes('size') || o1n.includes('diameter')) return component['Option 1 Value'];
+        if (o2n.includes('size') || o2n.includes('diameter')) return component['Option 2 Value'];
     }
-    if (normTarget === 'holecount' || normTarget === 'spokecount' || normTarget === 'holes') {
-        return component['Hole Count'] || component['Spoke Count'] || component.holes || '';
+
+    if (normTarget === 'holecount' || normTarget === 'holes' || normTarget === 'spokecount') {
+        const h = component['Hole Count'] || component['Spoke Count'] || component['holes'];
+        if (h) return h;
+        // Fallback to Option columns
+        const o1n = (component['Option 1 Name'] || "").toLowerCase();
+        const o2n = (component['Option 2 Name'] || "").toLowerCase();
+        if (o1n.includes('hole') || o1n.includes('spoke')) return component['Option 1 Value'];
+        if (o2n.includes('hole') || o2n.includes('spoke')) return component['Option 2 Value'];
     }
 
     if (normTarget.includes('weight')) return component['Weight G (p)'] || component['Weight G (v)'] || component.weight || '';
@@ -721,7 +734,10 @@ export default function OpsDashboard() {
          return;
       }
 
-     const uniqueProductIds = [...new Set(candidates.map(c => getComponentValue(c, 'shopify_product_id')))];
+     const uniqueProductIds = [...new Set(candidates.map(c => {
+         const rawId = getComponentValue(c, 'shopify_product_id');
+         return getCleanShopifyId(rawId);
+      }))].filter(Boolean);
      const proposals = [];
      const auth = password || localStorage.getItem('loam_ops_auth');
 
@@ -735,7 +751,7 @@ export default function OpsDashboard() {
          
          // --- FIX: Create a pool of available variants to ensure 1-to-1 matching ---
          let localVariantPool = [...variants];
-         const componentsForPid = candidates.filter(c => getComponentValue(c, 'shopify_product_id') === pid);
+         const componentsForPid = candidates.filter(c => getCleanShopifyId(getComponentValue(c, 'shopify_product_id')) === pid);
          
          for (const comp of componentsForPid) {
             console.group(`[Discovery] Scanning: ${comp.Name || 'Unnamed Component'}`);
@@ -762,7 +778,10 @@ export default function OpsDashboard() {
                    const cHoles = norm(getComponentValue(comp, 'Hole Count')).replace(/\D/g, '');
                    const cColor = getCompColor();
                    
-                   const sizeMatch = vOpts.some(vo => vo.includes(cSize));
+                   // Require basic specs to be non-empty to avoid blind matching
+                   if (!cSize || !cHoles) return false;
+
+                   const sizeMatch = vOpts.some(vo => vo === cSize);
                    const holeMatch = vOpts.some(vo => vo.replace(/\D/g, '') === cHoles);
                    const colorMatch = !cColor || vOpts.some(vo => vo === cColor || vo.includes(cColor));
 
@@ -774,7 +793,7 @@ export default function OpsDashboard() {
                    const cHoles = norm(getComponentValue(comp, 'Hole Count')).replace(/\D/g, '');
                    const cColor = getCompColor();
 
-                   const holeMatch = vOpts.some(vo => vo.replace(/\D/g, '') === cHoles);
+                   const holeMatch = vOpts.some(vo => vo === cHoles);
                    const colorMatch = !cColor || vOpts.some(vo => vo === cColor || vo.includes(cColor));
 
                    if (holeMatch && colorMatch) { matchIdx = idx; return true; }
@@ -796,13 +815,26 @@ export default function OpsDashboard() {
 
             if (match) {
                console.log("✅ MATCH FOUND (Uniqueness Guaranteed):", match.title, "ID:", match.id);
+               
+               // Detect Spec Conflicts (ERD mismatch check) during discovery
+               let hasSpecMismatch = false;
+               if (tab === 'rims' && match) {
+                  const shopErd = match.metafields?.find(m => m.key === 'rim_erd')?.value;
+                  const gridErd = getComponentValue(comp, 'Rim Erd');
+                  if (shopErd && gridErd) {
+                     const diff = Math.abs(parseFloat(shopErd) - parseFloat(gridErd));
+                     if (diff > 2) hasSpecMismatch = true;
+                  }
+               }
+
                proposals.push({
                   rid: comp._rid || comp.id,
                   name: comp.Name || comp.Vendor || 'Unknown',
                   productTitle: title,
                   variantTitle: match.title,
                   newVariantId: match.id,
-                  fullGid: match.full_id
+                  fullGid: match.full_id,
+                  _hasSpecMismatch: hasSpecMismatch
                });
                
                // Remove this variant from the pool so it can't be claimed by another row
@@ -825,7 +857,65 @@ export default function OpsDashboard() {
      } finally {
        setIsDiscoveringVariants(false);
      }
-   }, [componentTab, componentData, password, showNotification]);
+    }, [componentTab, componentData, password, showNotification]);
+
+   const handleSyncSpecsFromShopify = async () => {
+      const selectedIds = selectedComponents[componentTab] || [];
+      if (selectedIds.length === 0) {
+         showNotification("Please select items in the grid first.", "error");
+         return;
+      }
+
+      setLoading(true);
+      let updateCount = 0;
+      const auth = password || localStorage.getItem('loam_ops_auth');
+      const category = componentTab.toUpperCase().replace(/S$/, '');
+      const activeTabRegistry = metafieldRegistry.filter(m => m.categories.includes(category));
+
+      try {
+         for (const rid of selectedIds) {
+            const comp = (componentData[componentTab] || []).find(c => (c._rid || c.id) === rid) || (gridAddedRows[componentTab] || []).find(c => (c._rid || c.id) === rid);
+            if (!comp) continue;
+
+            const pid = getCleanShopifyId(getComponentValue(comp, 'shopify_product_id'));
+            const vid = getCleanShopifyId(getComponentValue(comp, 'shopify_variant_id'));
+            if (!pid || !vid) continue;
+
+            const res = await fetch(`/api/get-product-variants?productId=${pid}`, { headers: { 'x-dashboard-auth': auth } });
+            if (!res.ok) continue;
+
+            const { variants } = await res.json();
+            const variant = variants.find(v => String(v.id) === String(vid));
+            if (!variant) continue;
+
+            // Update specs based on registry
+            const newSpecs = {};
+            activeTabRegistry.forEach(m => {
+               const shopVal = variant.metafields?.find(sm => sm.key === m.key)?.value;
+               if (shopVal !== undefined && shopVal !== null) {
+                  const gridTargetKey = m.label; 
+                  newSpecs[gridTargetKey] = shopVal;
+               }
+            });
+
+            if (Object.keys(newSpecs).length > 0) {
+               setGridUnsavedChanges(prev => ({
+                  ...prev,
+                  [componentTab]: {
+                     ...(prev[componentTab] || {}),
+                     [rid]: { ...(prev[componentTab]?.[rid] || {}), ...newSpecs }
+                  }
+               }));
+               updateCount++;
+            }
+         }
+         showNotification(`Successfully updated specs for ${updateCount} rows from Shopify.`);
+      } catch (e) {
+         console.error(e);
+         showNotification("Error syncing specs from Shopify.", "error");
+      }
+      setLoading(false);
+   };
 
    const applyVariantDiscovery = () => {
       const tab = componentTab;
@@ -3173,6 +3263,13 @@ export default function OpsDashboard() {
                              className="px-4 py-3 hover:bg-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-zinc-500 hover:text-black flex items-center gap-2 group"
                            >
                              {loadingHistory ? <Loader2 size={12} className="animate-spin"/> : <Clock size={12}/>} History
+                           </button>
+                           <button 
+                             onClick={handleSyncSpecsFromShopify} 
+                             disabled={loading || (selectedComponents[componentTab] || []).length === 0}
+                             className="px-4 py-3 hover:bg-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-zinc-500 hover:text-blue-600 flex items-center gap-2 group disabled:opacity-30 disabled:hover:text-zinc-500"
+                           >
+                             <RefreshCcw size={12} className={loading ? 'animate-spin' : ''}/> Sync Selected from Shopify
                            </button>
                            <button 
                              onClick={handleDiscoverVariantIds} 
