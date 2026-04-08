@@ -1037,7 +1037,10 @@ export default function OpsDashboard() {
         'Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 
         'id', 'ID', 'shopify_product_id', 'shopify_variant_id', 'Product ID', 'Variant ID', 
         'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', '_internal_database_id',
-        'RIM SIZE', 'RIM ERD', 'WEIGHT G (V)', 'Weight (V)', 'rim_size', 'rim_erd', 'weight_g', 'Option 1 Value', 'Option1 Value' // Explicitly block ghost keys
+        // GHOSTS (Case variants)
+        'RIM SIZE', 'RIM ERD', 'WEIGHT G (V)', 'Weight (V)', 'rim_size', 'rim_erd', 'weight_g', 'Option 1 Value', 'Option1 Value',
+        // UNIFIED OFFICIALS (We want these SPEC-ONLY, hidden from main grid)
+        'Rim Size', 'Rim Erd', 'Weight G (v)', 'Hole Count', 'Color', 'Rim Spoke Hole Offset'
      ];
      const allKeys = new Set();
      rawData.forEach(row => Object.keys(row).forEach(k => { if (!excludeKeys.includes(k)) allKeys.add(k); }));
