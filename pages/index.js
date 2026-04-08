@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ComponentLibraryGrid from '../components/ComponentLibraryGrid';
 import ReviewChangesModal from '../components/ReviewChangesModal';
-import { RefreshCcw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, ChevronDown, ChevronRight, Trash2, AlertCircle, AlertTriangle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker, Edit3, Edit, Settings, ExternalLink, BarChart, Database, CheckCircle, Layers, Clock } from 'lucide-react';
+import { RefreshCcw, RefreshCw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, ChevronDown, ChevronRight, Trash2, AlertCircle, AlertTriangle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker, Edit3, Edit, Settings, ExternalLink, BarChart, Database, CheckCircle, Layers, Clock } from 'lucide-react';
 
 const COMPONENT_SUGGESTIONS = {};
 
@@ -158,8 +158,8 @@ export default function OpsDashboard() {
     { key: 'internal_width_mm', label: 'Internal Width mm', categories: ['RIM'], target: 'variant', type: 'integer', isConstant: true },
     { key: 'acc_rim_width_min', label: 'Accessory Compatible Rim Width MIN (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'acc_rim_width_max', label: 'Accessory Compatible Rim Width MAX (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
-    { key: 'hub_sp_offset_left', label: 'Hub SP Offset Spoke Hole Left', categories: ['HUB'], target: 'variant', type: 'decimal' },
-    { key: 'hub_sp_offset_right', label: 'Hub SP Offset Spoke Hole Right', categories: ['HUB'], target: 'variant', type: 'decimal' },
+    { key: 'hub_sp_offset_spoke_hole_left', label: 'Hub SP Offset Spoke Hole Left', categories: ['HUB'], target: 'variant', type: 'decimal' },
+    { key: 'hub_sp_offset_spoke_hole_right', label: 'Hub SP Offset Spoke Hole Right', categories: ['HUB'], target: 'variant', type: 'decimal' },
     { key: 'historical_order_count', label: 'Historical Order Count', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'bti_part_number', label: 'BTI Part Number', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'single_line_text_field' },
     { key: 'inventory_sync_key', label: 'Inventory Sync Key', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'single_line_text_field' },
@@ -4256,6 +4256,17 @@ export default function OpsDashboard() {
                    >
                       <Trash2 size={14} className="group-hover:scale-110 transition-transform"/>
                       <span className="text-[10px] font-black uppercase tracking-widest">Move to Trash</span>
+                   </button>
+
+                   <div className="w-px h-8 bg-zinc-800 mx-2"></div>
+
+                   <button 
+                     onClick={handleSyncSpecsFromShopify}
+                     disabled={loading || componentSaving}
+                     className={`flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all border border-blue-500/50 group shadow-[0_0_20px_rgba(37,99,235,0.2)] ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                   >
+                      <RefreshCw size={14} className={loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}/>
+                      <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Sync From Shopify</span>
                    </button>
 
                    <div className="w-1 h-8 bg-zinc-800 mx-2"></div>
