@@ -1548,7 +1548,6 @@ export default function OpsDashboard() {
               const shopifyVariants = data.variants || [];
 
               for (const comp of comps) {
-                 // Use getComponentValue for the name to avoid "Unnamed" logs
                  const name = getComponentValue(comp, 'Name') || getComponentValue(comp, 'title') || 'Unknown Component';
                  console.group(`🔍 Item: ${name}`);
                  
@@ -1562,35 +1561,37 @@ export default function OpsDashboard() {
                  }
 
                  console.log("Found Shopify Variant:", sVariant.title);
-                 console.log("Variant Metafields Count:", sVariant.metafields?.length || 0);
-
+                 
                  scanned++;
                  const compMismatches = [];
                  const rid = comp._rid || comp.id;
 
-                 // --- NEW: Registry-Driven Strict Audit (No Guessing) ---
+                 // --- REGISTRY-DRIVEN AUDIT (Robust Helper) ---
                  metafieldRegistry.forEach(regField => {
-                    // 1. Get value from Grid (Explicitly using the Column Label)
-                    const cValRaw = comp[regField.label];
-                    if (cValRaw === undefined) return; // Field was not found in this component's data
+                    // Skip product-level checks for variant items if you prefer, 
+                    // but usually, we check both for full data integrity.
+                    
+                    // 1. Get value from Grid (Using robust helper)
+                    const cValRaw = getComponentValue(comp, regField.label);
+                    // Filter out fields not present in this category/item
+                    if (!cValRaw && cValRaw !== 0 && cValRaw !== '0') return;
 
-                    const cVal = String(cValRaw || "").trim();
+                    const cVal = String(cValRaw).trim();
                     let shopifyVal = null;
                     let source = "metafield";
 
-                    // 2. Get value from Shopify (Explicitly using the Registry Key)
+                    // 2. Get value from Shopify 
                     if (regField.target === 'variant') {
                        shopifyVal = sVariant.metafields?.find(m => m.key === regField.key)?.value;
                     } else {
                        shopifyVal = data.metafields?.find(m => m.key === regField.key)?.value;
                     }
 
-                    // 3. Fallback: If metafield is empty, check Shopify Variant Options (for Constants like Position/Size)
+                    // 3. Fallback for Position/Constants (Common Shopify Pattern)
                     if (!shopifyVal && regField.target === 'variant') {
-                       // Position/Size are often variant options
-                       const optionValue = Object.entries(sVariant.options || {}).find(([optName, optVal]) => 
-                          optName.toLowerCase().includes(regField.key.replace(/_/g, ' ')) || 
-                          regField.label.toLowerCase().includes(optName.toLowerCase())
+                       const optKey = regField.key.replace(/_/g, ' ').toLowerCase();
+                       const optionValue = Object.entries(sVariant.options || {}).find(([oK, oV]) => 
+                          oK.toLowerCase().includes(optKey) || regField.label.toLowerCase().includes(oK.toLowerCase())
                        )?.[1];
                        
                        if (optionValue) {
@@ -1599,27 +1600,28 @@ export default function OpsDashboard() {
                        }
                     }
 
-                    // 4. Special Handling: Wheel Spec Position (Hardcoded strict map)
+                    // 4. Special Fallback: Position
                     if (regField.key === 'wheel_spec_position' && !shopifyVal) {
-                       shopifyVal = sVariant.options?.Position || sVariant.options?.['Wheel Spec Position'] || sVariant.wheel_spec_position;
-                       if (shopifyVal) source = "special_prop";
+                       shopifyVal = sVariant.wheel_spec_position || sVariant.options?.Position;
+                       if (shopifyVal) source = "prop";
                     }
 
-                    // 5. Strict Normalization and Comparison
+                    // 5. Comparison
                     const normalize = (v) => {
                        if (v === null || v === undefined || v === "") return "";
-                       // If numerical, strip trailing zeros (580.0 -> 580)
                        const n = parseFloat(v);
                        if (!isNaN(n)) return String(n);
-                       // Otherwise, lowercase and trim
                        return String(v).toLowerCase().trim();
                     };
 
                     const ncVal = normalize(cVal);
                     const nsVal = normalize(shopifyVal);
 
+                    // Debug: Log every check so we can see it happening
+                    // console.log(`Checking [${regField.label}] | Lib: "${ncVal}" vs Shop: "${nsVal}" (${source})`);
+
                     if (ncVal !== nsVal) {
-                       console.log(`❌ MISMATCH on [${regField.label}] (${source})`);
+                       console.log(`❌ MISMATCH on [${regField.label}]`);
                        console.log(`   Grid: "${cVal}" (Norm: "${ncVal}")`);
                        console.log(`   Shop: "${shopifyVal}" (Norm: "${nsVal}")`);
                        compMismatches.push(regField.label);
