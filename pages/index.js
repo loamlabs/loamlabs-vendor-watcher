@@ -440,14 +440,17 @@ export default function OpsDashboard() {
     
     // 4. Fallback for Weight (Generic search)
     if (normTarget.includes('weightg')) {
-        const findWeight = (type) => {
-           return Object.keys(component).find(k => {
-              const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-              return nk.includes('weight') && (type === 'v' ? (nk.includes('variant') || nk.includes('v')) : (nk.includes('product') || nk.includes('p')));
-           });
-        };
-        const wKey = findWeight(normTarget.includes('v') ? 'v' : 'p');
-        if (wKey && (component[wKey] || component[wKey] === 0)) return component[wKey];
+         const findWeight = (type) => {
+            const keys = Object.keys(component);
+            let match = keys.find(k => {
+               const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+               return nk.includes('weight') && (type === 'v' ? (nk.includes('variant') || nk.includes('v')) : (nk.includes('product') || nk.includes('p')));
+            });
+            if (!match) match = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '').includes('weight'));
+            return match;
+         };
+         const wKey = findWeight(normTarget.includes('v') ? 'v' : 'p');
+         if (wKey && (component[wKey] || component[wKey] === 0)) return component[wKey];
     }
     
     // 5. Variant Property Matcher (Fuzzy for Options)
@@ -490,7 +493,9 @@ export default function OpsDashboard() {
         return (!isNaN(n) && clean !== "") ? String(n) : clean.toLowerCase();
      };
 
-     const activeTabRegistry = metafieldRegistry.filter(m => m.tabs.includes(tab));
+     const activeTabRegistry = metafieldRegistry.filter(m => 
+         m.categories?.map(c => c.toLowerCase() + 's').includes(tab)
+      );
      
      activeTabRegistry.forEach(m => {
         // Evaluate based on registry rule
@@ -1815,7 +1820,9 @@ export default function OpsDashboard() {
 
            if (res.ok) {
               const variantMap = await res.json();
-              const registry = metafieldRegistry.filter(m => m.tabs.includes(tab));
+              const registry = metafieldRegistry.filter(m => 
+                  m.categories?.map(c => c.toLowerCase() + 's').includes(tab)
+               );
              
              list.forEach(item => {
                 const rid = item._rid || item.id;
