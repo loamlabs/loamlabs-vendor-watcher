@@ -776,137 +776,70 @@ export default function OpsDashboard() {
          const componentsForPid = candidates.filter(c => getCleanShopifyId(getComponentValue(c, 'shopify_product_id')) === pid);
          
          for (const comp of componentsForPid) {
-            const compName = getComponentValue(comp, 'Name') || comp.Name || 'Unnamed';
-            console.group(`[Discovery] Scanning: ${compName}`);
-            
-            // MATCHING ENGINE (Category-Aware)
-            let matchIdx = -1;
-            const match = localVariantPool.find((v, idx) => {
-                const norm = (val) => String(val || "").toLowerCase().replace(/["'\\]/g, '').trim();
-                const vOpts = Object.values(v.options || {}).map(norm);
-                
-                // Helper to find a color-like value in the component
-                const getCompColor = () => {
-                   const c1nt = (getComponentValue(comp, 'Option 1 Name') || "").toLowerCase();
-                   const c2nt = (getComponentValue(comp, 'Option 2 Name') || "").toLowerCase();
-                   if (c1nt.includes('color')) return norm(getComponentValue(comp, 'Option 1 Value'));
-                   if (c2nt.includes('color')) return norm(getComponentValue(comp, 'Option 2 Value'));
-                   
-                   const standard = getComponentValue(comp, 'Color') || getComponentValue(comp, 'Finish');
-                   if (standard) return norm(standard);
+             const compName = getComponentValue(comp, 'Name') || comp.Name || 'Unnamed';
+             console.group(`[Discovery] Scanning: ${compName}`);
+             
+             // --- BEST-FIT MATCHING ENGINE ---
+             const norm = (val) => String(val || "").toLowerCase().replace(/["'\\]/g, '').trim();
+             
+             // 1. Identify all Technical Candidates
+             const techCandidates = localVariantPool.filter(v => {
+                 const vOpts = Object.values(v.options || {}).map(norm);
+                 
+                 if (tab === 'rims') {
+                    const cSize = norm(getComponentValue(comp, 'Rim Size'));
+                    const cHoles = norm(getComponentValue(comp, 'Hole Count')).replace(/\D/g, '');
+                    if (!cSize || !cHoles) return false;
+                    return vOpts.some(vo => vo === cSize) && vOpts.some(vo => vo.replace(/\D/g, '') === cHoles);
+                 }
+                 
+                 if (tab === 'hubs') {
+                    const cHolesVal = getComponentValue(comp, 'Hole Count') || getComponentValue(comp, 'Spoke Count');
+                    const cHoles = norm(cHolesVal).replace(/\D/g, '');
+                    if (!cHoles) return false;
+                    return vOpts.some(vo => vo.replace(/\D/g, '') === cHoles);
+                 }
 
-                   // Ultimate Fallback: Scour all keys for anything color-related
-                   const fuzzyKey = Object.keys(comp).find(k => k.toLowerCase().includes('color') || k.toLowerCase().includes('finish'));
-                   if (fuzzyKey) return norm(comp[fuzzyKey]);
+                 if (tab === 'spokes') return vOpts.some(vo => vo === '-');
+                 if (tab === 'nipples') return true;
+                 return false;
+             });
 
-                   return "";
-                };
+             if (techCandidates.length > 0) {
+                // 2. Select the FIRST technical match (Color is Ignored as requested)
+                const match = techCandidates[0];
+                console.log(`✅ MATCH FOUND (Technical): ${match.title}`);
 
-                // 1. RIM LOGIC: Size + Hub Count + Color
+                // 3. Process the Match
+                let hasSpecMismatch = false;
                 if (tab === 'rims') {
-                   const cSize = norm(getComponentValue(comp, 'Rim Size'));
-                   const cHoles = norm(getComponentValue(comp, 'Hole Count')).replace(/\D/g, '');
-                   const cColor = getCompColor();
-                   
-                   console.log(`[Diagnostic] Rim specs extracted from grid -> Size: "${cSize}", Holes: "${cHoles}", Color: "${cColor}"`);
-
-                   // Require basic specs to be non-empty to avoid blind matching
-                   if (!cSize || !cHoles) {
-                      console.warn(`   ⚠️ Missing critical spec (Size or Holes) for ${compName}`);
-                      return false;
+                   const shopErd = match.metafields?.find(m => m.key === 'rim_erd')?.value;
+                   const gridErd = getComponentValue(comp, 'Rim Erd');
+                   if (shopErd && gridErd) {
+                      const diff = Math.abs(parseFloat(shopErd) - parseFloat(gridErd));
+                      if (diff > 2) hasSpecMismatch = true;
                    }
-
-                   const sizeMatch = vOpts.some(vo => vo === cSize);
-                   const holeMatch = vOpts.some(vo => vo.replace(/\D/g, '') === cHoles);
-                   const colorMatch = !cColor || vOpts.some(vo => {
-                      const vColor = vo.toLowerCase();
-                      return vColor === cColor || vColor.includes(cColor) || cColor.includes(vColor);
-                   });
-
-                   if (sizeMatch && holeMatch && colorMatch) { 
-                      console.log(`✅ MATCH FOUND for ${compName}: ${v.title}`);
-                      matchIdx = idx; 
-                      return true; 
-                   } else {
-                      if (!sizeMatch) console.log(`   ❌ Size Mismatch: Grid(${cSize}) vs PoolOpts(${vOpts.join(', ')})`);
-                      if (!holeMatch) console.log(`   ❌ Hole Mismatch: Grid(${cHoles}) vs PoolOpts(${vOpts.map(o => o.replace(/\D/g, '')).join(', ')})`);
-                      if (!colorMatch) console.log(`   ❌ Color Mismatch: Grid(${cColor}) vs PoolOpts(${vOpts.join(', ')})`);
-                   }
-                   return false;
                 }
+
+                proposals.push({
+                   rid: comp._rid || comp.id,
+                   name: compName,
+                   productTitle: title,
+                   variantTitle: match.title,
+                   newVariantId: match.id,
+                   fullGid: match.full_id,
+                   _hasSpecMismatch: hasSpecMismatch
+                });
                 
-                // 2. HUB LOGIC: Spoke Count + Color
-                if (tab === 'hubs') {
-                   const cHolesVal = getComponentValue(comp, 'Hole Count') || getComponentValue(comp, 'Spoke Count');
-                   const cHoles = norm(cHolesVal).replace(/\D/g, '');
-                   const cColor = getCompColor();
-                   
-                   console.log(`[Diagnostic] Hub specs extracted from grid -> Holes: "${cHoles}", Color: "${cColor}" (Tab: ${tab})`);
+                // 4. Remove from pool
+                const poolIdx = localVariantPool.indexOf(match);
+                if (poolIdx !== -1) localVariantPool.splice(poolIdx, 1);
+             } else {
+                console.log("❌ NO AVAILABLE MATCH for technical specs.");
+             }
 
-                   const holeMatch = vOpts.some(vo => vo.replace(/\D/g, '') === cHoles);
-                   const colorMatch = !cColor || vOpts.some(vo => {
-                      const vColor = vo.toLowerCase();
-                      const match = vColor === cColor || vColor.includes(cColor) || cColor.includes(vColor);
-                      return match;
-                   });
-
-                   if (holeMatch && colorMatch) { 
-                      console.log(`✅ MATCH FOUND for ${compName}: ${v.title}`);
-                      matchIdx = idx; 
-                      return true; 
-                   } else {
-                      // Optional: log why it failed
-                      if (!holeMatch) console.log(`   ❌ Hole Mismatch: Grid(${cHoles}) vs PoolOpts(${vOpts.map(o => o.replace(/\D/g, '')).join(', ')})`);
-                      if (!colorMatch) console.log(`   ❌ Color Mismatch: Grid(${cColor}) vs PoolOpts(${vOpts.join(', ')})`);
-                   }
-                   return false;
-                }
-
-               // 3. SPOKE LOGIC: "-" Length Variant
-               if (tab === 'spokes') {
-                  const lengthMatch = vOpts.some(vo => vo === '-');
-                  if (lengthMatch) { matchIdx = idx; return true; }
-               }
-
-               // 4. NIPPLE LOGIC: First Available
-               if (tab === 'nipples') {
-                  { matchIdx = idx; return true; }
-               }
-
-               return false;
-            });
-
-            if (match) {
-               console.log("✅ MATCH FOUND (Uniqueness Guaranteed):", match.title, "ID:", match.id);
-               
-               // Detect Spec Conflicts (ERD mismatch check) during discovery
-               let hasSpecMismatch = false;
-               if (tab === 'rims' && match) {
-                  const shopErd = match.metafields?.find(m => m.key === 'rim_erd')?.value;
-                  const gridErd = getComponentValue(comp, 'Rim Erd');
-                  if (shopErd && gridErd) {
-                     const diff = Math.abs(parseFloat(shopErd) - parseFloat(gridErd));
-                     if (diff > 2) hasSpecMismatch = true;
-                  }
-               }
-
-               proposals.push({
-                  rid: comp._rid || comp.id,
-                  name: comp.Name || comp.Vendor || 'Unknown',
-                  productTitle: title,
-                  variantTitle: match.title,
-                  newVariantId: match.id,
-                  fullGid: match.full_id,
-                  _hasSpecMismatch: hasSpecMismatch
-               });
-               
-               // Remove this variant from the pool so it can't be claimed by another row
-               if (matchIdx !== -1) localVariantPool.splice(matchIdx, 1);
-            } else {
-               console.log("❌ NO AVAILABLE MATCH. Remaining Options in Pool:", localVariantPool.map(v => v.title));
-            }
-            console.groupEnd();
-         }
+             console.groupEnd();
+          }
        }
        
        if (proposals.length === 0) {
