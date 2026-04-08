@@ -152,34 +152,57 @@ const ComponentLibraryGrid = React.memo(({
      }
    }, [focusedCell, componentTab, componentColumnWidths]);
 
-  const getBiologicalCols = () => {
-    const rawData = componentData[componentTab] || [];
-    const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'Tags', 'tags', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags', '_rid', '_isNew', '_rawIdx', '_editIdx'];
-    
-    // Scan all rows to find every possible unique key (specification column)
-    const allKeys = new Set();
-    rawData.forEach(row => {
-      Object.keys(row).forEach(k => {
-        if (!excludeKeys.includes(k)) allKeys.add(k);
-      });
-    });
-    
-    // Sort based on componentColumnOrder if available
-    const specCols = Array.from(allKeys);
-    const order = componentColumnOrder?.[componentTab];
-    if (order && Array.isArray(order)) {
-      specCols.sort((a, b) => {
-        const aIdx = order.indexOf(a);
-        const bIdx = order.indexOf(b);
-        if (aIdx === -1 && bIdx === -1) return 0;
-        if (aIdx === -1) return 1;
-        if (bIdx === -1) return -1;
-        return aIdx - bIdx;
-      });
-    }
-    
-    return ['Vendor', 'Name', ...specCols];
-  };
+   const getBiologicalCols = () => {
+     const rawData = componentData[componentTab] || [];
+     
+     // NUCLEAR BAN LIST - Everything is normalized to lowercase alphanumeric for comparison
+     const BAN_LIST = [
+        'Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'Tags', 'tags', 
+        'id', 'ID', 'shopify_product_id', 'shopify_variant_id', 'Product ID', 'Variant ID', 
+        '_rid', '_isNew', '_rawIdx', '_editIdx', '_internal_database_id', 
+        'RIM SIZE', 'RIM ERD', 'WEIGHT G (V)', 'Weight (V)', 'rim_size', 'rim_erd', 'weight_g', 
+        'Option 1 Value', 'Option1 Value', 'Rim Size', 'Rim Erd', 'Weight G (v)', 'Hole Count', 
+        'Color', 'Rim Spoke Hole Offset', 'ProductURL'
+     ].map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+     const allKeys = new Set();
+     const blockedKeys = [];
+
+     rawData.forEach(row => {
+       Object.keys(row).forEach(k => {
+         const normK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+         if (!BAN_LIST.includes(normK)) {
+           allKeys.add(k);
+         } else {
+           if (!blockedKeys.includes(k)) blockedKeys.push(k);
+         }
+       });
+     });
+     
+     let specCols = Array.from(allKeys);
+
+     // Secondary Nuclear Filter: Final pass on the array
+     specCols = specCols.filter(k => {
+        const normK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return !BAN_LIST.includes(normK);
+     });
+
+     console.log(`🎨 [GRID_DEBUG] Tab: ${componentTab} | Blocked:`, blockedKeys, "| Final:", specCols);
+     
+     const order = componentColumnOrder?.[componentTab];
+     if (order && Array.isArray(order)) {
+       specCols.sort((a, b) => {
+         const aIdx = order.indexOf(a);
+         const bIdx = order.indexOf(b);
+         if (aIdx === -1 && bIdx === -1) return 0;
+         if (aIdx === -1) return 1;
+         if (bIdx === -1) return -1;
+         return aIdx - bIdx;
+       });
+     }
+     
+     return ['Vendor', 'Name', ...specCols];
+   };
 
   const getRectangularRange = (startCell, endCell) => {
     if (!startCell || !endCell) return [];
