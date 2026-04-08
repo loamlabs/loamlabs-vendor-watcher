@@ -688,21 +688,38 @@ export default function OpsDashboard() {
    }, [componentTab, stagedUpdatedArray, saveComponentChanges]);
 
    const handleDiscoverVariantIds = React.useCallback(async () => {
-     setIsDiscoveringVariants(true);
-     const tab = componentTab;
-     const items = componentData[tab] || [];
-     const candidates = items.filter(item => {
-        const pid = getComponentValue(item, 'shopify_product_id');
-        const vid = getComponentValue(item, 'shopify_variant_id');
-        // Only trigger for items with real numeric IDs (ignore hashes)
-        return pid && /^\d+$/.test(String(pid)) && !vid;
-     });
-     
-     if (candidates.length === 0) {
-        showNotification("No components found matching Discovery criteria (Has Product ID, No Variant ID).", "info");
-        setIsDiscoveringVariants(false);
-        return;
-     }
+      setIsDiscoveringVariants(true);
+      const tab = componentTab;
+      const items = componentData[tab] || [];
+      
+      // --- NEW: Selection-Aware Discovery ---
+      let candidates = [];
+      const selectedForTab = items.filter((item, idx) => selectedComponents.includes(item._rid || getComponentUniqueId(item, idx)));
+
+      if (selectedForTab.length > 0) {
+         // User has selected specific rows -> process them regardless of if they have IDs
+         const hasExisting = selectedForTab.some(item => getComponentValue(item, 'shopify_variant_id'));
+         if (hasExisting) {
+            if (!confirm(`You have selected ${selectedForTab.length} components. Some already have Shopify Variant IDs. Should we re-link and potentially OVERWRITE them?`)) {
+               setIsDiscoveringVariants(false);
+               return;
+            }
+         }
+         candidates = selectedForTab;
+      } else {
+         // Fallback to missing ID discovery
+         candidates = items.filter(item => {
+            const pid = getComponentValue(item, 'shopify_product_id');
+            const vid = getComponentValue(item, 'shopify_variant_id');
+            return pid && /^\d+$/.test(String(pid)) && !vid;
+         });
+      }
+      
+      if (candidates.length === 0) {
+         showNotification("No components found matching Discovery criteria. (Select rows to Force Re-Link or ensure Product IDs are present).", "info");
+         setIsDiscoveringVariants(false);
+         return;
+      }
 
      const uniqueProductIds = [...new Set(candidates.map(c => getComponentValue(c, 'shopify_product_id')))];
      const proposals = [];
