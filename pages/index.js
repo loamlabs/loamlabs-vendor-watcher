@@ -397,81 +397,63 @@ export default function OpsDashboard() {
     
     // 2. Identity Mapping (Standardize Display for Header Columns)
     if (normTarget === 'name' || normTarget === 'displayname' || normTarget === 'title') {
-       const exactName = component.Title || component.title || component.Name || component.name || component.Title;
+       const exactName = component.Title || component.title || component.Name || component.name;
        if (exactName) return exactName;
     }
-
     if (normTarget === 'vendor' || normTarget === 'brand') {
        const exactVendor = component.Vendor || component.vendor || component.Brand || component.brand;
        if (exactVendor) return exactVendor;
     }
-
-    if (normTarget === 'shopifyproductid' || normTarget === 'productid') {
+    if (normTarget === 'productid' || normTarget === 'shopifyproductid') {
        return component.shopify_product_id || component.id || component.ID || component['Product ID'] || '';
     }
-    if (normTarget === 'shopifyvariantid' || normTarget === 'variantid') {
+    if (normTarget === 'variantid' || normTarget === 'shopifyvariantid') {
        return component.shopify_variant_id || component['Variant ID'] || '';
     }
 
-    // 3. Registry Mapping (UI Translation Layer)
-    // If the grid asks for "Rim Erd" (label), we look for "rim_erd" (key) in the JSON
+    // 3. REGISTRY & DEEP TECHNICAL MATCHING
+    // Search the registry for the target label
     const regEntry = metafieldRegistry.find(r => 
        r.label.toLowerCase().replace(/[^a-z0-9]/g, '') === normTarget ||
        r.key.toLowerCase().replace(/[^a-z0-9]/g, '') === normTarget
     );
 
-    if (regEntry) {
-       const rawShopifyKey = regEntry.key;
-       // Check for the clean registry key
-       if (component[rawShopifyKey] !== undefined && component[rawShopifyKey] !== null) return component[rawShopifyKey];
-       
-       // Check for technical Shopify strings (prefix/suffix variants) in the JSON
-       const existingKeys = Object.keys(component);
-       const technicalKey = existingKeys.find(k => {
-           const rawNK = k.toLowerCase();
-           const cleanNK = rawNK.replace(/[^a-z0-9]/g, '');
-           const normRegK = rawShopifyKey.toLowerCase().replace(/[^a-z0-9]/g, '');
-           return rawNK.includes(`custom.${rawShopifyKey.toLowerCase()}`) ||
-                  (rawNK.includes('metafield:') && rawNK.includes(rawShopifyKey.toLowerCase())) ||
-                  (cleanNK.includes(normRegK) && (rawNK.includes('custom.') || rawNK.includes('metafield:')));
-       });
-       if (technicalKey) return component[technicalKey];
-    }
-    
-    // 4. Fallback for Weight (Generic search)
-    if (normTarget.includes('weightg')) {
-         const findWeight = (type) => {
-            const keys = Object.keys(component);
-            let match = keys.find(k => {
-               const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-               return nk.includes('weight') && (type === 'v' ? (nk.includes('variant') || nk.includes('v')) : (nk.includes('product') || nk.includes('p')));
-            });
-            if (!match) match = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '').includes('weight'));
-            return match;
-         };
-         const wKey = findWeight(normTarget.includes('v') ? 'v' : 'p');
-         if (wKey && (component[wKey] || component[wKey] === 0)) return component[wKey];
-    }
-    
-    // 5. Variant Property Matcher (Fuzzy for Options)
-    // Fixes false-positive "Missing Data" warnings for Option 1 Name, etc.
-    if (normTarget.startsWith('option') && (normTarget.includes('name') || normTarget.includes('value'))) {
-       const keys = Object.keys(component);
-       const found = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normTarget);
-       if (found) return component[found];
-    }
-
-    // 6. FUZZY FINAL FALLBACK (Harden against unmapped technical keys)
-    // If the grid asks for "Spoke Type" and we haven't found it yet, 
-    // search ALL keys in the JSON for a match that "contains" the target.
     const keys = Object.keys(component);
-    const fuzzyMatch = keys.find(k => {
-       const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-       return nk === normTarget || (nk.length > 5 && (nk.includes(normTarget) || normTarget.includes(nk)));
-    });
-    if (fuzzyMatch && (component[fuzzyMatch] !== undefined && component[fuzzyMatch] !== null && component[fuzzyMatch] !== "")) return component[fuzzyMatch];
+    const regKey = regEntry?.key?.toLowerCase();
+    
+    const findInJSON = () => {
+       // A. Try registry key match (e.g. "rim_erd")
+       if (regKey && component[regEntry.key] !== undefined) return component[regEntry.key];
+       
+       // B. Deep Parser for Technical Keys 
+       // Pattern: "Metafield: custom.rim_erd [number_decimal]" OR "Variant Metafield: custom.weight_g [number_decimal]"
+       const deepMatch = keys.find(k => {
+          const lowerK = k.toLowerCase();
+          // Remove noise
+          let cleanK = lowerK.replace(/variant metafield:|metafield:|custom\.|\[.*?\]/g, '').replace(/[^a-z0-9]/g, '');
+          
+          // Match against registry key OR target label
+          return (regKey && cleanK === regKey.replace(/[^a-z0-9]/g, '')) || cleanK === normTarget;
+       });
+       if (deepMatch) return component[deepMatch];
 
-    return '';
+       // C. Weight Specific Fallback
+       if (normTarget.includes('weight')) {
+          const wMatch = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '').includes('weight'));
+          if (wMatch) return component[wMatch];
+       }
+
+       // D. Option Specific Fallback
+       if (normTarget.startsWith('option')) {
+          const oMatch = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normTarget);
+          if (oMatch) return component[oMatch];
+       }
+
+       return '';
+    };
+
+    const result = findInJSON();
+    return (result === undefined || result === null) ? '' : result;
   }, [metafieldRegistry]);
 
 
@@ -583,11 +565,10 @@ export default function OpsDashboard() {
     
     required.forEach(field => {
       if (field.toLowerCase().includes('weight g')) {
-          const pVal = getComponentValue(component, 'Weight G (p)');
-          const vVal = getComponentValue(component, 'Weight G (v)');
-          const genericVal = getComponentValue(component, 'weight');
-          if (!pVal && !vVal && !genericVal) {
-             missing.push('Weight (P) or (V)');
+          // Comprehensive weight check after overhaul
+          const hasWeight = getComponentValue(component, 'weight');
+          if (!hasWeight && hasWeight !== 0) {
+             missing.push('Weight (req)');
           }
           return;
       }
