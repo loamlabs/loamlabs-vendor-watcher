@@ -307,10 +307,17 @@ export default function OpsDashboard() {
   }, [filteredRules, visibleCount]);
 
   // --- CORE UTILITIES (Foundation) ---
-  const showNotification = (msg, type = 'success') => {
+  const showNotification = React.useCallback((msg, type = 'success') => {
     setNotification({ msg, type });
     setTimeout(() => setNotification(null), 4000);
-  };
+  }, []);
+
+  useEffect(() => {
+    console.log("%c🚀 [SYSTEM] DASHBOARD VERSION 2.2 ACTIVE", "color: #3b82f6; font-size: 14px; font-weight: 800; padding: 4px; border: 2px solid #3b82f6; border-radius: 4px;");
+    if (typeof window !== 'undefined') {
+       window.__DASHBOARD_VERSION__ = "2.2-nuclear-debug";
+    }
+  }, []);
 
   const formatColumnTitle = React.useCallback((title) => {
     const isVariant = title.toLowerCase().includes('variant metafield');
@@ -601,10 +608,12 @@ export default function OpsDashboard() {
       try {
           const auth = password || localStorage.getItem('loam_ops_auth');
           if (!auth) return;
+          console.log(`[Lifecycle] Fetching components...`);
           const cb = Date.now();
           const res = await fetch(`/api/components?cb=${cb}`, { headers: { 'x-dashboard-auth': auth } });
           if (res.ok) {
               const data = await res.json();
+              console.log(`[Lifecycle] Fetch SUCCESS. Received tabs: ${Object.keys(data).join(', ')}`);
               const hydrated = {};
               Object.keys(data).forEach(tab => {
                   const rawList = data[tab] || [];
@@ -638,6 +647,8 @@ export default function OpsDashboard() {
               const cleanData = unifyComponentKeys(hydrated);
               setComponentData(cleanData);
               setComponentsLoaded(true);
+          } else {
+              console.error(`[Lifecycle] Fetch FAILED: ${res.status}`);
           }
       } catch (e) { console.error('Fetch Component Error: ', e); }
       setLoading(false);
