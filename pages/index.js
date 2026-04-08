@@ -1056,7 +1056,7 @@ export default function OpsDashboard() {
         'Name', 'Vendor', 'Brand', 'id', 'ID', 'shopify_product_id', 'shopify_variant_id', 
         'Product ID', 'Variant ID', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', 
         '_internal_database_id', 'RIM SIZE', 'RIM ERD', 'WEIGHT G (V)', 'Weight (V)', 'rim_size', 
-        'rim_erd', 'weight_g', 'Option 1 Value', 'Option1 Value', 'Rim Size', 'Rim Erd', 
+        'rim_erd', 'weight_g', 'Rim Size', 'Rim Erd', 
         'Weight G (v)', 'Hole Count', 'Color', 'Rim Spoke Hole Offset', 'ProductURL', 'Title'
      ].map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
@@ -1806,6 +1806,9 @@ export default function OpsDashboard() {
                     // 0. Category Check: Only audit fields applicable to this component type
                     const activeCategory = componentTab.toUpperCase().replace(/S$/, ''); // rims -> RIM, spokes -> SPOKE
                     if (!regField.categories.includes(activeCategory)) return;
+                    
+                    // Skip Aliased fields to prevent false-positive mismatches from consolidated data
+                    if (regField.label.toLowerCase().includes('aliased')) return;
 
                     // 1. Get value from Grid (Using robust helper)
                     const cValRaw = getComponentValue(comp, regField.label);

@@ -161,7 +161,7 @@ const ComponentLibraryGrid = React.memo(({
         'id', 'ID', 'shopify_product_id', 'shopify_variant_id', 'Product ID', 'Variant ID', 
         '_rid', '_isNew', '_rawIdx', '_editIdx', '_internal_database_id', 
         'RIM SIZE', 'RIM ERD', 'WEIGHT G (V)', 'Weight (V)', 'rim_size', 'rim_erd', 'weight_g', 
-        'Option 1 Value', 'Option1 Value', 'Rim Size', 'Rim Erd', 'Weight G (v)', 'Hole Count', 
+        'Rim Size', 'Rim Erd', 'Weight G (v)', 'Hole Count', 
         'Color', 'Rim Spoke Hole Offset', 'ProductURL'
      ].map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
