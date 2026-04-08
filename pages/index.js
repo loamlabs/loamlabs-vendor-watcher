@@ -345,6 +345,19 @@ export default function OpsDashboard() {
     return str.includes('/') ? str.split('/').pop() : str;
   }, []);
 
+  const cleanShopifyValue = React.useCallback((v) => {
+    if (v === null || v === undefined || v === "") return "";
+    let val = v;
+    // Handle Shopify "List" metafields (JSON array strings)
+    if (typeof v === 'string' && v.startsWith('[') && v.endsWith(']')) {
+       try {
+          const parsed = JSON.parse(v);
+          if (Array.isArray(parsed) && parsed.length > 0) val = parsed[0];
+       } catch (e) { /* Not JSON, keep original */ }
+    }
+    return val;
+  }, []);
+
   const getComponentValue = React.useCallback((component, key) => {
     if (!component) return '';
     let normTarget = key.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -903,8 +916,9 @@ export default function OpsDashboard() {
             // Update specs based on registry
             const newSpecs = {};
             activeTabRegistry.forEach(m => {
-               const shopVal = variant.metafields?.find(sm => sm.key === m.key)?.value;
-               if (shopVal !== undefined && shopVal !== null) {
+               const rawShopVal = variant.metafields?.find(sm => sm.key === m.key)?.value;
+               const shopVal = cleanShopifyValue(rawShopVal);
+               if (shopVal !== undefined && shopVal !== null && shopVal !== "") {
                   const gridTargetKey = m.label; 
                   newSpecs[gridTargetKey] = shopVal;
                }
@@ -1727,10 +1741,11 @@ export default function OpsDashboard() {
 
                     // 5. Comparison
                     const normalize = (v) => {
-                       if (v === null || v === undefined || v === "") return "";
-                       const n = parseFloat(v);
+                       const cleanValue = cleanShopifyValue(v);
+                       if (cleanValue === null || cleanValue === undefined || cleanValue === "") return "";
+                       const n = parseFloat(cleanValue);
                        if (!isNaN(n)) return String(n);
-                       return String(v).toLowerCase().trim();
+                       return String(cleanValue).toLowerCase().trim();
                     };
 
                     const ncVal = normalize(cVal);
