@@ -1778,15 +1778,16 @@ export default function OpsDashboard() {
        const list = componentData[tab] || [];
        const variantIds = list.map(c => c.shopify_variant_id || c['Variant ID']).filter(Boolean);
        
-       if (variantIds.length === 0) {
-          showNotification("No linked components in this tab to audit.", 'info');
-          return;
-       }
+        if (variantIds.length === 0) {
+           showNotification("No linked components in this tab to audit.", 'info');
+           setIsAuditing(false);
+           return;
+        }
 
-       setIsAuditing(true);
-       const newMismatches = { ...syncMismatches };
-       let scanned = 0;
-       let mismatchCount = 0;
+        setIsAuditing(true);
+        const newMismatches = { ...syncMismatches };
+        let scanned = 0;
+        let mismatchCount = 0;
 
        try {
            const auth = localStorage.getItem('loam_ops_auth');
