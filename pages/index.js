@@ -1585,7 +1585,15 @@ export default function OpsDashboard() {
                    if (isMetafield) {
                       const cVal = String(comp[key] || "").trim();
                       const sVal = String(shopifyVal || "").trim();
-                      if (cVal !== sVal) {
+                      
+                      // Normalize values for comparison (handles 580 vs 580.0)
+                      const normalize = (v) => {
+                         if (!v) return "";
+                         const n = parseFloat(v);
+                         return !isNaN(n) ? String(n) : String(v).toLowerCase();
+                      };
+
+                      if (normalize(cVal) !== normalize(sVal)) {
                          compMismatches.push(key);
                       }
                    }

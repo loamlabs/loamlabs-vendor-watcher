@@ -33,12 +33,30 @@ export default async function handler(req, res) {
       query($id: ID!) {
         product(id: $id) {
           title
+          metafields(first: 50) {
+            edges {
+              node {
+                key
+                namespace
+                value
+              }
+            }
+          }
           variants(first: 250) {
             edges {
               node {
                 id
                 title
                 sku
+                metafields(first: 50) {
+                  edges {
+                    node {
+                      key
+                      namespace
+                      value
+                    }
+                  }
+                }
                 selectedOptions {
                   name
                   value
@@ -70,16 +88,19 @@ export default async function handler(req, res) {
     }
 
     const variants = product.variants.edges.map(e => ({
-      id: e.node.id.split('/').pop(), // Return the numeric part if needed, or full GID? Let's keep it consistent.
+      id: e.node.id.split('/').pop(),
       full_id: e.node.id,
       title: e.node.title,
+      metafields: e.node.metafields?.edges.map(me => me.node) || [],
       options: e.node.selectedOptions.reduce((acc, opt) => {
         acc[opt.name] = opt.value;
         return acc;
       }, {})
     }));
 
-    return res.status(200).json({ title: product.title, variants });
+    const productMetafields = product.metafields?.edges.map(me => me.node) || [];
+
+    return res.status(200).json({ title: product.title, variants, metafields: productMetafields });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'Internal Server Error' });
