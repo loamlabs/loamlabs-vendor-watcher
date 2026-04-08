@@ -443,24 +443,78 @@ export default function OpsDashboard() {
         const wKey = findWeight(normTarget.includes('v') ? 'v' : 'p');
         if (wKey && (component[wKey] || component[wKey] === 0)) return component[wKey];
     }
+    
+    // 5. Variant Property Matcher (Fuzzy for Options)
+    // Fixes false-positive "Missing Data" warnings for Option 1 Name, etc.
+    if (normTarget.startsWith('option') && (normTarget.includes('name') || normTarget.includes('value'))) {
+       const keys = Object.keys(component);
+       const found = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normTarget);
+       if (found) return component[found];
+    }
 
     return '';
   }, [metafieldRegistry]);
+
+
+  // --- SHARED AUDIT ENGINE ---
+  // This 'Golden Rule' is shared by BOTH the Sync Audit and Sync Selected buttons
+  // to ensure 100% consistency across the dashboard.
+  const evaluateComponentAgainstShopify = React.useCallback((comp, shopifyVariant, tab) => {
+     if (!comp || !shopifyVariant) return null;
+     
+     const mismatches = [];
+     const proposals = {};
+     const variant = shopifyVariant;
+     
+     const normalize = (val) => {
+        const raw = String(val || "").trim();
+        if (!raw || raw === "(empty)") return "";
+        const clean = raw.replace(/[\[\]\\\"”″“′'‘’]/g, '').trim();
+        const n = Number(clean);
+        return (!isNaN(n) && clean !== "") ? String(n) : clean.toLowerCase();
+     };
+
+     const activeTabRegistry = metafieldRegistry.filter(m => m.tabs.includes(tab));
+     
+     activeTabRegistry.forEach(m => {
+        // Evaluate based on registry rule
+        let shopifyVal = null;
+        if (m.source === 'variant') {
+           shopifyVal = variant[m.key] || variant.metafields?.find(sm => sm.key === m.key)?.value;
+        } else {
+           shopifyVal = variant.product?.[m.key] || variant.product?.metafields?.find(sm => sm.key === m.key)?.value;
+        }
+
+        const cValue = getComponentValue(comp, m.label);
+        const ncVal = normalize(cValue);
+        let nsVal = "";
+        
+        if (Array.isArray(shopifyVal)) {
+           const shopValsNorm = shopifyVal.map(v => normalize(v));
+           nsVal = shopValsNorm.includes(ncVal) ? ncVal : (shopValsNorm[0] || "");
+        } else {
+           nsVal = normalize(shopifyVal);
+        }
+
+        if (ncVal !== nsVal) {
+           mismatches.push(m.label);
+           // Proposed value is always the Shopify value (Standardize)
+           proposals[m.label] = (Array.isArray(shopifyVal) ? shopifyVal[0] : shopifyVal) || "";
+        }
+     });
+
+     return mismatches.length > 0 ? { mismatches, proposals } : null;
+  }, [metafieldRegistry, getComponentValue]);
+
 
 
   const unifyComponentKeys = React.useCallback((data) => {
      if (!data || typeof data !== 'object') return data;
      
      const processItem = (item) => {
-        // --- PASSIVE JANITOR ---
-        // We NO LONGER delete or rename anything. 
-        // We only prepare the object for the Grid's internal tracking.
         const newItem = { ...item };
-
-        // Identity Cleanup (Internal only, does not affect permanent keys)
         if (newItem.ID && !newItem.shopify_product_id) newItem.shopify_product_id = newItem.ID;
         if (newItem.id && !newItem.shopify_product_id) newItem.shopify_product_id = newItem.id;
-
         return newItem;
       };
 
@@ -893,83 +947,73 @@ export default function OpsDashboard() {
     }, [componentTab, componentData, password, showNotification]);
 
    const handleSyncSpecsFromShopify = async () => {
-      const selectedIds = selectedComponents || [];
-      if (selectedIds.length === 0) {
-         showNotification("Please select items in the grid first.", "error");
-         return;
-      }
+     const selected = componentSelections[componentTab] || [];
+     if (selected.length === 0) {
+        showNotification("No components selected to sync.", 'warning');
+        return;
+     }
 
-      setLoading(true);
-      let updateCount = 0;
-      const auth = password || localStorage.getItem('loam_ops_auth');
-      const category = componentTab.toUpperCase().replace(/S$/, '');
-      const activeTabRegistry = metafieldRegistry.filter(m => m.categories.includes(category));
+     setLoading(true);
+     try {
+         const auth = password || localStorage.getItem('loam_ops_auth');
+         const res = await fetch('/api/get-variant-details', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': auth },
+            body: JSON.stringify({ variantIds: selected.map(rid => {
+               const c = (componentData[componentTab] || []).find(x => (x._rid || x.id) === rid);
+               return c?.shopify_variant_id || c?.['Variant ID'];
+            }).filter(Boolean) })
+         });
 
-      // BAN LIST for sync protection
-      const BURIED_FIELDS = [
-         'historical_order_count', 'historical order count', 'Weight G (v)', 'Weight (V)', 
-         'RIM SIZE', 'RIM ERD', 'Hole Count', 'Color', 'Rim Spoke Hole Offset', 
-         'ProductURL', 'Title', 'ID', 'Variant ID', 'Product ID', 'Name', 'name'
-      ];
-      const BAN_LIST_NORM = BURIED_FIELDS.map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+         if (res.ok) {
+            const variantMap = await res.json();
+            const newChanges = { ...(gridUnsavedChanges[componentTab] || {}) };
+            let updatedCount = 0;
 
-      try {
-         for (const rid of selectedIds) {
-            const comp = (componentData[componentTab] || []).find(c => (c._rid || c.id) === rid) || (gridAddedRows[componentTab] || []).find(c => (c._rid || c.id) === rid);
-            if (!comp) continue;
+            selected.forEach(rid => {
+               const comp = (componentData[componentTab] || []).find(c => (c._rid || c.id) === rid);
+               const vid = comp?.shopify_variant_id || comp?.['Variant ID'];
+               const variantData = variantMap[vid];
 
-            const pid = getCleanShopifyId(getComponentValue(comp, 'shopify_product_id'));
-            const vid = getCleanShopifyId(getComponentValue(comp, 'shopify_variant_id'));
-            if (!pid || !vid) continue;
+               if (variantData) {
+                  // USE UNIFIED AUDIT ENGINE
+                  const evaluation = evaluateComponentAgainstShopify(comp, variantData, componentTab);
+                  if (evaluation) {
+                     const rowChanges = { ...(newChanges[rid] || {}) };
+                     
+                     // Apply proposals from the unified engine
+                     Object.entries(evaluation.proposals).forEach(([label, shopVal]) => {
+                        // We must map label back to technical key for persistence
+                        const regEntry = metafieldRegistry.find(r => r.label === label);
+                        const techK = regEntry?.key || label;
+                        const existingKeys = Object.keys(comp);
+                        const finalField = existingKeys.find(k => 
+                           k.toLowerCase() === techK.toLowerCase() ||
+                           k.toLowerCase().includes(`custom.${techK.toLowerCase()}`) ||
+                           (k.toLowerCase().includes('metafield:') && k.toLowerCase().includes(techK.toLowerCase()))
+                        ) || techK;
 
-            const res = await fetch(`/api/get-product-variants?productId=${pid}`, { headers: { 'x-dashboard-auth': auth } });
-            if (!res.ok) continue;
+                        rowChanges[finalField] = shopVal;
+                     });
 
-            const { variants } = await res.json();
-            const variant = variants.find(v => String(v.id) === String(vid));
-            if (!variant) continue;
-
-            // Update specs based on registry
-            const newSpecs = {};
-            activeTabRegistry.forEach(m => {
-               // SKIP BANNED FIELDS
-               const normLabel = m.label.toLowerCase().replace(/[^a-z0-9]/g, '');
-               if (BAN_LIST_NORM.includes(normLabel)) return;
-
-               const rawShopVal = variant.metafields?.find(sm => sm.key === m.key)?.value;
-               const shopVal = cleanShopifyValue(rawShopVal);
-               if (shopVal !== undefined && shopVal !== null && shopVal !== "") {
-                  // CRITICAL FIX: Write to the TECHNICAL key from your JSON
-                  const technicalKey = m.key;
-                  
-                  // Find the exact key variant used in the JSON if possible
-                  const existingKeys = Object.keys(comp);
-                  const targetKey = existingKeys.find(k => 
-                     k.toLowerCase().includes(technicalKey.toLowerCase()) || 
-                     m.label.toLowerCase().includes(k.toLowerCase())
-                  ) || technicalKey;
-
-                  newSpecs[targetKey] = shopVal;
+                     newChanges[rid] = rowChanges;
+                     updatedCount++;
+                  }
                }
             });
 
-            if (Object.keys(newSpecs).length > 0) {
-               setGridUnsavedChanges(prev => ({
-                  ...prev,
-                  [componentTab]: {
-                     ...(prev[componentTab] || {}),
-                     [rid]: { ...(prev[componentTab]?.[rid] || {}), ...newSpecs }
-                  }
-               }));
-               updateCount++;
+            if (updatedCount > 0) {
+               setGridUnsavedChanges(prev => ({ ...prev, [componentTab]: newChanges }));
+               showNotification(`Staged sync proposals for ${updatedCount} items. Review in red.`, 'success');
+            } else {
+               showNotification("All selected components are already in sync.", 'success');
             }
          }
-         showNotification(`Successfully updated specs for ${updateCount} rows from Shopify.`);
-      } catch (e) {
+     } catch (e) {
          console.error(e);
-         showNotification("Error syncing specs from Shopify.", "error");
-      }
-      setLoading(false);
+         showNotification("Sync failed: " + e.message, 'error');
+     }
+     setLoading(false);
    };
 
    const applyVariantDiscovery = () => {
@@ -1730,10 +1774,11 @@ export default function OpsDashboard() {
   };
 
     const handleAuditShopifySync = async () => {
-       const tabData = componentData[componentTab] || [];
-       const candidates = tabData.filter(c => getComponentValue(c, 'shopify_product_id') && getComponentValue(c, 'shopify_variant_id'));
+       const tab = componentTab;
+       const list = componentData[tab] || [];
+       const variantIds = list.map(c => c.shopify_variant_id || c['Variant ID']).filter(Boolean);
        
-       if (candidates.length === 0) {
+       if (variantIds.length === 0) {
           showNotification("No linked components in this tab to audit.", 'info');
           return;
        }
@@ -1745,154 +1790,35 @@ export default function OpsDashboard() {
 
        try {
            const auth = localStorage.getItem('loam_ops_auth');
-           console.group("🚀 Shopify Sync Audit Started");
-           console.log("Total Candidates:", candidates.length);
-           
-           // Group by Product ID for batching
-           const grouped = candidates.reduce((acc, c) => {
-              const pid = getComponentValue(c, 'shopify_product_id');
-              if (!acc[pid]) acc[pid] = [];
-              acc[pid].push(c);
-              return acc;
-           }, {});
+           const res = await fetch('/api/get-variant-details', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-dashboard-auth': auth },
+              body: JSON.stringify({ variantIds })
+           });
 
-           for (const [pid, comps] of Object.entries(grouped)) {
-              console.group(`📦 Auditing Product ID: ${pid}`);
-            
-            const cleanPid = getCleanShopifyId(pid);
-            if (!cleanPid || cleanPid === 'undefined' || cleanPid === 'null') {
-               console.warn(`[Discovery] Skipping group with invalid Product ID: ${pid}`);
-               console.groupEnd();
-               continue;
-            }
+           if (res.ok) {
+              const variantMap = await res.json();
+              const registry = metafieldRegistry.filter(m => m.tabs.includes(tab));
+             
+             list.forEach(item => {
+                const rid = item._rid || item.id;
+                const vid = item.shopify_variant_id || item['Variant ID'];
+                if (!vid) return;
 
-            const res = await fetch(`/api/get-product-variants?productId=${cleanPid}`, {
-               headers: { 'x-dashboard-auth': auth }
-            });
-            if (!res.ok) {
-               console.error(`[Discovery] Shopify Error (Status ${res.status}) for PID:`, cleanPid);
-               console.groupEnd();
-               continue;
-            }
-              
-              const data = await res.json();
-              console.log("Product Title:", data.title);
-              console.log("Product Metafields:", data.metafields);
-              const shopifyVariants = data.variants || [];
-
-              for (const comp of comps) {
-                 const name = getComponentValue(comp, 'Name') || getComponentValue(comp, 'title') || 'Unknown Component';
-                 console.group(`🔍 Item: ${name}`);
-                 
-                 const vid = String(getComponentValue(comp, 'shopify_variant_id'));
-                 const sVariant = shopifyVariants.find(v => String(v.id) === vid);
-                 
-                 if (!sVariant) {
-                    console.warn("Could not find matching variant in Shopify for VID:", vid);
-                    console.groupEnd();
-                    continue;
-                 }
-
-                 console.log("Found Shopify Variant:", sVariant.title);
-                 
-                 scanned++;
-                 const compMismatches = [];
-                 const rid = comp._rid || comp.id;
-
-                 // --- REGISTRY-DRIVEN AUDIT (Robust Helper) ---
-                 metafieldRegistry.forEach(regField => {
-                    // 0. Category Check: Only audit fields applicable to this component type
-                    const activeCategory = componentTab.toUpperCase().replace(/S$/, ''); // rims -> RIM, spokes -> SPOKE
-                    if (!regField.categories.includes(activeCategory)) return;
-                    
-                    // Skip Aliased fields to prevent false-positive mismatches from consolidated data
-                    if (regField.label.toLowerCase().includes('aliased')) return;
-
-                    // 1. Get value from Grid (Using robust helper)
-                    const cValRaw = getComponentValue(comp, regField.label);
-                    // Filter out fields not present in this category/item
-                    if (!cValRaw && cValRaw !== 0 && cValRaw !== '0') return;
-
-                    const cVal = String(cValRaw).trim();
-                    let shopifyVal = null;
-                    let source = "metafield";
-
-                    // 2. Get value from Shopify 
-                    if (regField.target === 'variant') {
-                       shopifyVal = sVariant.metafields?.find(m => m.key === regField.key)?.value;
-                    } else {
-                       shopifyVal = data.metafields?.find(m => m.key === regField.key)?.value;
-                    }
-
-                    // 3. Fallback for Position/Constants (Common Shopify Pattern)
-                    if (!shopifyVal && regField.target === 'variant') {
-                       const optKey = regField.key.replace(/_/g, ' ').toLowerCase();
-                       const optionValue = Object.entries(sVariant.options || {}).find(([oK, oV]) => 
-                          oK.toLowerCase().includes(optKey) || regField.label.toLowerCase().includes(oK.toLowerCase())
-                       )?.[1];
-                       
-                       if (optionValue) {
-                          shopifyVal = optionValue;
-                          source = "option";
-                       }
-                    }
-
-                    // 4. Special Fallback: Position
-                    if (regField.key === 'wheel_spec_position' && !shopifyVal) {
-                       shopifyVal = sVariant.wheel_spec_position || sVariant.options?.Position;
-                       if (shopifyVal) source = "prop";
-                    }
-
-                    // 5. Comparison
-                    const normalize = (v) => {
-                       const raw = String(v || "").trim();
-                       if (raw === "" || raw === "null" || raw === "undefined" || raw === "(empty)") return "";
-                       
-                       // Robust Normalization for Shopify List Metafields & Smart Quotes
-                       // Strips: [ ] \ (Brackets and Escaping from serialized JSON arrays)
-                       // Strips: " ” ″ “ ′ ' ‘ ’ (All Straight and Smart Quotes)
-                       const clean = raw.replace(/[\[\]\\\"”″“′'‘’]/g, '').trim();
-                       
-                       const n = Number(clean);
-                       if (!isNaN(n) && clean !== "") {
-                          return String(n);
-                       }
-                       return clean.toLowerCase();
-                    };
-
-                    const ncVal = normalize(cVal);
-                    let nsVal = "";
-                    
-                    if (Array.isArray(shopifyVal)) {
-                       // Support for Shopify "List" metafields: Match if any item in the list matches the grid
-                       const shopValsNorm = shopifyVal.map(v => normalize(v));
-                       nsVal = shopValsNorm.includes(ncVal) ? ncVal : shopValsNorm[0] || "";
-                    } else {
-                       nsVal = normalize(shopifyVal);
-                    }
-
-                    // Debug: Log every check so we can see it happening
-                    // console.log(`Checking [${regField.label}] | Lib: "${ncVal}" vs Shop: "${nsVal}" (${source})`);
-
-                    if (ncVal !== nsVal) {
-                       console.log(`❌ MISMATCH on [${regField.label}]`);
-                       console.log(`   Grid: "${cVal}" (Norm: "${ncVal}")`);
-                       console.log(`   Shop: "${shopifyVal}" (Norm: "${nsVal}")`);
-                       compMismatches.push(regField.label);
-                    }
-                 });
-
-                 if (compMismatches.length > 0) {
-                    newMismatches[rid] = compMismatches;
-                    mismatchCount++;
-                 } else {
-                    delete newMismatches[rid];
-                 }
-                 console.groupEnd();
-              }
-              console.groupEnd();
+                const variantData = variantMap[vid];
+                if (variantData) {
+                   scanned++;
+                   // USE UNIFIED AUDIT ENGINE
+                   const evaluation = evaluateComponentAgainstShopify(item, variantData, tab);
+                   if (evaluation) {
+                      newMismatches[rid] = evaluation.mismatches;
+                      mismatchCount++;
+                   } else {
+                      delete newMismatches[rid];
+                   }
+                }
+             });
            }
-           console.groupEnd();
 
           setSyncMismatches(newMismatches);
           showNotification(`Audit Complete. Scanned: ${scanned}. Mismatches: ${mismatchCount}.`, mismatchCount > 0 ? 'warning' : 'success');

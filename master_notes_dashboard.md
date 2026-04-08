@@ -39,11 +39,12 @@ Control product visibility per-tab using Shopify tags:
 ## 🚀 Future Roadmap
 ### **Phase 4: Component Library Architecture**
 The Component Library is a GitHub-backed engineering database that lives within the dashboard, allowing for direct management of the unified calculator JSON (`rims.json`, `hubs.json`, etc.).
-- **Smart Discovery**: Automatically identifies field naming conventions (e.g., `Option1Name` vs `Option 1 Name`) in the existing dataset to ensure data consistency during edits.
-- **Mandatory Validation**: Enforces "Ready-to-Build" data integrity. Missing fields (Name, Vendor, Position, Option Names/Values) are highlighted with red row backgrounds in the library.
+- **Identity Migration (Name ⮕ Title)**: The system standardized on **"Title"** as the primary identity key to align with Shopify sources. The "Name" field has been fully retired and mapped to "Title" in the UI.
+- **Passive Stability Architecture**: Implemented a non-destructive "Translation Layer". The dashboard respects technical JSON headings (e.g., `wheel_spec_position`, `rim_erd`) as the absolute source of truth while providing clean, human-readable labels in the spreadsheet UI.
+- **Data Integrity Protection**: Edits in the grid are "Source-Aware"—they write back to the original technical key in the JSON, ensuring the backend files remain compatible with existing engineering calculators.
+- **Mandatory Validation**: Enforces "Ready-to-Build" data integrity. Missing fields (Title, Vendor, Position, Option Names/Values) are highlighted with red row backgrounds in the library.
 - **UI UX**: Implemented horizontal scrolling for wide spec sheets, zebra-stripping for readability, and high-contrast labels.
-- **Pre-population**: Automates data entry by pre-filling standard category defaults (e.g., "Size" and "Spoke Count" for Rims) based on the starting position.
-- **Strict Dropdowns**: technical specifications (Brake Interface, Spoke Count, Spacing) are locked to proper `<select>` dropdowns to prevent engineering typos.
+- **Safe Sync Engine**: Harmonized the sync logic across all buttons. Both the "Sync Audit" and "Sync Selected" handlers use the same "Golden Rule" (registry-driven comparisons and robust normalization) to ensure consistent, bloat-free updates.
 
 ### **Phase 6: The Spreadsheet Engine (Implemented Apr 2026)**
 The Component Library has been transformed into a high-performance, modular spreadsheet interface to handle large engineering datasets without UI lag.
@@ -52,10 +53,11 @@ The Component Library has been transformed into a high-performance, modular spre
   - **Navigation**: Full support for Arrow keys, Tab (move right/next row), and Enter (move down/submit edit).
   - **Inline Editing**: Double-click or press Enter/Space to activate high-performance `EditableCell` components.
 - **Data Architecture Fixes**:
-  - **Vendor Resolution**: A dedicated "Vendor" column was decoupled from "Name" to align with the underlying JSON structure and improve filtering.
-  - **Unique Row Identity**: All rows now use a composite key (`ID_INDEX`) ensuring visual uniqueness. This eliminates the "ghost selection" bug where multiple rows would highlight simultaneously for duplicate products.
-  - **Robust Mapping**: Enhanced key resolution for Name/Vendor fields to handle inconsistent JSON source keys (e.g., `product_title` vs `name`).
+  - **Vendor & Title Resolution**: Decentralized identity mapping ensures the grid always resolves `Vendor` and `Title` regardless of variations in the underlying JSON schema.
+  - **Unique Row Identity**: All rows now use a persistent `_rid` identifier ensuring visual uniqueness. This eliminates the "ghost selection" bug where multiple rows would highlight simultaneously for duplicate products.
+  - **One-Click Discard**: Hardened the Discard Draft functionality to clear all unsaved state, added rows, and selection contexts across all tabs in a single operation.
 - **Persistence Layer**: Spreadsheet edits are tracked in `sessionStorage` (`loamops_grid_unsaved_v1`) to prevent data loss on accidental refreshes, and are persisted to GitHub via a floating batch-save UI.
 
 ---
-*Updated April 2026 to reflect Spreadsheet Modularization and Keyboard Navigation stabilization.*
+*Updated April 2026 to reflect Passive Stability Architecture and Component Library identity standardization.*
+
