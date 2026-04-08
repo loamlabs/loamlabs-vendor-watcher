@@ -147,8 +147,8 @@ export default function OpsDashboard() {
     { key: 'inventory_alert_threshold', label: 'Inventory Alert Threshold', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'hub_manual_cross_value', label: 'Hub Manual Cross Value', categories: ['HUB'], target: 'variant', type: 'decimal' },
     { key: 'weight_g', label: 'Weight G (v)', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'decimal' },
-    { key: 'length_adjust_mm', label: 'Length Adjust mm', categories: ['SPOKE'], target: 'variant', type: 'decimal' },
-    { key: 'wheel_spec_position', label: 'Wheel Spec Position', categories: ['HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
+    { key: 'length_adjust_mm', label: 'Length Adjust mm', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE'], target: 'variant', type: 'decimal' },
+    { key: 'wheel_spec_position', label: 'Wheel Spec Position', categories: ['RIM', 'HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
     { key: 'wheel_spec_brake_interface', label: 'Brake Interface', categories: ['HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
     { key: 'wheel_spec_hub_spacing', label: 'Hub Spacing', categories: ['HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
     { key: 'wheel_spec_rim_size', label: 'Rim Size', categories: ['RIM'], target: 'variant', type: 'single_line_text_field', isConstant: true },
@@ -160,18 +160,29 @@ export default function OpsDashboard() {
     { key: 'acc_rim_width_max', label: 'Accessory Compatible Rim Width MAX (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'hub_sp_offset_spoke_hole_left', label: 'Hub SP Offset Spoke Hole Left', categories: ['HUB'], target: 'variant', type: 'decimal' },
     { key: 'hub_sp_offset_spoke_hole_right', label: 'Hub SP Offset Spoke Hole Right', categories: ['HUB'], target: 'variant', type: 'decimal' },
-    { key: 'bti_part_number', label: 'BTI Part Number', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'single_line_text_field' },
-    { key: 'inventory_sync_key', label: 'Inventory Sync Key', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'single_line_text_field' },
     { key: 'product_weight_g', label: 'Weight G (p)', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'decimal' },
-    { key: 'included_valve_variant_id', label: 'Included Valve Variant ID', categories: ['VALVESTEM'], target: 'product', type: 'single_line_text_field' },
     { key: 'integrated_hub_name', label: 'Integrated Hub Name', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
-    { key: 'google_shopping_link', label: 'Google Shopping Canonical Link', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'url' },
-    { key: 'preconfigured_wheel_rules', label: 'Pre-configured Wheel Rules', categories: ['RIM', 'HUB'], target: 'product', type: 'json' },
     { key: 'spoke_hub_interface', label: 'Spoke Hub Interface', categories: ['HUB', 'SPOKE'], target: 'product', type: 'single_line_text_field' },
-    { key: 'price_adjustment_percentage', label: 'Price Adjustment Percentage', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'integer' },
     { key: 'model', label: 'Model', categories: ['RIM', 'HUB', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'single_line_text_field' },
-    { key: 'pairing_key', label: 'Pairing Key', categories: ['RIM', 'HUB'], target: 'product', type: 'single_line_text_field' }
+    // HUB SPECIFIC JSON FIELDS
+    { key: 'hub_lacing_cross_left', label: 'Hub Lacing Cross Left', categories: ['HUB'], target: 'variant', type: 'decimal' },
+    { key: 'hub_lacing_cross_right', label: 'Hub Lacing Cross Right', categories: ['HUB'], target: 'variant', type: 'decimal' },
+    { key: 'hub_spoke_distribution', label: 'Hub Spoke Distribution', categories: ['HUB'], target: 'product', type: 'decimal' },
+    { key: 'hub_flange_diameter_left', label: 'Hub Flange Diameter Left', categories: ['HUB'], target: 'product', type: 'decimal' },
+    { key: 'hub_flange_diameter_right', label: 'Hub Flange Diameter Right', categories: ['HUB'], target: 'product', type: 'decimal' },
+    { key: 'hub_flange_offset_left', label: 'Hub Flange Offset Left', categories: ['HUB'], target: 'product', type: 'decimal' },
+    { key: 'hub_flange_offset_right', label: 'Hub Flange Offset Right', categories: ['HUB'], target: 'product', type: 'decimal' },
+    { key: 'hub_spoke_hole_diameter', label: 'Hub Spoke Hole Diameter', categories: ['HUB'], target: 'product', type: 'decimal' },
+    { key: 'hub_lacing_policy', label: 'Hub Lacing Policy', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
+    { key: 'hub_type', label: 'Hub Type', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
+    // RIM SPECIFIC JSON FIELDS
+    { key: 'nipple_washer_thickness', label: 'Nipple Washer Thickness', categories: ['RIM'], target: 'product', type: 'decimal' },
+    { key: 'rim_spoke_hole_offset', label: 'Rim Spoke Hole Offset', categories: ['RIM'], target: 'product', type: 'decimal' },
+    { key: 'rim_washer_policy', label: 'Rim Washer Policy', categories: ['RIM'], target: 'product', type: 'single_line_text_field' },
+    { key: 'rim_target_tension_kgf', label: 'Rim Target Tension Kgf', categories: ['RIM'], target: 'product', type: 'integer' },
+    { key: 'rim_compatible_nipple_types', label: 'Rim Compatible Nipple Types', categories: ['RIM'], target: 'product', type: 'list.single_line_text_field' }
   ]);
+
 
   const [resizingCol, setResizingCol] = useState(null);
   const [startX, setStartX] = useState(0);
@@ -483,15 +494,25 @@ export default function OpsDashboard() {
            const officialLabel = reg.label;
            const rawKey = reg.key;
            
-           // If the row has the raw Shopify key, migrate it to the grid label
-           if (newItem[rawKey] !== undefined && newItem[rawKey] !== null && String(newItem[rawKey]).trim() !== "" && newItem[rawKey] !== "(empty)") {
+           // ROBUST KEY SEARCH: Look for rawKey OR any technical Shopify key that contains it
+           const existingKeys = Object.keys(newItem);
+           const technicalKey = existingKeys.find(k => {
+              const nk = k.toLowerCase();
+              return nk === rawKey.toLowerCase() || 
+                     nk.includes(`custom.${rawKey.toLowerCase()}`) ||
+                     (nk.includes('metafield:') && nk.includes(rawKey.toLowerCase()));
+           });
+
+           if (technicalKey && newItem[technicalKey] !== undefined && newItem[technicalKey] !== null && String(newItem[technicalKey]).trim() !== "" && newItem[technicalKey] !== "(empty)") {
+              // Migrate to human label if label is empty
               if (newItem[officialLabel] === undefined || newItem[officialLabel] === null || String(newItem[officialLabel]).trim() === "" || newItem[officialLabel] === "(empty)") {
-                 newItem[officialLabel] = newItem[rawKey];
+                 newItem[officialLabel] = newItem[technicalKey];
               }
-              // Always delete the raw key once we've migrated (or confirmed data exists in label)
-              delete newItem[rawKey];
+              // Eradicate technical key
+              delete newItem[technicalKey];
            }
         });
+
 
         // 3. Manual Legacy Mappings (Hardcoded overlaps)
         const manualMappings = {
@@ -4502,9 +4523,12 @@ export default function OpsDashboard() {
                         </button>
                         <button 
                            onClick={() => {
-                              if (confirm("DISCARD ALL UNSAVED SPREADSHEETING EDITS? This will wipe your draft.")) {
-                                 setGridUnsavedChanges(prev => ({ ...prev, [componentTab]: {} }));
-                                 setGridAddedRows(prev => ({ ...prev, [componentTab]: [] }));
+                              if (confirm("DISCARD ALL UNSAVED DRAFTS ACROSS ALL TABS? This cannot be undone.")) {
+                                 setGridUnsavedChanges({});
+                                 setGridAddedRows({ hubs: [], rims: [], spokes: [], nipples: [] });
+                                 setSelectedComponents([]);
+                                 setSelectedCells([]);
+                                 showNotification("Draft discarded successfully.", "info");
                               }
                            }}
                            className="px-6 py-4 text-zinc-500 hover:text-red-500 text-[10px] font-black uppercase tracking-widest transition-colors"
