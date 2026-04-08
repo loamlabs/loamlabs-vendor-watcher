@@ -418,6 +418,25 @@ export default function OpsDashboard() {
     });
     if (foundKey && (component[foundKey] || component[foundKey] === 0 || component[foundKey] === '0')) return component[foundKey];
 
+    // RESTORED: Safe Fuzzy Lookup (with Nuclear Shield)
+    // This allows finding fields like "Metafield: custom.weight_g" while blocking "WEIGHT G (V)"
+    const BAN_LIST = [
+        'ID', 'shopify_product_id', 'shopify_variant_id', 'Product ID', 'Variant ID', 
+        '_rid', '_isNew', '_rawIdx', '_editIdx', '_internal_database_id', 
+        'RIM SIZE', 'RIM ERD', 'WEIGHT G (V)', 'Weight (V)', 'rim_size', 'rim_erd', 'weight_g', 
+        'Rim Size', 'Rim Erd', 'Weight G (v)', 'Hole Count', 
+        'Color', 'Rim Spoke Hole Offset', 'ProductURL', 'Title'
+     ].map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+    const fuzzyKey = Object.keys(component).find(k => {
+        const normK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (BAN_LIST.includes(normK)) return false; // NUCLEAR SHIELD: Skip buried ghost fields
+        
+        const val = component[k];
+        return normK.includes(normTarget) && !normK.includes('option') && (val || val === 0 || val === '0');
+    });
+    if (fuzzyKey) return component[fuzzyKey];
+
     // REMOVED: Broad "weight" fallback that was picking up ghost fields
     // if (normTarget.includes('weight')) return component['Weight G (p)'] || component['Weight G (v)'] || component.weight || '';
     
