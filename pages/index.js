@@ -483,10 +483,14 @@ export default function OpsDashboard() {
          m.categories?.map(c => c.toLowerCase() + 's').includes(tab)
       );
      
+     console.group(`[Sync Audit] Evaluating: ${comp.Title || 'Unnamed'}`);
+     console.log('Registry Fields:', activeTabRegistry.map(m => m.label));
+
      activeTabRegistry.forEach(m => {
         // Evaluate based on registry rule
         let shopifyVal = null;
-        if (m.source === 'variant') {
+        // --- FIX: Change m.source to m.target ---
+        if (m.target === 'variant') {
            shopifyVal = variant[m.key] || variant.metafields?.find(sm => sm.key === m.key)?.value;
         } else {
            shopifyVal = variant.product?.[m.key] || variant.product?.metafields?.find(sm => sm.key === m.key)?.value;
@@ -504,12 +508,14 @@ export default function OpsDashboard() {
         }
 
         if (ncVal !== nsVal) {
+           console.log(`❌ Mismatch [${m.label}]: Grid="${ncVal}" vs Shopify="${nsVal}" (Source: ${m.target})`);
            mismatches.push(m.label);
            // Proposed value is always the Shopify value (Standardize)
            proposals[m.label] = (Array.isArray(shopifyVal) ? shopifyVal[0] : shopifyVal) || "";
         }
      });
 
+     console.groupEnd();
      return mismatches.length > 0 ? { mismatches, proposals } : null;
   }, [metafieldRegistry, getComponentValue]);
 
@@ -993,11 +999,27 @@ export default function OpsDashboard() {
                         const regEntry = metafieldRegistry.find(r => r.label === label);
                         const techK = regEntry?.key || label;
                         const existingKeys = Object.keys(comp);
-                        const finalField = existingKeys.find(k => 
-                           k.toLowerCase() === techK.toLowerCase() ||
-                           k.toLowerCase().includes(`custom.${techK.toLowerCase()}`) ||
-                           (k.toLowerCase().includes('metafield:') && k.toLowerCase().includes(techK.toLowerCase()))
-                        ) || techK;
+                        const finalField = existingKeys.find(k => {
+                            const lowK = k.toLowerCase();
+                            const lowT = techK.toLowerCase();
+                            const lowL = label.toLowerCase();
+
+                            // 1. Explicit Label Match
+                            if (k === label) return true;
+
+                            // 2. Weight Field Intelligence
+                            if (lowT.includes('weight')) {
+                               if (lowL.includes('(v)') && lowK.includes('variant') && lowK.includes('weight')) return true;
+                               if (lowL.includes('(p)') && !lowK.includes('variant') && lowK.includes('weight')) return true;
+                            }
+
+                            // 3. General technical match
+                            return lowK === lowT || 
+                                   lowK.includes(`custom.${lowT}`) || 
+                                   (lowK.includes('metafield:') && lowK.includes(lowT));
+                         }) || techK;
+
+                         console.log(`Mapping Proposal [${label}] to technical field [${finalField}] with value [${shopVal}]`);
 
                         rowChanges[finalField] = shopVal;
                      });
@@ -1005,6 +1027,7 @@ export default function OpsDashboard() {
                      newChanges[rid] = rowChanges;
                      updatedCount++;
                   }
+                  console.groupEnd();
                }
             });
 
@@ -1817,6 +1840,7 @@ export default function OpsDashboard() {
                 const variantData = variantMap[vid];
                 if (variantData) {
                    scanned++;
+                   console.group(`[Sync Specs] ${item.Title || 'Unnamed'} (Variant: ${vid})`);
                    // USE UNIFIED AUDIT ENGINE
                    const evaluation = evaluateComponentAgainstShopify(item, variantData, tab);
                    if (evaluation) {
