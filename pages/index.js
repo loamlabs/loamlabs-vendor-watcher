@@ -478,9 +478,15 @@ export default function OpsDashboard() {
                     newItem[official] = newItem[alias];
                  }
               }
-              // NUCLEAR CLEANUP: Explicitly delete the zombie key from the object
-              if (alias !== 'Option1 Value' && newItem.hasOwnProperty(alias)) {
+              // NUCLEAR CLEANUP: Explicitly delete the zombie key from the object NO MATTER WHAT
+              if (newItem.hasOwnProperty(alias)) {
                  delete newItem[alias];
+              }
+           });
+           // Also delete whitespace variants if any
+           Object.keys(newItem).forEach(k => {
+              if (k.toLowerCase().trim() === official.toLowerCase().trim() && k !== official) {
+                 delete newItem[k];
               }
            });
         });
@@ -1041,10 +1047,24 @@ export default function OpsDashboard() {
         'RIM SIZE', 'RIM ERD', 'WEIGHT G (V)', 'Weight (V)', 'rim_size', 'rim_erd', 'weight_g', 'Option 1 Value', 'Option1 Value',
         // UNIFIED OFFICIALS (We want these SPEC-ONLY, hidden from main grid)
         'Rim Size', 'Rim Erd', 'Weight G (v)', 'Hole Count', 'Color', 'Rim Spoke Hole Offset'
-     ];
+     ].map(k => k.toLowerCase().trim());
+
      const allKeys = new Set();
-     rawData.forEach(row => Object.keys(row).forEach(k => { if (!excludeKeys.includes(k)) allKeys.add(k); }));
+     rawData.forEach((row, i) => {
+        Object.keys(row).forEach(k => {
+           const cleanK = k.toLowerCase().trim();
+           if (!excludeKeys.includes(cleanK)) {
+              allKeys.add(k); 
+           } else {
+              // Only log for the first row to avoid spamming
+              // if (i === 0) console.log(`[Column Debug] Excluded: "${k}" (matches restricted list)`);
+           }
+        });
+     });
+
      const specCols = Array.from(allKeys);
+     // console.log(`[Column Debug] Tab: ${tab} | Detected:`, Array.from(allKeys), "| Filtered:", specCols);
+
      const order = componentColumnOrder?.[tab];
      if (order && Array.isArray(order)) {
        specCols.sort((a, b) => {
