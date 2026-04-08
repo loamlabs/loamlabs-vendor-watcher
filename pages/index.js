@@ -180,7 +180,13 @@ export default function OpsDashboard() {
     { key: 'rim_spoke_hole_offset', label: 'Rim Spoke Hole Offset', categories: ['RIM'], target: 'product', type: 'decimal' },
     { key: 'rim_washer_policy', label: 'Rim Washer Policy', categories: ['RIM'], target: 'product', type: 'single_line_text_field' },
     { key: 'rim_target_tension_kgf', label: 'Rim Target Tension Kgf', categories: ['RIM'], target: 'product', type: 'integer' },
-    { key: 'rim_compatible_nipple_types', label: 'Rim Compatible Nipple Types', categories: ['RIM'], target: 'product', type: 'list.single_line_text_field' }
+    { key: 'rim_compatible_nipple_types', label: 'Rim Compatible Nipple Types', categories: ['RIM'], target: 'product', type: 'list.single_line_text_field' },
+    // SPOKE SPECIFIC JSON FIELDS
+    { key: 'spoke_type', label: 'Spoke Type', categories: ['SPOKE'], target: 'product', type: 'single_line_text_field' },
+    { key: 'spoke_model_group', label: 'Spoke Model Group', categories: ['SPOKE'], target: 'product', type: 'single_line_text_field' },
+    { key: 'spoke_diameter_spec', label: 'Spoke Diameter Spec', categories: ['SPOKE'], target: 'product', type: 'single_line_text_field' },
+    { key: 'spoke_rounding_rule', label: 'Spoke Rounding Rule', categories: ['SPOKE'], target: 'product', type: 'single_line_text_field' },
+    { key: 'spoke_cross_section_area_mm2', label: 'Spoke Cross Section Area Mm2', categories: ['SPOKE'], target: 'product', type: 'decimal' }
   ]);
 
 
@@ -451,6 +457,16 @@ export default function OpsDashboard() {
        const found = keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normTarget);
        if (found) return component[found];
     }
+
+    // 6. FUZZY FINAL FALLBACK (Harden against unmapped technical keys)
+    // If the grid asks for "Spoke Type" and we haven't found it yet, 
+    // search ALL keys in the JSON for a match that "contains" the target.
+    const keys = Object.keys(component);
+    const fuzzyMatch = keys.find(k => {
+       const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+       return nk === normTarget || (nk.length > 5 && (nk.includes(normTarget) || normTarget.includes(nk)));
+    });
+    if (fuzzyMatch && (component[fuzzyMatch] !== undefined && component[fuzzyMatch] !== null && component[fuzzyMatch] !== "")) return component[fuzzyMatch];
 
     return '';
   }, [metafieldRegistry]);
@@ -947,7 +963,7 @@ export default function OpsDashboard() {
     }, [componentTab, componentData, password, showNotification]);
 
    const handleSyncSpecsFromShopify = async () => {
-     const selected = componentSelections[componentTab] || [];
+     const selected = selectedComponents || [];
      if (selected.length === 0) {
         showNotification("No components selected to sync.", 'warning');
         return;
