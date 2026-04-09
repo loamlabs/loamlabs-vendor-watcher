@@ -576,9 +576,12 @@ export default function OpsDashboard() {
     
     required.forEach(field => {
       if (field.toLowerCase().includes('weight g')) {
-          // Comprehensive weight check after overhaul
-          const hasWeight = getComponentValue(component, 'weight');
-          if (!hasWeight && hasWeight !== 0) {
+          // Comprehensive weight check after overhaul (Supports new technical headings)
+          const variantWeight = getComponentValue(component, 'Variant Metafield: custom.weight_g [number_decimal]');
+          const productWeight = getComponentValue(component, 'Metafield: custom.weight_g [number_decimal]');
+          const legacyWeight = getComponentValue(component, 'weight_g');
+
+          if (!variantWeight && !productWeight && !legacyWeight && variantWeight !== 0 && productWeight !== 0) {
              missing.push('Weight (req)');
           }
           return;
@@ -1008,10 +1011,13 @@ export default function OpsDashboard() {
                             // 1. Explicit Label Match
                             if (k === label) return true;
 
-                            // 2. Weight Field Intelligence
+                            // 2. Weight Field Intelligence (Updated for Technical Labels)
                             if (lowT.includes('weight')) {
-                               if (lowL.includes('(v)') && lowK.includes('variant') && lowK.includes('weight')) return true;
-                               if (lowL.includes('(p)') && !lowK.includes('variant') && lowK.includes('weight')) return true;
+                               const isVariantLabel = lowL.includes('variant metafield');
+                               const isProductLabel = lowL.includes('metafield:') && !isVariantLabel;
+                               
+                               if (isVariantLabel && lowK.includes('variant') && lowK.includes('weight')) return true;
+                               if (isProductLabel && !lowK.includes('variant') && lowK.includes('weight')) return true;
                             }
 
                             // 3. Option Position mapping
@@ -1107,11 +1113,18 @@ export default function OpsDashboard() {
        if (regEntry && rowData) {
           const techK = regEntry.key;
           const existingKeys = Object.keys(rowData);
-          finalKey = existingKeys.find(k => 
-             k.toLowerCase() === techK.toLowerCase() ||
-             k.toLowerCase().includes(`custom.${techK.toLowerCase()}`) ||
-             (k.toLowerCase().includes('metafield:') && k.toLowerCase().includes(techK.toLowerCase()))
-          ) || techK;
+          
+          // 1. Literal ColKey match (highest priority to prevent "key jumping")
+          if (existingKeys.includes(colKey)) {
+             finalKey = colKey;
+          } else {
+             // 2. Technical Discovery fallback
+             finalKey = existingKeys.find(k => 
+                k.toLowerCase() === techK.toLowerCase() ||
+                k.toLowerCase().includes(`custom.${techK.toLowerCase()}`) ||
+                (k.toLowerCase().includes('metafield:') && k.toLowerCase().includes(techK.toLowerCase()))
+             ) || techK;
+          }
        }
 
        return {
