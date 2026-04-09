@@ -146,14 +146,14 @@ export default function OpsDashboard() {
   const [metafieldRegistry, setMetafieldRegistry] = useState([
     { key: 'inventory_alert_threshold', label: 'Inventory Alert Threshold', categories: ['HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'hub_manual_cross_value', label: 'Hub Manual Cross Value', categories: ['HUB'], target: 'variant', type: 'decimal' },
-    { key: 'weight_g', label: 'Weight G (v)', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'decimal' },
-    { key: 'length_adjust_mm', label: 'Length Adjust mm', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE'], target: 'variant', type: 'decimal' },
-    { key: 'wheel_spec_position', label: 'Wheel Spec Position', categories: ['RIM', 'HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
+    { key: 'weight_g', label: 'Variant Metafield: custom.weight_g [number_decimal]', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'decimal' },
+    { key: 'length_adjust_mm', label: 'Variant Metafield: custom.length_adjust_mm [number_decimal]', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE'], target: 'variant', type: 'decimal' },
+    { key: 'wheel_spec_position', label: 'Variant Metafield: custom.wheel_spec_position [single_line_text_field]', categories: ['RIM', 'HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
     { key: 'wheel_spec_brake_interface', label: 'Brake Interface', categories: ['HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
     { key: 'wheel_spec_hub_spacing', label: 'Hub Spacing', categories: ['HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
-    { key: 'option1', label: 'Rim Size', categories: ['RIM'], target: 'variant', isOption: true },
-    { key: 'option2', label: 'Hole Count', categories: ['RIM'], target: 'variant', isOption: true },
-    { key: 'rim_erd', label: 'Rim Erd', categories: ['RIM'], target: 'variant', type: 'decimal', isConstant: true },
+    { key: 'option1', label: 'Option1 Value', categories: ['RIM'], target: 'variant', isOption: true },
+    { key: 'option2', label: 'Option2 Value', categories: ['RIM'], target: 'variant', isOption: true },
+    { key: 'rim_erd', label: 'Variant Metafield: custom.rim_erd [number_decimal]', categories: ['RIM'], target: 'variant', type: 'decimal', isConstant: true },
     { key: 'valve_min_rim_depth_mm', label: 'Valve Min Rim Depth mm', categories: ['VALVESTEM'], target: 'variant', type: 'integer', isConstant: true },
     { key: 'valve_max_rim_depth_mm', label: 'Valve Max Rim Depth mm', categories: ['VALVESTEM'], target: 'variant', type: 'integer', isConstant: true },
     { key: 'internal_width_mm', label: 'Internal Width mm', categories: ['ACCESSORY'], target: 'variant', type: 'integer', isConstant: true },
@@ -161,7 +161,7 @@ export default function OpsDashboard() {
     { key: 'acc_rim_width_max', label: 'Accessory Compatible Rim Width MAX (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'hub_sp_offset_spoke_hole_left', label: 'Hub SP Offset Spoke Hole Left', categories: ['HUB'], target: 'variant', type: 'decimal' },
     { key: 'hub_sp_offset_spoke_hole_right', label: 'Hub SP Offset Spoke Hole Right', categories: ['HUB'], target: 'variant', type: 'decimal' },
-    { key: 'product_weight_g', label: 'Weight G (p)', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'decimal' },
+    { key: 'product_weight_g', label: 'Metafield: custom.weight_g [number_decimal]', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'decimal' },
     { key: 'integrated_hub_name', label: 'Integrated Hub Name', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
     { key: 'spoke_hub_interface', label: 'Spoke Hub Interface', categories: ['HUB', 'SPOKE'], target: 'product', type: 'single_line_text_field' },
     { key: 'model', label: 'Model', categories: ['RIM', 'HUB', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'single_line_text_field' },
@@ -177,11 +177,11 @@ export default function OpsDashboard() {
     { key: 'hub_lacing_policy', label: 'Hub Lacing Policy', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
     { key: 'hub_type', label: 'Hub Type', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
     // RIM SPECIFIC JSON FIELDS
-    { key: 'nipple_washer_thickness', label: 'Nipple Washer Thickness', categories: ['RIM'], target: 'product', type: 'decimal' },
-    { key: 'rim_spoke_hole_offset', label: 'Rim Spoke Hole Offset', categories: ['RIM'], target: 'product', type: 'decimal' },
-    { key: 'rim_washer_policy', label: 'Rim Washer Policy', categories: ['RIM'], target: 'product', type: 'single_line_text_field' },
-    { key: 'rim_target_tension_kgf', label: 'Rim Target Tension Kgf', categories: ['RIM'], target: 'product', type: 'integer' },
-    { key: 'rim_compatible_nipple_types', label: 'Rim Compatible Nipple Types', categories: ['RIM'], target: 'product', type: 'list.single_line_text_field' },
+    { key: 'nipple_washer_thickness', label: 'Metafield: custom.nipple_washer_thickness [number_decimal]', categories: ['RIM'], target: 'product', type: 'decimal' },
+    { key: 'rim_spoke_hole_offset', label: 'Metafield: custom.rim_spoke_hole_offset [number_decimal]', categories: ['RIM'], target: 'product', type: 'decimal' },
+    { key: 'rim_washer_policy', label: 'Metafield: custom.rim_washer_policy [single_line_text_field]', categories: ['RIM'], target: 'product', type: 'single_line_text_field' },
+    { key: 'rim_target_tension_kgf', label: 'Metafield: custom.rim_target_tension_kgf [number_integer]', categories: ['RIM'], target: 'product', type: 'integer' },
+    { key: 'rim_compatible_nipple_types', label: 'Metafield: custom.rim_compatible_nipple_types [list.single_line_text_field]', categories: ['RIM'], target: 'product', type: 'list.single_line_text_field' },
     // SPOKE SPECIFIC JSON FIELDS
     { key: 'spoke_type', label: 'Spoke Type', categories: ['SPOKE'], target: 'product', type: 'single_line_text_field' },
     { key: 'spoke_model_group', label: 'Spoke Model Group', categories: ['SPOKE'], target: 'product', type: 'single_line_text_field' },
@@ -473,12 +473,17 @@ export default function OpsDashboard() {
      const variant = shopifyVariant;
      
      const normalize = (val) => {
-        const raw = String(val || "").trim();
-        if (!raw || raw === "(empty)") return "";
-        const clean = raw.replace(/[\[\]\\\"”″“′'‘’]/g, '').trim();
-        const n = Number(clean);
-        return (!isNaN(n) && clean !== "") ? String(n) : clean.toLowerCase();
-     };
+         const clean = String(val === 0 ? "0" : (val || "")).trim();
+         if (clean === "") return "";
+         
+         // Only parse as float if it's a pure numeric value (prevents "700c" -> "700" bug)
+         if (/^-?\d*\.?\d+$/.test(clean)) {
+            const n = parseFloat(clean);
+            return isNaN(n) ? clean.toLowerCase() : String(n);
+         }
+         
+         return clean.toLowerCase();
+      };
 
      const activeTabRegistry = metafieldRegistry.filter(m => 
          m.categories?.map(c => c.toLowerCase() + 's').includes(tab)
