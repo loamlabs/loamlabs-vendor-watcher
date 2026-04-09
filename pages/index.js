@@ -144,18 +144,19 @@ export default function OpsDashboard() {
     const [syncMismatches, setSyncMismatches] = useState({}); // { [rid]: [fieldKey1, fieldKey2] }
     const [showMismatchesOnly, setShowMismatchesOnly] = useState(false);
   const [metafieldRegistry, setMetafieldRegistry] = useState([
-    { key: 'inventory_alert_threshold', label: 'Inventory Alert Threshold', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'integer' },
+    { key: 'inventory_alert_threshold', label: 'Inventory Alert Threshold', categories: ['HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'hub_manual_cross_value', label: 'Hub Manual Cross Value', categories: ['HUB'], target: 'variant', type: 'decimal' },
     { key: 'weight_g', label: 'Weight G (v)', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'decimal' },
     { key: 'length_adjust_mm', label: 'Length Adjust mm', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE'], target: 'variant', type: 'decimal' },
     { key: 'wheel_spec_position', label: 'Wheel Spec Position', categories: ['RIM', 'HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
     { key: 'wheel_spec_brake_interface', label: 'Brake Interface', categories: ['HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
     { key: 'wheel_spec_hub_spacing', label: 'Hub Spacing', categories: ['HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
-    { key: 'wheel_spec_rim_size', label: 'Rim Size', categories: ['RIM'], target: 'variant', type: 'single_line_text_field', isConstant: true },
+    { key: 'option1', label: 'Rim Size', categories: ['RIM'], target: 'variant', isOption: true },
+    { key: 'option2', label: 'Hole Count', categories: ['RIM'], target: 'variant', isOption: true },
     { key: 'rim_erd', label: 'Rim Erd', categories: ['RIM'], target: 'variant', type: 'decimal', isConstant: true },
     { key: 'valve_min_rim_depth_mm', label: 'Valve Min Rim Depth mm', categories: ['VALVESTEM'], target: 'variant', type: 'integer', isConstant: true },
     { key: 'valve_max_rim_depth_mm', label: 'Valve Max Rim Depth mm', categories: ['VALVESTEM'], target: 'variant', type: 'integer', isConstant: true },
-    { key: 'internal_width_mm', label: 'Internal Width mm', categories: ['RIM'], target: 'variant', type: 'integer', isConstant: true },
+    { key: 'internal_width_mm', label: 'Internal Width mm', categories: ['ACCESSORY'], target: 'variant', type: 'integer', isConstant: true },
     { key: 'acc_rim_width_min', label: 'Accessory Compatible Rim Width MIN (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'acc_rim_width_max', label: 'Accessory Compatible Rim Width MAX (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'hub_sp_offset_spoke_hole_left', label: 'Hub SP Offset Spoke Hole Left', categories: ['HUB'], target: 'variant', type: 'decimal' },
@@ -489,8 +490,10 @@ export default function OpsDashboard() {
      activeTabRegistry.forEach(m => {
         // Evaluate based on registry rule
         let shopifyVal = null;
-        // --- FIX: Change m.source to m.target ---
-        if (m.target === 'variant') {
+        // --- IMPROVED: Handle Shopify Options (Size, Holes, etc) ---
+        if (m.isOption) {
+           shopifyVal = variant[m.key];
+        } else if (m.target === 'variant') {
            shopifyVal = variant[m.key] || variant.metafields?.find(sm => sm.key === m.key)?.value;
         } else {
            shopifyVal = variant.product?.[m.key] || variant.product?.metafields?.find(sm => sm.key === m.key)?.value;
@@ -505,6 +508,11 @@ export default function OpsDashboard() {
            nsVal = shopValsNorm.includes(ncVal) ? ncVal : (shopValsNorm[0] || "");
         } else {
            nsVal = normalize(shopifyVal);
+        }
+
+        // Special handling for Hole Counts (e.g. "32H" vs "32")
+        if (m.key === 'option2' && tab === 'rims' && ncVal.replace(/\D/g, '') === nsVal.replace(/\D/g, '') && nsVal !== "") {
+           return; // Match!
         }
 
         if (ncVal !== nsVal) {
@@ -1013,7 +1021,13 @@ export default function OpsDashboard() {
                                if (lowL.includes('(p)') && !lowK.includes('variant') && lowK.includes('weight')) return true;
                             }
 
-                            // 3. General technical match
+                            // 3. Option Position mapping
+                            if (lowT.startsWith('option')) {
+                               const pos = lowT.replace('option', '');
+                               if (lowK === `option${pos} value`) return true;
+                            }
+
+                            // 4. General technical match
                             return lowK === lowT || 
                                    lowK.includes(`custom.${lowT}`) || 
                                    (lowK.includes('metafield:') && lowK.includes(lowT));

@@ -84,6 +84,9 @@ export default async function handler(req, res) {
                 node { key namespace value }
               }
             }
+            option1
+            option2
+            option3
             selectedOptions {
               name
               value
@@ -135,6 +138,9 @@ export default async function handler(req, res) {
              metafields: node.product.metafields?.edges.map(e => e.node) || []
           } : null,
           metafields: node.metafields?.edges.map(e => e.node) || [],
+          option1: node.option1,
+          option2: node.option2,
+          option3: node.option3,
           options: node.selectedOptions?.reduce((acc, opt) => {
              acc[opt.name] = opt.value;
              return acc;
