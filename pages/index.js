@@ -7,7 +7,6 @@ const COMPONENT_SUGGESTIONS = {};
 
 const DROPDOWN_OPTIONS = {
   'Wheel Spec Position': ['Front', 'Rear', 'Front/Rear'],
-  'Brake Interface': ['Centerlock', '6-Bolt', 'N/A', 'Rim Brake'],
   'Option 1 Name': ['Size', 'Spoke Count', 'Freehub', 'Spacing', 'Color', 'Type'],
   'Option 2 Name': ['Size', 'Spoke Count', 'Freehub', 'Spacing', 'Color', 'Type'],
   'Rim Size': ['26"', '27.5"', '29"', '30"', '31"', '32"', '700c', '650b'],
@@ -17,7 +16,6 @@ const DROPDOWN_OPTIONS = {
   'Rim Washer Policy': ['Optional', 'Mandatory', 'Not Compatible', 'None'],
   'Spoke Type': ['J-Bend', 'Straight Pull', 'Carbon'],
   'Spoke Rounding Rule': ['Nearest', 'Even'],
-  'Hub Spacing': ['QR', '100mm', '110mm', '135mm', '142mm', '148mm', '150mm', '157mm'],
   'Hub Freehub': ['Standard', 'XD', 'XDR', 'N/A']
 };
 
@@ -144,19 +142,15 @@ export default function OpsDashboard() {
     const [syncMismatches, setSyncMismatches] = useState({}); // { [rid]: [fieldKey1, fieldKey2] }
     const [showMismatchesOnly, setShowMismatchesOnly] = useState(false);
   const [metafieldRegistry, setMetafieldRegistry] = useState([
-    { key: 'inventory_alert_threshold', label: 'Inventory Alert Threshold', categories: ['HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'hub_manual_cross_value', label: 'Hub Manual Cross Value', categories: ['HUB'], target: 'variant', type: 'decimal' },
     { key: 'weight_g', label: 'Variant Metafield: custom.weight_g [number_decimal]', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'decimal' },
     { key: 'length_adjust_mm', label: 'Variant Metafield: custom.length_adjust_mm [number_decimal]', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE'], target: 'variant', type: 'decimal' },
     { key: 'wheel_spec_position', label: 'Variant Metafield: custom.wheel_spec_position [single_line_text_field]', categories: ['RIM', 'HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
-    { key: 'wheel_spec_brake_interface', label: 'Brake Interface', categories: ['HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
-    { key: 'wheel_spec_hub_spacing', label: 'Hub Spacing', categories: ['HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
     { key: 'option1', label: 'Option1 Value', categories: ['RIM'], target: 'variant', isOption: true },
     { key: 'option2', label: 'Option2 Value', categories: ['RIM'], target: 'variant', isOption: true },
     { key: 'rim_erd', label: 'Variant Metafield: custom.rim_erd [number_decimal]', categories: ['RIM'], target: 'variant', type: 'decimal', isConstant: true },
     { key: 'valve_min_rim_depth_mm', label: 'Valve Min Rim Depth mm', categories: ['VALVESTEM'], target: 'variant', type: 'integer', isConstant: true },
     { key: 'valve_max_rim_depth_mm', label: 'Valve Max Rim Depth mm', categories: ['VALVESTEM'], target: 'variant', type: 'integer', isConstant: true },
-    { key: 'internal_width_mm', label: 'Internal Width mm', categories: ['ACCESSORY'], target: 'variant', type: 'integer', isConstant: true },
     { key: 'acc_rim_width_min', label: 'Accessory Compatible Rim Width MIN (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'acc_rim_width_max', label: 'Accessory Compatible Rim Width MAX (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'hub_sp_offset_spoke_hole_left', label: 'Hub SP Offset Spoke Hole Left', categories: ['HUB'], target: 'variant', type: 'decimal' },
@@ -1152,7 +1146,7 @@ export default function OpsDashboard() {
         '_internal_database_id', 'RIM SIZE', 'RIM ERD', 'WEIGHT G (V)', 'Weight (V)', 'rim_size', 
         'rim_erd', 'weight_g', 'Rim Size', 'Rim Erd', 
         'Weight G (v)', 'Hole Count', 'Color', 'Rim Spoke Hole Offset', 'ProductURL',
-        'historical_order_count', 'historical order count', 'Name', 'name'
+        'historical_order_count', 'historical order count', 'Name', 'name', 'inventory_alert_threshold', 'wheel_spec_brake_interface', 'wheel_spec_hub_spacing', 'internal_width_mm', 'Brake Interface', 'Hub Spacing'
      ].map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
      const allKeys = new Set();
@@ -1530,7 +1524,7 @@ export default function OpsDashboard() {
     } else if (tab === 'nipples') {
       newComp = { ...newComp, [findKey('Option 1 Name')]: 'Type', [findKey('Option 1 Value')]: '' };
     } else if (tab === 'hubs') {
-      newComp = { ...newComp, [findKey('Option 1 Name')]: 'Spoke Count', [findKey('Option 2 Name')]: 'Spacing', [findKey('Wheel Spec Position')]: '', [findKey('Brake Interface')]: 'Centerlock', [findKey('Hub Type')]: 'J-Bend', [findKey('Hub Pairing Policy')]: 'None' };
+      newComp = { ...newComp, [findKey('Option 1 Name')]: 'Spoke Count', [findKey('Option 2 Name')]: 'Spacing', [findKey('Wheel Spec Position')]: '', [findKey('Hub Type')]: 'J-Bend' };
     } else if (tab === 'spokes') {
         newComp = { ...newComp, [findKey('Option 1 Name')]: 'Color', [findKey('Option 2 Name')]: 'Size', [findKey('Spoke Type')]: 'J-Bend' };
     }
@@ -3730,7 +3724,7 @@ export default function OpsDashboard() {
                           </button>
                           {(() => {
                              const activeList = (componentData[componentTab] || []).map((item, idx) => ({ ...item, _rawIdx: idx }));
-                             const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', 'wheel_spec_brake_interface', 'wheel_spec_hub_spacing', 'Brake Interface', 'Hub Spacing'];
+                             const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx'];
                              const requiredKeys = ['Name', 'Vendor', ...Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k))];
                              const allConfirmed = !isDuplicateMode || requiredKeys.every(k => confirmedFields.includes(k));
                              
