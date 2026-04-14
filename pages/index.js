@@ -731,7 +731,8 @@ export default function OpsDashboard() {
     }
     const cleanArray = unifyComponentKeys(newArray);
     const sanitizedArray = cleanArray.map(item => {
-      const { tags, Tags, _rawIdx, _editIdx, ...rest } = item;
+      const { tags, Tags, _rawIdx, _editIdx, ...rest } = item || {};
+      if (!item) return null;
       return rest;
     });
     setComponentSaving(true);
@@ -824,8 +825,8 @@ export default function OpsDashboard() {
    const handleFinalConfirmSave = React.useCallback(async () => {
       setShowReviewModal(false);
       // DATA SANITIZATION: Strip internal ephemeral keys before persisting to GitHub
-      const cleanedArray = stagedUpdatedArray.map(item => {
-          const { _rid, _isNew, _rawIdx, _editIdx, ...rest } = item;
+      const cleanedArray = stagedUpdatedArray.filter(Boolean).map(item => {
+          const { _rid, _isNew, _rawIdx, _editIdx, ...rest } = item || {};
           return rest;
       });
 
@@ -3852,7 +3853,7 @@ export default function OpsDashboard() {
                              <div className="space-y-4">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block italic">Technical Specifications</label>
                                 {(() => {
-                                   const activeList = (componentData[componentTab] || []).map((item, idx) => ({ ...item, _rawIdx: idx }));
+                                   const activeList = (componentData[componentTab] || []).filter(Boolean).map((item, idx) => ({ ...item, _rawIdx: idx }));
                                    const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'Shopify Variant ID', 'Shopify Product ID', 'shopify_variant_id', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx'];
                                    const specFields = [...new Set(activeList.slice(0, 10).flatMap(item => Object.keys(item)))].filter(k => !excludeKeys.includes(k));
                                    
@@ -4114,7 +4115,7 @@ export default function OpsDashboard() {
                                              </div>
                                              <div className="bg-zinc-50/50 p-3 rounded-xl border border-zinc-100/30">
                                                 <div className="text-[7px] font-black uppercase text-zinc-400 mb-0.5">Raw Index</div>
-                                                <div className="font-mono text-[8px] text-zinc-500">{editingComponent._rawIdx ?? "New"}</div>
+                                                <div className="font-mono text-[8px] text-zinc-500">{editingComponent?._rawIdx ?? "New"}</div>
                                              </div>
                                           </div>
                                        </div>
@@ -4773,6 +4774,8 @@ export default function OpsDashboard() {
     </div>
   );
 }
+
+
 
 
 

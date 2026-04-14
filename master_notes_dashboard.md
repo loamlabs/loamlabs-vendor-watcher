@@ -58,6 +58,12 @@ The Component Library has been transformed into a high-performance, modular spre
   - **One-Click Discard**: Hardened the Discard Draft functionality to clear all unsaved state, added rows, and selection contexts across all tabs in a single operation.
 - **Persistence Layer**: Spreadsheet edits are tracked in `sessionStorage` (`loamops_grid_unsaved_v1`) to prevent data loss on accidental refreshes, and are persisted to GitHub via a floating batch-save UI.
 
+### **Phase 7: Importer & Multi-Edit Stabilization (Implemented Apr 2026)**
+The Component Library engine has been hardened to handle bulk operations and automated data ingestion from external storefronts.
+- **Smart Variant Deduplication**: The Shopify Product Importer specifically identifies "Color", "Finish", and "Surface" options. It groups variants by their core technical specifications and only imports a single representative variant per specification group. This prevents the library from being flooded with redundant color rows.
+- **Nuclear Null-Safety**: Implemented a comprehensive safety layer across the library's state engine. Every mapping, filter, and sorting operation (including selection contexts) is protected by existence checks. This resolved the critical "Application Error" crashes during multi-selection and mass-edit operations.
+- **Stable Mass Editing**: Hardened the multi-selection context to use persistent RID (Registry ID) tracking. This ensures that mass-edit operations reliably target the correct objects even when filters or sorts are active in the background.
+
 ---
-*Updated April 2026 to reflect Passive Stability Architecture and Component Library identity standardization.*
+*Updated April 14, 2026 to reflect Spreadsheet stabilization and Importer deduplication logic.*
 
