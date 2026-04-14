@@ -40,7 +40,7 @@ const ReviewChangesModal = ({ isOpen, onClose, onConfirm, changes, originalData,
               <div className="bg-emerald-50 rounded-2xl border border-emerald-100 divide-y divide-emerald-100 overflow-hidden">
                 {addedRows.map((row, idx) => (
                   <div key={idx} className="p-4 text-sm text-emerald-900 flex justify-between items-center">
-                    <span className="font-medium">{row.Name || 'Unnamed Component'}</span>
+                    <span className="font-medium">{row.Title || row.Name || row.name || row.title || 'Unnamed Component'}</span>
                     <span className="text-xs bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200 uppercase font-bold tracking-tighter">New Row</span>
                   </div>
                 ))}

@@ -420,18 +420,24 @@ export default function OpsDashboard() {
     
     const findInJSON = () => {
        // A. Try registry key match (e.g. "rim_erd")
-       if (regKey && component[regEntry.key] !== undefined) return component[regEntry.key];
+       if (regKey && component[regEntry.key] !== undefined && String(component[regEntry.key]).trim() !== '') {
+          return component[regEntry.key];
+       }
        
        // B. Deep Parser for Technical Keys 
        // Pattern: "Metafield: custom.rim_erd [number_decimal]" OR "Variant Metafield: custom.weight_g [number_decimal]"
        const deepMatch = keys.find(k => {
           const lowerK = k.toLowerCase();
+          // Skip if value is blank
+          if (String(component[k]).trim() === '') return false;
+
           // Remove noise
           let cleanK = lowerK.replace(/variant metafield:|metafield:|custom\.|\[.*?\]/g, '').replace(/[^a-z0-9]/g, '');
           
           // Match against registry key OR target label
           return (regKey && cleanK === regKey.replace(/[^a-z0-9]/g, '')) || cleanK === normTarget;
        });
+
        if (deepMatch) return component[deepMatch];
        return "";
     };
@@ -1074,8 +1080,10 @@ export default function OpsDashboard() {
      setLoading(false);
    };
 
-   const handleImportProductByID = async (productIdOverride) => {
-      const pidInput = productIdOverride || productSyncId;
+   const handleImportProductByID = async (productIdOverride = null) => {
+      // Target ID Fallback: Arg -> State -> Editing Row
+      const pidInput = productIdOverride || productSyncId || editingComponent?.shopify_product_id;
+
       if (!pidInput) {
          showNotification("Please enter a Shopify Product ID", "warning");
          return;
@@ -1102,9 +1110,13 @@ export default function OpsDashboard() {
             m.categories?.map(c => c.toLowerCase() + 's').includes(tab)
          );
 
-         const currentData = componentData[tab] || [];
+         // COLLISION ENGINE: Merge permanent data with currently staged/added rows
+         const permanentData = componentData[tab] || [];
+         const stagedData = gridAddedRows[tab] || [];
+         const currentData = [...permanentData, ...stagedData];
+
          const newChanges = { ...(gridUnsavedChanges[tab] || {}) };
-         const newAdded = [...(gridAddedRows[tab] || [])];
+         const newAdded = [...stagedData]; // Work with currently staged list
          let importedCount = 0;
          let collisionCount = 0;
 
@@ -1171,10 +1183,15 @@ export default function OpsDashboard() {
                   }
                });
 
+               // Add to the head of the staged list
                newAdded.unshift(baseObj);
                importedCount++;
             }
          });
+
+         // --- SYNC STATE BACK TO GRID ---
+         setGridAddedRows(prev => ({ ...prev, [tab]: newAdded }));
+         setGridUnsavedChanges(prev => ({ ...prev, [tab]: newChanges }));
 
          if (importedCount > 0 || collisionCount > 0) {
             setGridAddedRows(prev => ({ ...prev, [tab]: newAdded }));
