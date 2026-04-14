@@ -1474,7 +1474,7 @@ export default function OpsDashboard() {
 
       // If it's a permanent row but has staged updates, deleting it currently just reverts updates
       // The user likely wants to confirm a hard delete from the database
-      const name = item.Name || item.name || item.title || "Unknown";
+      const name = item.Title || item.Name || item.name || item.title || "Unknown";
       if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
 
       const rawData = componentData[componentTab] || [];
@@ -1636,7 +1636,8 @@ export default function OpsDashboard() {
     
     const activeList = componentData[componentTab].map((item, idx) => ({ ...item, _rawIdx: idx }));
     const addedRows = gridAddedRows[componentTab] || [];
-    const combinedList = [...activeList, ...addedRows];
+    // Prepend addedRows so they naturally start at the top
+    const combinedList = [...addedRows, ...activeList];
 
     let preFilteredList = componentVendorFilter === 'All' 
       ? combinedList 
@@ -1658,8 +1659,9 @@ export default function OpsDashboard() {
 
     return [...preFilteredList].sort((a,b) => {
       // Prioritize actual drafts (items in gridAddedRows) over database items
-      const isDraftA = gridAddedRows[componentTab]?.some(r => (r._rid && r._rid === a._rid));
-      const isDraftB = gridAddedRows[componentTab]?.some(r => (r._rid && r._rid === b._rid));
+      // Prioritize actual drafts (items in gridAddedRows) over database items
+      const isDraftA = gridAddedRows[componentTab]?.some(r => r._rid === a._rid);
+      const isDraftB = gridAddedRows[componentTab]?.some(r => r._rid === b._rid);
 
       if (isDraftA && !isDraftB) return -1;
       if (!isDraftA && isDraftB) return 1;
@@ -1670,8 +1672,8 @@ export default function OpsDashboard() {
       if (vA === "" && vB !== "") return -1;
       if (vA !== "" && vB === "") return 1;
 
-      const aN = (a.Name || a.name || a.title || "Unknown").toLowerCase();
-      const bN = (b.Name || b.name || b.title || "Unknown").toLowerCase();
+      const aN = (a.Title || a.Name || a.name || a.title || "Unknown").toLowerCase();
+      const bN = (b.Title || b.Name || b.name || b.title || "Unknown").toLowerCase();
       return aN.localeCompare(bN);
     });
   }, [componentData, componentTab, gridAddedRows, componentVendorFilter, showMissingOnly, showMismatchesOnly, syncMismatches, getComponentValidation, getComponentUniqueId]);
