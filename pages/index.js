@@ -733,6 +733,7 @@ export default function OpsDashboard() {
       'Wheel Spec Position', 'wheel_spec_position', 
       'Rim Size', 'Rim size', 'rim_size',
       'Weight G', 'Weight g', 'weight_g',
+      'Weight G (p)', 'Weight G (v)', 'Weight G (P)', 'Weight G (V)',
       'Rim ERD', 'Rim Erd', 'rim_erd',
       'Name', 'name'
     ];
@@ -1642,7 +1643,7 @@ export default function OpsDashboard() {
   const handleDrop = React.useCallback((targetCol) => {
     if (!draggedColumn || draggedColumn === targetCol) return;
     const activeList = componentData[componentTab] || [];
-    const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx'];
+                                   const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'Shopify Variant ID', 'Shopify Product ID', 'shopify_variant_id', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', 'Wheel Spec Position', 'wheel_spec_position', 'Rim Size', 'Weight G', 'Rim ERD', 'Weight G (p)', 'Weight G (v)', 'Weight G (P)', 'Weight G (V)'];
     const rawColumns = Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k));
     let currentCols = componentColumnOrder[componentTab] || rawColumns;
     const srcIdx = currentCols.indexOf(draggedColumn);
@@ -3867,7 +3868,7 @@ export default function OpsDashboard() {
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block italic">Technical Specifications</label>
                                 {(() => {
                                    const activeList = (componentData[componentTab] || []).filter(Boolean).map((item, idx) => ({ ...item, _rawIdx: idx }));
-                                   const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'Shopify Variant ID', 'Shopify Product ID', 'shopify_variant_id', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', 'Wheel Spec Position', 'wheel_spec_position', 'Rim Size', 'Weight G', 'Rim ERD'];
+                                                                  const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'Shopify Variant ID', 'Shopify Product ID', 'shopify_variant_id', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', 'Wheel Spec Position', 'wheel_spec_position', 'Rim Size', 'Weight G', 'Rim ERD', 'Weight G (p)', 'Weight G (v)', 'Weight G (P)', 'Weight G (V)'];
                                    const specFields = [...new Set(activeList.slice(0, 10).flatMap(item => Object.keys(item)))].filter(k => !excludeKeys.includes(k));
                                    
                                    return specFields.map(key => {
@@ -3876,7 +3877,11 @@ export default function OpsDashboard() {
                                           const nk = key.toLowerCase().replace(/[^a-z0-9]/g, ''); 
                                           return nf === nk || nk.startsWith(nf) || nf.startsWith(nk) || nk.includes(nf) || nf.includes(nk); 
                                        });
-                                      const options = DROPDOWN_OPTIONS[key] || DROPDOWN_OPTIONS[formatColumnTitle(key)] || DROPDOWN_OPTIONS[key.toLowerCase()];
+                                                                             // DYNAMIC OPTIONS: For Rims, pull Option1 Value choices from Shopify metafield validation
+                                       let options = DROPDOWN_OPTIONS[key] || DROPDOWN_OPTIONS[formatColumnTitle(key)] || DROPDOWN_OPTIONS[key.toLowerCase()];
+                                       if (key === 'Option1 Value' && componentTab === 'rims' && metafieldOptionsMap['wheel_spec_rim_size']) {
+                                          options = metafieldOptionsMap['wheel_spec_rim_size'];
+                                       }
                                       
                                       return (
                                          <div key={key} className="flex items-start gap-4 group/field">
@@ -3948,7 +3953,7 @@ export default function OpsDashboard() {
                           </button>
                           {(() => {
                              const activeList = (componentData[componentTab] || []).map((item, idx) => ({ ...item, _rawIdx: idx }));
-                             const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', 'Wheel Spec Position', 'wheel_spec_position', 'Rim Size', 'Weight G', 'Rim ERD'];
+                             const excludeKeys = [, 'Weight G (p)', 'Weight G (v)', 'Weight G (P)', 'Weight G (V)'];
                              const requiredKeys = ['Name', 'Vendor', ...Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k))];
                              const allConfirmed = !isDuplicateMode || requiredKeys.every(k => confirmedFields.includes(k));
                              
@@ -4076,7 +4081,7 @@ export default function OpsDashboard() {
                                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block italic">Technical Specifications</label>
                                  {(() => {
                                     const activeList = (componentData[componentTab] || []);
-                                    const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'Shopify Variant ID', 'Shopify Product ID', 'shopify_variant_id', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', 'Wheel Spec Position', 'wheel_spec_position', 'Rim Size', 'Weight G', 'Rim ERD'];
+                                    const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'Shopify Variant ID', 'Shopify Product ID', 'shopify_variant_id', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', 'Wheel Spec Position', 'wheel_spec_position', 'Rim Size', 'Weight G', 'Rim ERD', 'Weight G (p)', 'Weight G (v)', 'Weight G (P)', 'Weight G (V)'];
                                     const specFields = Array.from(new Set(activeList.slice(0, 10).flatMap(item => Object.keys(item)))).filter(k => !excludeKeys.includes(k));
                                     
                                     const nodes = specFields.map(key => {
@@ -4085,7 +4090,11 @@ export default function OpsDashboard() {
                                           const nk = key.toLowerCase().replace(/[^a-z0-9]/g, ''); 
                                           return nf === nk || nk.startsWith(nf) || nf.startsWith(nk) || nk.includes(nf) || nf.includes(nk); 
                                        });
-                                       const options = DROPDOWN_OPTIONS[key] || DROPDOWN_OPTIONS[formatColumnTitle(key)] || DROPDOWN_OPTIONS[key.toLowerCase()];
+                                       // DYNAMIC OPTIONS: For Rims, pull Option1 Value choices from Shopify metafield validation
+                                       let options = DROPDOWN_OPTIONS[key] || DROPDOWN_OPTIONS[formatColumnTitle(key)] || DROPDOWN_OPTIONS[key.toLowerCase()];
+                                       if (key === 'Option1 Value' && componentTab === 'rims' && metafieldOptionsMap['wheel_spec_rim_size']) {
+                                          options = metafieldOptionsMap['wheel_spec_rim_size'];
+                                       }
                                        
                                        return (
                                           <div key={key} className="flex items-start gap-4">
@@ -4787,6 +4796,7 @@ export default function OpsDashboard() {
     </div>
   );
 }
+
 
 
 
