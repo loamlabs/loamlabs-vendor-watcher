@@ -6,10 +6,10 @@ import { RefreshCcw, RefreshCw, Search, Package, ShieldCheck, ShieldAlert, Plus,
 const COMPONENT_SUGGESTIONS = {};
 
 const DROPDOWN_OPTIONS = {
-  'Wheel Spec Position': ['Front', 'Rear', 'Front/Rear'],
+  'Variant Metafield: custom.wheel_spec_position [single_line_text_field]': ['Front', 'Rear', 'Front/Rear'],
   'Option 1 Name': ['Size', 'Spoke Count', 'Freehub', 'Spacing', 'Color', 'Type'],
   'Option 2 Name': ['Size', 'Spoke Count', 'Freehub', 'Spacing', 'Color', 'Type'],
-  'Rim Size': ['26"', '27.5"', '29"', '30"', '31"', '32"', '700c', '650b'],
+  'Option1 Value': ['26"', '27.5"', '29"', '30"', '31"', '32"', '700c', '650b'],
   'Spoke Count': ['16h', '18h', '20h', '24h', '28h', '32h', '36h'],
   'Hub Type': ['J-Bend', 'Straight Pull', 'Hook Flange'],
   'Hub Lacing Policy': ['Standard', 'Force 2-Cross for 28h Only', 'Force 3-Cross for 28h Only', 'Force All as 2-Cross', 'Use Manual Override Field', 'None'],
@@ -20,10 +20,10 @@ const DROPDOWN_OPTIONS = {
 };
 
 const MANDATORY_FIELDS = {
-  rims: ['Title', 'Vendor', 'Option1 Name', 'Option1 Value', 'Option2 Name', 'Option2 Value', 'Wheel Spec Position', 'Rim Erd', 'Weight G (p)'],
-  hubs: ['Title', 'Vendor', 'Option1 Name', 'Option1 Value', 'Hub Type', 'Weight G (v)', 'Wheel Spec Position'],
-  spokes: ['Title', 'Vendor', 'Spoke Type', 'Spoke Cross Section Area Mm2', 'Spoke Model Group', 'Weight G (p)', 'Spoke Diameter Spec', 'Spoke Rounding Rule'],
-  nipples: ['Title', 'Vendor', 'Option1 Name', 'Option1 Value', 'Weight G (p)']
+  rims: ['Title', 'Vendor', 'Option1 Name', 'Option1 Value', 'Option2 Name', 'Option2 Value', 'Variant Metafield: custom.wheel_spec_position [single_line_text_field]', 'Variant Metafield: custom.rim_erd [number_decimal]', 'Variant Metafield: custom.weight_g [number_decimal]'],
+  hubs: ['Title', 'Vendor', 'Option1 Name', 'Option1 Value', 'Hub Type', 'Variant Metafield: custom.weight_g [number_decimal]', 'Variant Metafield: custom.wheel_spec_position [single_line_text_field]'],
+  spokes: ['Title', 'Vendor', 'Spoke Type', 'Spoke Cross Section Area Mm2', 'Spoke Model Group', 'Variant Metafield: custom.weight_g [number_decimal]', 'Spoke Diameter Spec', 'Spoke Rounding Rule'],
+  nipples: ['Title', 'Vendor', 'Option1 Name', 'Option1 Value', 'Variant Metafield: custom.weight_g [number_decimal]']
 };
 
 
@@ -729,11 +729,24 @@ export default function OpsDashboard() {
         showNotification("Save Error: No category selected", "error");
         return false;
     }
+    const DEPRECATED_KEYS = [
+      'Wheel Spec Position', 'wheel_spec_position', 
+      'Rim Size', 'Rim size', 'rim_size',
+      'Weight G', 'Weight g', 'weight_g',
+      'Rim ERD', 'Rim Erd', 'rim_erd',
+      'Name', 'name'
+    ];
+    
     const cleanArray = unifyComponentKeys(newArray);
     const sanitizedArray = cleanArray.map(item => {
       const { tags, Tags, _rawIdx, _editIdx, ...rest } = item || {};
       if (!item) return null;
-      return rest;
+      
+      // DEEP CLEAN: Remove legacy/deprecated keys
+      const finalItem = { ...rest };
+      DEPRECATED_KEYS.forEach(k => delete finalItem[k]);
+      
+      return finalItem;
     });
     setComponentSaving(true);
     try {
@@ -3780,7 +3793,7 @@ export default function OpsDashboard() {
                              <div className="space-y-4 mb-10">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500/60 block italic">Primary Identity</label>
                                 {[
-                                   { label: 'Display Name', key: 'Name' },
+                                   { label: 'Display Name', key: 'Title' },
                                    { label: 'Vendor / Brand', key: 'Vendor' }
                                 ].map(field => (
                                    <div key={field.key} className="flex gap-4">
@@ -3854,7 +3867,7 @@ export default function OpsDashboard() {
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block italic">Technical Specifications</label>
                                 {(() => {
                                    const activeList = (componentData[componentTab] || []).filter(Boolean).map((item, idx) => ({ ...item, _rawIdx: idx }));
-                                   const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'Shopify Variant ID', 'Shopify Product ID', 'shopify_variant_id', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx'];
+                                   const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'Shopify Variant ID', 'Shopify Product ID', 'shopify_variant_id', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', 'Wheel Spec Position', 'wheel_spec_position', 'Rim Size', 'Weight G', 'Rim ERD'];
                                    const specFields = [...new Set(activeList.slice(0, 10).flatMap(item => Object.keys(item)))].filter(k => !excludeKeys.includes(k));
                                    
                                    return specFields.map(key => {
@@ -3935,7 +3948,7 @@ export default function OpsDashboard() {
                           </button>
                           {(() => {
                              const activeList = (componentData[componentTab] || []).map((item, idx) => ({ ...item, _rawIdx: idx }));
-                             const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx'];
+                             const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', 'Wheel Spec Position', 'wheel_spec_position', 'Rim Size', 'Weight G', 'Rim ERD'];
                              const requiredKeys = ['Name', 'Vendor', ...Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k))];
                              const allConfirmed = !isDuplicateMode || requiredKeys.every(k => confirmedFields.includes(k));
                              
@@ -4063,7 +4076,7 @@ export default function OpsDashboard() {
                                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block italic">Technical Specifications</label>
                                  {(() => {
                                     const activeList = (componentData[componentTab] || []);
-                                    const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'Shopify Variant ID', 'Shopify Product ID', 'shopify_variant_id', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx'];
+                                    const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'Shopify Variant ID', 'Shopify Product ID', 'shopify_variant_id', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', 'Wheel Spec Position', 'wheel_spec_position', 'Rim Size', 'Weight G', 'Rim ERD'];
                                     const specFields = Array.from(new Set(activeList.slice(0, 10).flatMap(item => Object.keys(item)))).filter(k => !excludeKeys.includes(k));
                                     
                                     const nodes = specFields.map(key => {

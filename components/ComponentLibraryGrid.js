@@ -156,14 +156,15 @@ const ComponentLibraryGrid = React.memo(({
      const rawData = componentData[componentTab] || [];
      
      // NUCLEAR BAN LIST - Everything is normalized to lowercase alphanumeric for comparison
-     const BAN_LIST = [
-        'Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'Tags', 'tags', 
-        'id', 'ID', 'shopify_product_id', 'shopify_variant_id', 'Product ID', 'Variant ID', 
-        '_rid', '_isNew', '_rawIdx', '_editIdx', '_internal_database_id', 
-        'RIM SIZE', 'RIM ERD', 'WEIGHT G (V)', 'Weight (V)', 'rim_size', 'rim_erd', 'weight_g', 
-        'Rim Size', 'Rim Erd', 'Weight G (v)', 'Hole Count', 
-        'Color', 'Rim Spoke Hole Offset', 'ProductURL', 'historical_order_count'
-     ].map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      const BAN_LIST = [
+         'Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'Tags', 'tags', 
+         'id', 'ID', 'shopify_product_id', 'shopify_variant_id', 'Product ID', 'Variant ID', 
+         '_rid', '_isNew', '_rawIdx', '_editIdx', '_internal_database_id', 
+         'RIM SIZE', 'RIM ERD', 'WEIGHT G (V)', 'Weight (V)', 'rim_size', 'rim_erd', 'weight_g', 
+         'Rim Size', 'Rim Erd', 'Weight G (v)', 'Hole Count', 
+         'Color', 'Rim Spoke Hole Offset', 'ProductURL', 'historical_order_count',
+         'Wheel Spec Position', 'wheel_spec_position'
+      ].map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
      const allKeys = new Set();
      const blockedKeys = [];
