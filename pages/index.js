@@ -3779,16 +3779,6 @@ export default function OpsDashboard() {
                         </div>
 
                        <div className="flex-grow overflow-y-auto p-8 space-y-8 scrollbar-thin">
-                          {isDuplicateMode && (
-                             <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl">
-                                <div className="flex items-center gap-3 text-amber-900 mb-2 font-black uppercase italic text-xs">
-                                   <ShieldAlert size={16}/> Safety Protocol Active
-                                </div>
-                                <p className="text-[10px] font-bold text-amber-700 leading-relaxed uppercase tracking-widest">
-                                   You are duplicating a component. Please manually verify and confirm each entry in the checklist below to unlock the save button.
-                                </p>
-                             </div>
-                          )}
 
                           <div className="grid gap-6">
                              {/* BASIC FIELDS */}
@@ -3800,22 +3790,14 @@ export default function OpsDashboard() {
                                 ].map(field => (
                                    <div key={field.key} className="flex gap-4">
                                       <div className="flex-grow">
-                                         <div className="text-[9px] font-black uppercase text-zinc-500/60 mb-1 ml-1 tracking-widest">{field.label}{(field.key === 'Name' || field.key === 'Vendor') && <span className="text-red-500 ml-1 font-bold">*</span>}</div>
+                                         <div className="text-[9px] font-black uppercase text-zinc-500/60 mb-1 ml-1 tracking-widest">{field.label}{(field.key === 'Title' || field.key === 'Vendor') && <span className="text-red-500 ml-1 font-bold">*</span>}</div>
                                          <input 
                                             type="text" 
                                             value={getComponentValue(editingComponent, field.key)}
                                             onChange={(e) => setEditingComponent({...editingComponent, [field.key]: e.target.value})}
-                                             className={`w-full p-4 rounded-xl outline-none border-2 transition-all font-bold text-sm ${(field.key === 'Name' || field.key === 'Vendor') && (String(getComponentValue(editingComponent, field.key)).trim() === '') ? 'bg-red-50 border-red-200 focus:border-red-500' : 'bg-zinc-50 border-transparent focus:border-black'}`}
+                                             className={`w-full p-4 rounded-xl outline-none border-2 transition-all font-bold text-sm ${(field.key === 'Title' || field.key === 'Vendor') && (String(getComponentValue(editingComponent, field.key)).trim() === '') ? 'bg-red-50 border-red-200 focus:border-red-500' : 'bg-zinc-50 border-transparent focus:border-black'}`}
                                          />
                                       </div>
-                                      {isDuplicateMode && (
-                                         <button 
-                                            onClick={() => toggleFieldConfirmation(field.key)}
-                                            className={`p-4 rounded-xl border-2 transition-all ${confirmedFields.includes(field.key) ? 'bg-green-500 border-green-600 text-white' : 'bg-white border-zinc-200 text-zinc-300'}`}
-                                         >
-                                            <ShieldCheck size={20}/>
-                                         </button>
-                                      )}
                                    </div>
                                 ))}
                              </div>
@@ -3869,20 +3851,29 @@ export default function OpsDashboard() {
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block italic">Technical Specifications</label>
                                 {(() => {
                                    const activeList = (componentData[componentTab] || []).filter(Boolean).map((item, idx) => ({ ...item, _rawIdx: idx }));
-                                                                  const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'Shopify Variant ID', 'Shopify Product ID', 'shopify_variant_id', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', 'Wheel Spec Position', 'wheel_spec_position', 'Rim Size', 'Weight G', 'Rim ERD', 'Weight G (p)', 'Weight G (v)', 'Weight G (P)', 'Weight G (V)'];
+                                   const excludeKeys = ['Name', 'name', 'title', 'Title', 'Vendor', 'vendor', 'Brand', 'brand', 'id', 'ID', 'shopify_product_id', 'Product ID', 'Variant ID', 'Shopify Variant ID', 'Shopify Product ID', 'shopify_variant_id', 'tags', 'RID', 'RAWIDX', '_rid', '_rawIdx', '_isNew', '_editIdx', 'Wheel Spec Position', 'wheel_spec_position', 'Rim Size', 'Weight G', 'Rim ERD', 'Weight G (p)', 'Weight G (v)', 'Weight G (P)', 'Weight G (V)'];
                                    const specFields = [...new Set(activeList.slice(0, 10).flatMap(item => Object.keys(item)))].filter(k => !excludeKeys.includes(k));
                                    
                                    return specFields.map(key => {
-                                      const isMandatory = MANDATORY_FIELDS[componentTab]?.some(f => { 
+                                      const isMandatoryRaw = MANDATORY_FIELDS[componentTab]?.some(f => { 
                                           const nf = f.toLowerCase().replace(/[^a-z0-9]/g, ''); 
                                           const nk = key.toLowerCase().replace(/[^a-z0-9]/g, ''); 
                                           return nf === nk || nk.startsWith(nf) || nf.startsWith(nk) || nk.includes(nf) || nf.includes(nk); 
                                        });
-                                                                             // DYNAMIC OPTIONS: For Rims, pull Option1 Value choices from Shopify metafield validation
-                                       let options = DROPDOWN_OPTIONS[key] || DROPDOWN_OPTIONS[formatColumnTitle(key)] || DROPDOWN_OPTIONS[key.toLowerCase()];
-                                       if (key === 'Option1 Value' && componentTab === 'rims' && metafieldOptionsMap['wheel_spec_rim_size']) {
-                                          options = metafieldOptionsMap['wheel_spec_rim_size'];
-                                       }
+
+                                      // CONDITIONAL WEIGHT LOGIC: Only mandatory if BOTH weight fields are empty
+                                      let isMandatory = isMandatoryRaw;
+                                      if (key.toLowerCase().includes('weight_g')) {
+                                         const hasVariantWeight = !!editingComponent['Variant Metafield: custom.weight_g [number_decimal]'];
+                                         const hasProductWeight = !!editingComponent['Metafield: custom.weight_g [number_decimal]'];
+                                         if (hasVariantWeight || hasProductWeight) isMandatory = false;
+                                      }
+
+                                      // DYNAMIC OPTIONS: For Rims, pull Option1 Value choices from Shopify metafield validation
+                                      let options = DROPDOWN_OPTIONS[key] || DROPDOWN_OPTIONS[formatColumnTitle(key)] || DROPDOWN_OPTIONS[key.toLowerCase()];
+                                      if (key === 'Option1 Value' && componentTab === 'rims' && metafieldOptionsMap['wheel_spec_rim_size']) {
+                                         options = metafieldOptionsMap['wheel_spec_rim_size'];
+                                      }
                                       
                                       return (
                                          <div key={key} className="flex items-start gap-4 group/field">
@@ -3906,7 +3897,7 @@ export default function OpsDashboard() {
                                                      }}
                                                       className={`w-full p-4 rounded-xl outline-none border-2 transition-all font-bold text-sm appearance-none cursor-pointer ${isMandatory && String(editingComponent[key] || '').trim() === '' && editingComponent[key] !== 0 && editingComponent[key] !== '0' ? 'bg-red-50 border-red-200 focus:border-red-500' : 'bg-zinc-50 border-transparent focus:border-black'}`}
                                                   >
-                                                     <option value="">Select {formatColumnTitle(key)}...</option>
+                                                     <option value="">Select Option</option>
                                                      {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                                                   </select>
                                                ) : (
@@ -3926,16 +3917,6 @@ export default function OpsDashboard() {
                                                   />
                                                )}
                                             </div>
-                                            {isDuplicateMode && (
-                                               <div className="pt-5">
-                                                  <button 
-                                                     onClick={() => toggleFieldConfirmation(key)}
-                                                     className={`p-4 rounded-xl border-2 transition-all ${confirmedFields.includes(key) ? 'bg-green-500 border-green-600 text-white' : 'bg-white border-zinc-200 text-zinc-300'}`}
-                                                  >
-                                                     <ShieldCheck size={20}/>
-                                                  </button>
-                                               </div>
-                                            )}
                                          </div>
                                       );
                                    });
@@ -3953,18 +3934,13 @@ export default function OpsDashboard() {
                              Cancel
                           </button>
                           {(() => {
-                             const activeList = (componentData[componentTab] || []).map((item, idx) => ({ ...item, _rawIdx: idx }));
-                             const excludeKeys = ['Weight G (p)', 'Weight G (v)', 'Weight G (P)', 'Weight G (V)'];
-                             const requiredKeys = ['Name', 'Vendor', ...Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k))];
-                             const allConfirmed = !isDuplicateMode || requiredKeys.every(k => confirmedFields.includes(k));
+                             const allConfirmed = true; 
                              
                              return (
                                 <>
                                     <button 
                                        disabled={!allConfirmed || componentSaving}
                                        onClick={async () => {
-                                          // Upsert logic - use _editIdx for direct slot replacement
-                                            console.log("[Persistence Debug] Save Button Clicked", { _editIdx: editingComponent?._editIdx, isDuplicateMode });
                                             const activeArray = [...(componentData[componentTab] || [])];
                                             const targetId = editingComponent._rid || getComponentUniqueId(editingComponent, editingComponent._editIdx);
                                             const existingIdx = editingComponent._editIdx !== undefined ? editingComponent._editIdx : activeArray.findIndex(r => (r._rid || getComponentUniqueId(r)) === targetId);
@@ -3973,15 +3949,12 @@ export default function OpsDashboard() {
                                             if (existingIdx >= 0 && !isDuplicateMode) {
                                                activeArray[existingIdx] = cleanComp;
                                             } else {
-                                               // Ensure new items get a stable ID immediately
                                                const newComp = { ...cleanComp, _rid: `new_${Date.now()}` };
                                                activeArray.unshift(newComp);
                                             }
                                             
-                                            console.log(`[Persistence Debug] Saving Drawer Edit: ${targetId} at master index ${existingIdx}`);
                                             await saveComponentChanges(activeArray).catch(err => console.error("[Persistence Error] Save failed:", err));
                                             
-                                            // Only close drawer if not in duplicate mode
                                             if (!isDuplicateMode) setIsComponentDrawerOpen(false);
                                        }}
                                        className={`flex-[2] py-5 font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 ${allConfirmed && !componentSaving ? 'bg-black text-white hover:bg-zinc-800' : 'bg-zinc-200 text-zinc-400 cursor-not-allowed shadow-none'}`}
@@ -4008,7 +3981,6 @@ export default function OpsDashboard() {
                                              
                                              const success = await saveComponentChanges(activeArray);
                                              if (success !== false) {
-                                                // Open duplication mode immediately with the saved data
                                                 handleDuplicateComponent(cleanComp);
                                              }
                                           }}
@@ -4112,11 +4084,20 @@ export default function OpsDashboard() {
                                     const specFields = Array.from(new Set(activeList.slice(0, 10).flatMap(item => Object.keys(item)))).filter(k => !excludeKeys.includes(k));
                                     
                                     const nodes = specFields.map(key => {
-                                       const isMandatory = MANDATORY_FIELDS[componentTab]?.some(f => { 
+                                       const isMandatoryRaw = MANDATORY_FIELDS[componentTab]?.some(f => { 
                                           const nf = f.toLowerCase().replace(/[^a-z0-9]/g, ''); 
                                           const nk = key.toLowerCase().replace(/[^a-z0-9]/g, ''); 
                                           return nf === nk || nk.startsWith(nf) || nf.startsWith(nk) || nk.includes(nf) || nf.includes(nk); 
                                        });
+
+                                       // CONDITIONAL WEIGHT LOGIC for Mass Edit
+                                       let isMandatory = isMandatoryRaw;
+                                       if (key.toLowerCase().includes('weight_g')) {
+                                          const hasVariantWeight = !!bulkEditComponent['Variant Metafield: custom.weight_g [number_decimal]'];
+                                          const hasProductWeight = !!bulkEditComponent['Metafield: custom.weight_g [number_decimal]'];
+                                          if (hasVariantWeight || hasProductWeight) isMandatory = false;
+                                       }
+
                                        // DYNAMIC OPTIONS: For Rims, pull Option1 Value choices from Shopify metafield validation
                                        let options = DROPDOWN_OPTIONS[key] || DROPDOWN_OPTIONS[formatColumnTitle(key)] || DROPDOWN_OPTIONS[key.toLowerCase()];
                                        if (key === 'Option1 Value' && componentTab === 'rims' && metafieldOptionsMap['wheel_spec_rim_size']) {
