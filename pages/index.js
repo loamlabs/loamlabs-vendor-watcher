@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ComponentLibraryGrid from '../components/ComponentLibraryGrid';
 import ReviewChangesModal from '../components/ReviewChangesModal';
-import { RefreshCcw, RefreshCw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, ChevronDown, ChevronRight, Trash2, AlertCircle, AlertTriangle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker, Edit3, Edit, Settings, ExternalLink, BarChart, Database, CheckCircle, Layers, Clock } from 'lucide-react';
+import { RefreshCcw, RefreshCw, Search, Package, ShieldCheck, ShieldAlert, Plus, X, Info, Image as ImageIcon, Loader2, LogOut, ChevronUp, ChevronDown, ChevronRight, Trash2, AlertCircle, AlertTriangle, Zap, ZapOff, DollarSign, Tag, History, Activity, Beaker, Edit3, Edit, Settings, ExternalLink, BarChart, Database, CheckCircle, Layers, Clock, Copy } from 'lucide-react';
 
 const COMPONENT_SUGGESTIONS = {};
 
@@ -3732,6 +3732,7 @@ export default function OpsDashboard() {
                             toggleComponentSelection={toggleComponentSelection}
                             handleRemoveAddedRow={handleRemoveAddedRow}
                             handleDeleteComponent={handleDeleteComponent}
+                            handleDuplicateComponent={handleDuplicateComponent}
                             DROPDOWN_OPTIONS={DROPDOWN_OPTIONS}
                             handleEditComponent={handleEditComponent}
                             saveComponentChanges={saveComponentChanges}
@@ -3953,50 +3954,76 @@ export default function OpsDashboard() {
                           </button>
                           {(() => {
                              const activeList = (componentData[componentTab] || []).map((item, idx) => ({ ...item, _rawIdx: idx }));
-                             const excludeKeys = [, 'Weight G (p)', 'Weight G (v)', 'Weight G (P)', 'Weight G (V)'];
+                             const excludeKeys = ['Weight G (p)', 'Weight G (v)', 'Weight G (P)', 'Weight G (V)'];
                              const requiredKeys = ['Name', 'Vendor', ...Object.keys(activeList[0] || {}).filter(k => !excludeKeys.includes(k))];
                              const allConfirmed = !isDuplicateMode || requiredKeys.every(k => confirmedFields.includes(k));
                              
                              return (
-                                <button 
-                                   disabled={!allConfirmed || componentSaving}
-                                   onClick={() => {
-                                      // Upsert logic - use _editIdx for direct slot replacement
-                                        console.log("[Persistence Debug] Save Button Clicked", { _editIdx: editingComponent?._editIdx, isDuplicateMode });
-                                        const activeArray = [...(componentData[componentTab] || [])];
-                                        const { _editIdx, ...cleanComp } = editingComponent;
-                                        
-                                        let existingIdx = -1;
-                                        // Enforce stable identification via _rid for the master list
-                                        const targetId = editingComponent?._rid;
-                                        if (targetId) {
-                                           existingIdx = activeArray.findIndex((item, i) => item && ((item?._rid === targetId) || (getComponentUniqueId(item, i) === targetId)));
-                                        } else if (_editIdx !== undefined && _editIdx >= 0 && _editIdx < activeArray.length) {
-                                           // Fallback for objects missing _rid but having a valid local index context
-                                           existingIdx = _editIdx;
-                                        }
-
-                                        if (existingIdx >= 0 && !isDuplicateMode) {
-                                           activeArray[existingIdx] = cleanComp;
-                                        } else {
-                                           // Ensure new items get a stable ID immediately
-                                           const newComp = { ...cleanComp, _rid: `new_${Date.now()}` };
-                                           activeArray.unshift(newComp);
-                                        }
-                                        
-                                        console.log(`[Persistence Debug] Saving Drawer Edit: ${targetId} at master index ${existingIdx}`);
-                                        saveComponentChanges(activeArray).catch(err => console.error("[Persistence Error] Save failed:", err));
-                                   }}
-                                   className={`flex-[2] py-5 font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 ${allConfirmed && !componentSaving ? 'bg-black text-white hover:bg-zinc-800' : 'bg-zinc-200 text-zinc-400 cursor-not-allowed shadow-none'}`}
-                                >
-                                   {componentSaving ? <Loader2 className="animate-spin" size={16}/> : <Database size={16}/>} 
-                                   {isDuplicateMode ? 'Confirm & Commit Clone' : 'Save Changes'}
-                                </button>
+                                <>
+                                    <button 
+                                       disabled={!allConfirmed || componentSaving}
+                                       onClick={async () => {
+                                          // Upsert logic - use _editIdx for direct slot replacement
+                                            console.log("[Persistence Debug] Save Button Clicked", { _editIdx: editingComponent?._editIdx, isDuplicateMode });
+                                            const activeArray = [...(componentData[componentTab] || [])];
+                                            const targetId = editingComponent._rid || getComponentUniqueId(editingComponent, editingComponent._editIdx);
+                                            const existingIdx = editingComponent._editIdx !== undefined ? editingComponent._editIdx : activeArray.findIndex(r => (r._rid || getComponentUniqueId(r)) === targetId);
+                                            
+                                            const { _rawIdx, ...cleanComp } = editingComponent;
+                                            if (existingIdx >= 0 && !isDuplicateMode) {
+                                               activeArray[existingIdx] = cleanComp;
+                                            } else {
+                                               // Ensure new items get a stable ID immediately
+                                               const newComp = { ...cleanComp, _rid: `new_${Date.now()}` };
+                                               activeArray.unshift(newComp);
+                                            }
+                                            
+                                            console.log(`[Persistence Debug] Saving Drawer Edit: ${targetId} at master index ${existingIdx}`);
+                                            await saveComponentChanges(activeArray).catch(err => console.error("[Persistence Error] Save failed:", err));
+                                            
+                                            // Only close drawer if not in duplicate mode
+                                            if (!isDuplicateMode) setIsComponentDrawerOpen(false);
+                                       }}
+                                       className={`flex-[2] py-5 font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 ${allConfirmed && !componentSaving ? 'bg-black text-white hover:bg-zinc-800' : 'bg-zinc-200 text-zinc-400 cursor-not-allowed shadow-none'}`}
+                                    >
+                                       {componentSaving ? <Loader2 className="animate-spin" size={16}/> : <Database size={16}/>} 
+                                       {isDuplicateMode ? 'Confirm & Commit Clone' : 'Save Changes'}
+                                    </button>
+                                    
+                                    {!isDuplicateMode && (
+                                       <button 
+                                          disabled={!allConfirmed || componentSaving}
+                                          onClick={async () => {
+                                             const targetId = editingComponent._rid || getComponentUniqueId(editingComponent, editingComponent._editIdx);
+                                             const activeArray = [...(componentData[componentTab] || [])];
+                                             const existingIdx = editingComponent._editIdx !== undefined ? editingComponent._editIdx : activeArray.findIndex(r => (r._rid || getComponentUniqueId(r)) === targetId);
+                                             
+                                             const { _rawIdx, ...cleanComp } = editingComponent;
+                                             if (existingIdx >= 0) {
+                                                activeArray[existingIdx] = cleanComp;
+                                             } else {
+                                                const newComp = { ...cleanComp, _rid: `new_${Date.now()}` };
+                                                activeArray.unshift(newComp);
+                                             }
+                                             
+                                             const success = await saveComponentChanges(activeArray);
+                                             if (success !== false) {
+                                                // Open duplication mode immediately with the saved data
+                                                handleDuplicateComponent(cleanComp);
+                                             }
+                                          }}
+                                          className={`flex-1 py-5 font-black uppercase tracking-widest text-[9px] rounded-2xl shadow-lg transition-all flex flex-col items-center justify-center leading-tight ${allConfirmed && !componentSaving ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-zinc-100 text-zinc-300 cursor-not-allowed shadow-none'}`}
+                                       >
+                                          <span className="flex items-center gap-1.5"><Copy size={12}/> Clone</span>
+                                          <span className="text-[7px] opacity-60">Save & Start Copy</span>
+                                       </button>
+                                    )}
+                                 </>
                              );
                           })()}
                        </div>
-                    </div>
-                 </div>
+                     </div>
+                  </div>
                )}
 
                 {/* --- MASS EDIT DRAWER --- */}

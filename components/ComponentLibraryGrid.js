@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ChevronRight, ChevronDown, CheckCircle, AlertTriangle, 
-  Trash2, Edit, Save, Plus, ArrowLeft, ArrowRight,
+  Trash2, Edit, Save, Plus, ArrowLeft, ArrowRight, Copy,
   Database, ShieldAlert, Loader2, X, Layers
 } from 'lucide-react';
 
@@ -120,6 +120,7 @@ const ComponentLibraryGrid = React.memo(({
   componentSaving,
   handleRemoveAddedRow,
   handleDeleteComponent,
+  handleDuplicateComponent,
   componentColumnOrder,
   syncMismatches = {}
 }) => {
@@ -494,6 +495,7 @@ const ComponentLibraryGrid = React.memo(({
                   <td className="p-4 px-6 sticky left-[48px] z-80 bg-zinc-50 border-r border-zinc-100 text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-2">
                        <button onClick={() => { handleEditComponent(row, i); }} title="Advanced Edit" className="p-2 bg-zinc-100 hover:bg-black hover:text-white text-zinc-400 rounded-lg transition-all"><Edit size={12} /></button>
+                       <button onClick={() => handleDuplicateComponent(row)} title="Duplicate Component" className="p-2 bg-zinc-100 hover:bg-emerald-500 hover:text-white text-zinc-400 rounded-lg transition-all"><Copy size={12} /></button>
                        <button onClick={() => handleDeleteComponent(row)} title="Trash Component" className="p-2 bg-zinc-100 hover:bg-red-500 hover:text-white text-zinc-400 rounded-lg transition-all"><Trash2 size={12} /></button>
                     </div>
                   </td>
