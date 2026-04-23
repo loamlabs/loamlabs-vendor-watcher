@@ -72,8 +72,19 @@ The Component Library has reached its "Final Form" as a normalized, high-velocit
   - **Grid Cloning**: Instant one-click duplication directly from the spreadsheet action column.
   - **"Save & Clone" Workflow**: A specialized emerald-colored button in the Edit Drawer allows for sequential creation (e.g., saving a 28h version and immediately opening a clone for the 32h version).
 - **Refined Validation Logic**:
-  - **Conditional Mandatory Fields**: Smarter "OR" validation for weight. Red mandatory indicators automatically clear if *either* the Variant or Product weight metafield is populated.
+  - **Conditional Mandatory Fields**: Smarter "OR" validation f
+  
+  or weight. Red mandatory indicators automatically clear if *either* the Variant or Product weight metafield is populated.
   - **Streamlined Security**: Removed the manual "Safety Protocol" confirmation checklist for cloning to optimize for workflow speed, while maintaining robust backend identity mapping.
+
+### **Phase 9: Hub Section Remediation & Stabilization (Implemented Apr 2026)**
+The Hubs category has been stabilized with refined identity mapping and UI improvements.
+- **Identity Integrity**: Resolved the "Ghost Duplication" bug by implementing `_rawIdx` absolute mapping. Edits and saves now reliably update existing records regardless of grid filtering or sorting states.
+- **Shopify Sync Hydration**: Fixed the "Refresh" synchronization failure. The edit drawer now performs real-time state hydration during Shopify product refreshes, ensuring URLs and specifications are updated immediately in the UI.
+- **Refined Hub Taxonomy**:
+  - **Option1 Value**: Converted to a free-text input for Hubs to facilitate spoke count entries (e.g., "28h", "32h") without Rim-centric dropdown restrictions.
+  - **Hub Type**: Updated the taxonomy to prioritize "Classic Flange" over legacy "J-Bend" terminology.
+- **Data Uniformity**: Unified "Product URL" mapping across the entire sync engine and spreadsheet UI.
 
 ---
 *Updated April 23, 2026 to reflect Metadata Normalization and the High-Velocity Cloning engine.*
