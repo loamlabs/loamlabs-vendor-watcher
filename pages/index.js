@@ -10,7 +10,7 @@ const DROPDOWN_OPTIONS = {
   'Option 1 Name': ['Size', 'Spoke Count', 'Freehub', 'Spacing', 'Color', 'Type'],
   'Option 2 Name': ['Size', 'Spoke Count', 'Freehub', 'Spacing', 'Color', 'Type'],
   'Spoke Count': ['16h', '18h', '20h', '24h', '28h', '32h', '36h'],
-  'Hub Type': ['Classic Flange', 'Straight Pull', 'Hook Flange'],
+  'Metafield: custom.hub_type [single_line_text_field]': ['Classic Flange', 'Straight Pull', 'Hook Flange'],
   'Hub Lacing Policy': ['Standard', 'Force 2-Cross for 28h Only', 'Force 3-Cross for 28h Only', 'Force All as 2-Cross', 'Use Manual Override Field', 'None'],
   'Rim Washer Policy': ['Optional', 'Mandatory', 'Not Compatible', 'None'],
   'Spoke Type': ['J-Bend', 'Straight Pull', 'Carbon'],
@@ -20,7 +20,7 @@ const DROPDOWN_OPTIONS = {
 
 const MANDATORY_FIELDS = {
   rims: ['Title', 'Vendor', 'Option1 Name', 'Option1 Value', 'Option2 Name', 'Option2 Value', 'Variant Metafield: custom.wheel_spec_position [single_line_text_field]', 'Variant Metafield: custom.rim_erd [number_decimal]', 'Variant Metafield: custom.weight_g [number_decimal]'],
-  hubs: ['Title', 'Vendor', 'Option1 Name', 'Option1 Value', 'Hub Type', 'Variant Metafield: custom.weight_g [number_decimal]', 'Variant Metafield: custom.wheel_spec_position [single_line_text_field]'],
+  hubs: ['Title', 'Vendor', 'Option1 Name', 'Option1 Value', 'Metafield: custom.hub_type [single_line_text_field]', 'Variant Metafield: custom.weight_g [number_decimal]', 'Variant Metafield: custom.wheel_spec_position [single_line_text_field]'],
   spokes: ['Title', 'Vendor', 'Spoke Type', 'Spoke Cross Section Area Mm2', 'Spoke Model Group', 'Variant Metafield: custom.weight_g [number_decimal]', 'Spoke Diameter Spec', 'Spoke Rounding Rule'],
   nipples: ['Title', 'Vendor', 'Option1 Name', 'Option1 Value', 'Variant Metafield: custom.weight_g [number_decimal]']
 };
@@ -143,7 +143,7 @@ export default function OpsDashboard() {
     const [syncMismatches, setSyncMismatches] = useState({}); // { [rid]: [fieldKey1, fieldKey2] }
     const [showMismatchesOnly, setShowMismatchesOnly] = useState(false);
   const [metafieldRegistry, setMetafieldRegistry] = useState([
-    { key: 'hub_manual_cross_value', label: 'Hub Manual Cross Value', categories: ['HUB'], target: 'variant', type: 'decimal' },
+    { key: 'hub_manual_cross_value', label: 'Variant Metafield: custom.hub_manual_cross_value [number_decimal]', categories: ['HUB'], target: 'variant', type: 'decimal' },
     { key: 'weight_g', label: 'Variant Metafield: custom.weight_g [number_decimal]', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'decimal' },
     { key: 'length_adjust_mm', label: 'Variant Metafield: custom.length_adjust_mm [number_decimal]', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE'], target: 'variant', type: 'decimal' },
     { key: 'wheel_spec_position', label: 'Variant Metafield: custom.wheel_spec_position [single_line_text_field]', categories: ['RIM', 'HUB'], target: 'variant', type: 'single_line_text_field', isConstant: true },
@@ -154,23 +154,23 @@ export default function OpsDashboard() {
     { key: 'valve_max_rim_depth_mm', label: 'Valve Max Rim Depth mm', categories: ['VALVESTEM'], target: 'variant', type: 'integer', isConstant: true },
     { key: 'acc_rim_width_min', label: 'Accessory Compatible Rim Width MIN (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
     { key: 'acc_rim_width_max', label: 'Accessory Compatible Rim Width MAX (mm)', categories: ['ACCESSORY'], target: 'variant', type: 'integer' },
-    { key: 'hub_sp_offset_spoke_hole_left', label: 'Hub SP Offset Spoke Hole Left', categories: ['HUB'], target: 'variant', type: 'decimal' },
-    { key: 'hub_sp_offset_spoke_hole_right', label: 'Hub SP Offset Spoke Hole Right', categories: ['HUB'], target: 'variant', type: 'decimal' },
+    { key: 'hub_sp_offset_spoke_hole_left', label: 'Variant Metafield: custom.hub_sp_offset_spoke_hole_left [number_decimal]', categories: ['HUB'], target: 'variant', type: 'decimal' },
+    { key: 'hub_sp_offset_spoke_hole_right', label: 'Variant Metafield: custom.hub_sp_offset_spoke_hole_right [number_decimal]', categories: ['HUB'], target: 'variant', type: 'decimal' },
     { key: 'product_weight_g', label: 'Metafield: custom.weight_g [number_decimal]', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'decimal' },
     { key: 'integrated_hub_name', label: 'Integrated Hub Name', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
     { key: 'spoke_hub_interface', label: 'Spoke Hub Interface', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
     { key: 'model', label: 'Model', categories: ['RIM', 'HUB', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'single_line_text_field' },
     // HUB SPECIFIC JSON FIELDS
-    { key: 'hub_lacing_cross_left', label: 'Hub Lacing Cross Left', categories: ['HUB'], target: 'variant', type: 'decimal' },
-    { key: 'hub_lacing_cross_right', label: 'Hub Lacing Cross Right', categories: ['HUB'], target: 'variant', type: 'decimal' },
-    { key: 'hub_spoke_distribution', label: 'Hub Spoke Distribution', categories: ['HUB'], target: 'product', type: 'decimal' },
-    { key: 'hub_flange_diameter_left', label: 'Hub Flange Diameter Left', categories: ['HUB'], target: 'product', type: 'decimal' },
-    { key: 'hub_flange_diameter_right', label: 'Hub Flange Diameter Right', categories: ['HUB'], target: 'product', type: 'decimal' },
-    { key: 'hub_flange_offset_left', label: 'Hub Flange Offset Left', categories: ['HUB'], target: 'product', type: 'decimal' },
-    { key: 'hub_flange_offset_right', label: 'Hub Flange Offset Right', categories: ['HUB'], target: 'product', type: 'decimal' },
-    { key: 'hub_spoke_hole_diameter', label: 'Hub Spoke Hole Diameter', categories: ['HUB'], target: 'product', type: 'decimal' },
-    { key: 'hub_lacing_policy', label: 'Hub Lacing Policy', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
-    { key: 'hub_type', label: 'Hub Type', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
+    { key: 'hub_lacing_cross_left', label: 'Variant Metafield: custom.hub_lacing_cross_left [number_decimal]', categories: ['HUB'], target: 'variant', type: 'decimal' },
+    { key: 'hub_lacing_cross_right', label: 'Variant Metafield: custom.hub_lacing_cross_right [number_decimal]', categories: ['HUB'], target: 'variant', type: 'decimal' },
+    { key: 'hub_spoke_distribution', label: 'Metafield: custom.hub_spoke_distribution [number_decimal]', categories: ['HUB'], target: 'product', type: 'decimal' },
+    { key: 'hub_flange_diameter_left', label: 'Metafield: custom.hub_flange_diameter_left [number_decimal]', categories: ['HUB'], target: 'product', type: 'decimal' },
+    { key: 'hub_flange_diameter_right', label: 'Metafield: custom.hub_flange_diameter_right [number_decimal]', categories: ['HUB'], target: 'product', type: 'decimal' },
+    { key: 'hub_flange_offset_left', label: 'Metafield: custom.hub_flange_offset_left [number_decimal]', categories: ['HUB'], target: 'product', type: 'decimal' },
+    { key: 'hub_flange_offset_right', label: 'Metafield: custom.hub_flange_offset_right [number_decimal]', categories: ['HUB'], target: 'product', type: 'decimal' },
+    { key: 'hub_spoke_hole_diameter', label: 'Metafield: custom.hub_spoke_hole_diameter [number_decimal]', categories: ['HUB'], target: 'product', type: 'decimal' },
+    { key: 'hub_lacing_policy', label: 'Metafield: custom.hub_lacing_policy [single_line_text_field]', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
+    { key: 'hub_type', label: 'Metafield: custom.hub_type [single_line_text_field]', categories: ['HUB'], target: 'product', type: 'single_line_text_field' },
     // RIM SPECIFIC JSON FIELDS
     { key: 'nipple_washer_thickness', label: 'Metafield: custom.nipple_washer_thickness [number_decimal]', categories: ['RIM'], target: 'product', type: 'decimal' },
     { key: 'rim_spoke_hole_offset', label: 'Metafield: custom.rim_spoke_hole_offset [number_decimal]', categories: ['RIM'], target: 'product', type: 'decimal' },
@@ -533,10 +533,10 @@ export default function OpsDashboard() {
 
      // --- LIVE PRODUCT URL SYNC ---
      const shopifyUrl = variant.product?.handle ? `https://loamlabsusa.com/products/${variant.product.handle}` : "";
-     const currentUrl = getComponentValue(comp, 'Product URL') || getComponentValue(comp, 'ProductURL');
+     const currentUrl = getComponentValue(comp, 'ProductURL');
      if (shopifyUrl && normalize(shopifyUrl) !== normalize(currentUrl)) {
-        mismatches.push('Product URL');
-        proposals['Product URL'] = shopifyUrl;
+        mismatches.push('ProductURL');
+        proposals['ProductURL'] = shopifyUrl;
      }
 
      console.groupEnd();
@@ -570,24 +570,24 @@ export default function OpsDashboard() {
     const required = [...(MANDATORY_FIELDS[tab] || [])];
     const hubType = getComponentValue(component, 'Hub Type');
     const spokeType = getComponentValue(component, 'Spoke Type');
-    const lacingPolicy = getComponentValue(component, 'Hub Lacing Policy');
+    const lacingPolicy = getComponentValue(component, 'Metafield: custom.hub_lacing_policy [single_line_text_field]');
 
     if (tab === 'hubs') {
        if (hubType === 'J-Bend') { 
-          ['Hub Flange Diameter Left', 'Hub Flange Diameter Right', 'Hub Flange Offset Left', 'Hub Flange Offset Right', 'Hub Spoke Hole Diameter'].forEach(f => {
+          ['Metafield: custom.hub_flange_diameter_left [number_decimal]', 'Metafield: custom.hub_flange_diameter_right [number_decimal]', 'Metafield: custom.hub_flange_offset_left [number_decimal]', 'Metafield: custom.hub_flange_offset_right [number_decimal]', 'Metafield: custom.hub_spoke_hole_diameter [number_decimal]'].forEach(f => {
              if (!required.includes(f)) required.push(f);
           });
        }
        if (hubType === 'Straight Pull') {
-          ['Hub SP Offset Spoke Hole Left', 'Hub SP Offset Spoke Hole Right'].forEach(f => { if (!required.includes(f)) required.push(f); });
+          ['Variant Metafield: custom.hub_sp_offset_spoke_hole_left [number_decimal]', 'Variant Metafield: custom.hub_sp_offset_spoke_hole_right [number_decimal]'].forEach(f => { if (!required.includes(f)) required.push(f); });
        }
        if (hubType === 'Straight Pull' || hubType === 'Hook Flange' || lacingPolicy === 'Use Manual Override Field') {
-          ['Hub Lacing Cross Left', 'Hub Lacing Cross Right'].forEach(f => { if (!required.includes(f)) required.push(f); });
-          if (!required.includes('Hub Lacing Policy')) required.push('Hub Lacing Policy');
-          const leftCross = getComponentValue(component, 'Hub Lacing Cross Left');
-          const rightCross = getComponentValue(component, 'Hub Lacing Cross Right');
+          ['Variant Metafield: custom.hub_lacing_cross_left [number_decimal]', 'Variant Metafield: custom.hub_lacing_cross_right [number_decimal]'].forEach(f => { if (!required.includes(f)) required.push(f); });
+          if (!required.includes('Metafield: custom.hub_lacing_policy [single_line_text_field]')) required.push('Metafield: custom.hub_lacing_policy [single_line_text_field]');
+          const leftCross = getComponentValue(component, 'Variant Metafield: custom.hub_lacing_cross_left [number_decimal]');
+          const rightCross = getComponentValue(component, 'Variant Metafield: custom.hub_lacing_cross_right [number_decimal]');
           if (leftCross === rightCross && leftCross !== '' && leftCross !== null) {
-              if (!required.includes('Hub Manual Cross Value')) required.push('Hub Manual Cross Value');
+              if (!required.includes('Variant Metafield: custom.hub_manual_cross_value [number_decimal]')) required.push('Variant Metafield: custom.hub_manual_cross_value [number_decimal]');
           }
        }
     }
@@ -640,10 +640,10 @@ export default function OpsDashboard() {
            if (d.success && d.optionsDict) setMetafieldOptionsMap(d.optionsDict);
         }).catch(e => console.error("Meta def sync err", e));
       } else {
-        showNotification("âŒ Dashboard Login Failed", 'error');
+        showNotification("❌ Dashboard Login Failed", 'error');
       }
     } catch (e) { 
-      showNotification("âŒ Critical Error: " + e.message, 'error');
+      showNotification("❌ Critical Error: " + e.message, 'error');
     }
     setLoading(false);
   };
@@ -1190,7 +1190,7 @@ export default function OpsDashboard() {
                   _isNew: true,
                   Title: formatShopifyTitle(title, tab),
                   Vendor: vendor || '',
-                  ['Product URL']: handle ? `https://loamlabsusa.com/products/${handle}` : '',
+                  ProductURL: handle ? `https://loamlabsusa.com/products/${handle}` : '',
                   shopify_product_id: cleanPid,
                   shopify_variant_id: v.id,
                };

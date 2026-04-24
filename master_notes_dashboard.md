@@ -84,8 +84,12 @@ The Hubs category has been stabilized with refined identity mapping and UI impro
 - **Refined Hub Taxonomy**:
   - **Option1 Value**: Converted to a free-text input for Hubs to facilitate spoke count entries (e.g., "28h", "32h") without Rim-centric dropdown restrictions.
   - **Hub Type**: Updated the taxonomy to prioritize "Classic Flange" over legacy "J-Bend" terminology.
-- **Data Uniformity**: Unified "Product URL" mapping across the entire sync engine and spreadsheet UI.
+### **Phase 10: Hub Data Normalization & Schema Alignment (Implemented Apr 2026)**
+The Hub category has been fully aligned with the technical Shopify schema to ensure data consistency.
+- **Schema Standardization**: Converted all Hub specification labels (e.g., "Hub Type", "Hub Flange Diameter") to their technical Shopify equivalents (e.g., "Metafield: custom.hub_type [single_line_text_field]") in the registry and grid.
+- **ProductURL Alignment**: Reverted the Product URL key to `ProductURL` (no space) to match the master JSON record requirements.
+- **Synchronized Validation**: Updated the mandatory field enforcement engine to support the new technical labels, maintaining data integrity during high-velocity edits.
+- **Importer Hardening**: The Shopify Product Sync engine now produces Hub data that is 100% compatible with existing spreadsheet columns, preventing duplicate column creation.
 
 ---
-*Updated April 23, 2026 to reflect Metadata Normalization and the High-Velocity Cloning engine.*
-
+*Updated April 24, 2026 to reflect Hub Data Normalization and Schema Alignment.*
