@@ -1229,25 +1229,34 @@ export default function OpsDashboard() {
             }
          });
 
-         // --- SYNC STATE BACK TO GRID ---
-         setGridAddedRows(prev => ({ ...prev, [tab]: newAdded }));
-         setGridUnsavedChanges(prev => ({ ...prev, [tab]: newChanges }));
-
          if (importedCount > 0 || collisionCount > 0) {
-            setGridAddedRows(prev => ({ ...prev, [tab]: newAdded }));
-            setGridUnsavedChanges(prev => ({ ...prev, [tab]: newChanges }));
-
-            // --- REFRESH ACTIVE DRAWER ---
+            // --- REFRESH & HYDRATE ACTIVE DRAWER ---
+            let drawerHydrated = false;
             if (isComponentDrawerOpen && editingComponent && String(editingComponent.shopify_product_id) === String(cleanPid)) {
                // If the product we refreshed is the one being edited, find the specific variant update
                const rid = editingComponent?._rid || getComponentUniqueId(editingComponent);
                const updates = newChanges[rid];
                if (updates) {
                   setEditingComponent(prev => ({ ...prev, ...updates }));
+                  drawerHydrated = true;
+               } else if (newAdded.length > 0 && (!editingComponent.Title || editingComponent.Title.trim() === '')) {
+                  // It's a new component drawer, hydrate it with the first imported variant
+                  const firstVariant = newAdded.shift(); // Remove from staging
+                  importedCount--;
+                  setEditingComponent({ ...editingComponent, ...firstVariant });
+                  drawerHydrated = true;
                }
             }
 
-            showNotification(`Import Analysis Complete! Staged ${importedCount} new rows and detected ${collisionCount} updates for existing items. Review changes before saving.`, "success");
+            // --- SYNC STATE BACK TO GRID ---
+            setGridAddedRows(prev => ({ ...prev, [tab]: newAdded }));
+            setGridUnsavedChanges(prev => ({ ...prev, [tab]: newChanges }));
+
+            let msg = `Import Complete! `;
+            if (drawerHydrated) msg += `Loaded data into the edit drawer. `;
+            if (importedCount > 0) msg += `Staged ${importedCount} new rows. `;
+            if (collisionCount > 0) msg += `Detected ${collisionCount} updates.`;
+            showNotification(msg.trim(), "success");
          } else {
             showNotification("No importable data found for this product ID.", "info");
          }

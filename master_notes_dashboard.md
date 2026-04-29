@@ -84,6 +84,7 @@ The Hubs category has been stabilized with refined identity mapping and UI impro
 - **Refined Hub Taxonomy**:
   - **Option1 Value**: Converted to a free-text input for Hubs to facilitate spoke count entries (e.g., "28h", "32h") without Rim-centric dropdown restrictions.
   - **Hub Type**: Updated the taxonomy to prioritize "Classic Flange" over legacy "J-Bend" terminology.
+
 ### **Phase 10: Hub Data Normalization & Schema Alignment (Implemented Apr 2026)**
 The Hub category has been fully aligned with the technical Shopify schema to ensure data consistency.
 - **Schema Standardization**: Converted all Hub specification labels (e.g., "Hub Type", "Hub Flange Diameter") to their technical Shopify equivalents (e.g., "Metafield: custom.hub_type [single_line_text_field]") in the registry and grid.
@@ -91,5 +92,11 @@ The Hub category has been fully aligned with the technical Shopify schema to ens
 - **Synchronized Validation**: Updated the mandatory field enforcement engine to support the new technical labels, maintaining data integrity during high-velocity edits.
 - **Importer Hardening**: The Shopify Product Sync engine now produces Hub data that is 100% compatible with existing spreadsheet columns, preventing duplicate column creation.
 
+### **Phase 11: Sync Hydration for New Components (Implemented Apr 2026)**
+The Component Library now features an instant review workflow for new component imports.
+- **Drawer Hydration**: When syncing a Shopify Product ID inside a blank "New Component" drawer, the drawer immediately populates with the imported data instead of remaining blank.
+- **Multi-Variant Handling**: For products with multiple variants, the first variant is loaded into the drawer for immediate review, while the rest are staged in the background queue.
+- **Save Flow Integrity**: Saving the hydrated variant from the drawer commits it directly to the database and removes it from the staging queue, preventing duplicate entries.
+
 ---
-*Updated April 24, 2026 to reflect Hub Data Normalization and Schema Alignment.*
+*Updated April 29, 2026 to reflect Sync Hydration and RLS Security Fix.*
