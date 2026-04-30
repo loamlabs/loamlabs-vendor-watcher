@@ -10,7 +10,6 @@
 ALTER TABLE public.watcher_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vendor_logos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sync_logs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.abandoned_builds ENABLE ROW LEVEL SECURITY;
 
 -- 2. Ensure No Public Access 
 -- (This drops any "allow all" policies if they were accidentally created)

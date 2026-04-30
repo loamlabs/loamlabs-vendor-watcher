@@ -99,6 +99,7 @@ export default function OpsDashboard() {
   const [componentsLoaded, setComponentsLoaded] = useState(false);
   const [componentTab, setComponentTab] = useState('rims');
   const [componentVendorFilter, setComponentVendorFilter] = useState('All');
+  const [componentSearch, setComponentSearch] = useState('');
   const [componentColumnOrder, setComponentColumnOrder] = useState({});
   const [selectedComponents, setSelectedComponents] = useState([]);
   const [showMissingOnly, setShowMissingOnly] = useState(false);
@@ -1727,6 +1728,19 @@ export default function OpsDashboard() {
       });
     }
 
+    if (componentSearch) {
+      const searchString = normalize(componentSearch);
+      const searchTokens = searchString ? searchString.split(' ').filter(Boolean) : [];
+      preFilteredList = preFilteredList.filter(item => {
+        const rid = item?._rid || getComponentUniqueId(item);
+        const unsaved = (gridUnsavedChanges[componentTab] || {})[rid] || {};
+        const title = normalize(unsaved.Title || item.Title || '');
+        const vendor = normalize(unsaved.Vendor || item.Vendor || '');
+        const searchableText = `${title} ${vendor}`.toLowerCase();
+        return searchTokens.every(token => searchableText.includes(token));
+      });
+    }
+
     return [...preFilteredList].sort((a,b) => {
       // Prioritize actual drafts (items in gridAddedRows) over database items
       // Prioritize actual drafts (items in gridAddedRows) over database items
@@ -3200,7 +3214,7 @@ export default function OpsDashboard() {
                                     </div>
                                   </div>
                                 ) : (
-                                  <span className="bg-green-50 text-green-600 px-3 py-1 rounded-full font-black text-[9px] uppercase italic border border-green-100">âœ“ Healthy</span>
+                                  <span className="bg-green-50 text-green-600 px-3 py-1 rounded-full font-black text-[9px] uppercase italic border border-green-100">Healthy</span>
                                 )}
                               </td>
                               <td className="p-6 text-right">
@@ -3692,6 +3706,11 @@ export default function OpsDashboard() {
                             <div>
                                <div className="flex items-center justify-between mb-4">
                                  <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Filter by Component Vendor</label>
+                                 <div className="relative">
+                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300" />
+                                    <input type="text" placeholder={`Search ${componentTab}...`} value={componentSearch} onChange={(e) => setComponentSearch(e.target.value)} className="pl-9 pr-8 py-2 w-52 rounded-xl border-2 border-zinc-100 text-xs font-bold outline-none focus:border-black transition-all placeholder:text-zinc-300 placeholder:font-bold placeholder:italic" />
+                                    {componentSearch && <button onClick={() => setComponentSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-300 hover:text-zinc-600"><X size={12} /></button>}
+                                 </div>
                                </div>
                                <div className="flex flex-wrap gap-2">
                                  <button 
