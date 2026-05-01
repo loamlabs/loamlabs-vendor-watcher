@@ -144,6 +144,8 @@ export default function OpsDashboard() {
     const [syncMismatches, setSyncMismatches] = useState({}); // { [rid]: [fieldKey1, fieldKey2] }
     const [showMismatchesOnly, setShowMismatchesOnly] = useState(false);
   const [metafieldRegistry, setMetafieldRegistry] = useState([
+    { key: 'shopify_product_id', label: 'Shopify Product ID', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'product', type: 'single_line_text_field' },
+    { key: 'shopify_variant_id', label: 'Shopify Variant ID', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'single_line_text_field' },
     { key: 'hub_manual_cross_value', label: 'Variant Metafield: custom.hub_manual_cross_value [number_decimal]', categories: ['HUB'], target: 'variant', type: 'decimal' },
     { key: 'weight_g', label: 'Variant Metafield: custom.weight_g [number_decimal]', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE', 'VALVESTEM', 'ACCESSORY'], target: 'variant', type: 'decimal' },
     { key: 'length_adjust_mm', label: 'Variant Metafield: custom.length_adjust_mm [number_decimal]', categories: ['RIM', 'HUB', 'SPOKE', 'NIPPLE'], target: 'variant', type: 'decimal' },
