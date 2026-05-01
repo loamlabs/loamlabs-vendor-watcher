@@ -1761,7 +1761,7 @@ export default function OpsDashboard() {
       const bN = (b.Title || b.Name || b.name || b.title || "Unknown").toLowerCase();
       return aN.localeCompare(bN);
     });
-  }, [componentData, componentTab, gridAddedRows, gridUnsavedChanges, componentVendorFilter, showMissingOnly, showMismatchesOnly, syncMismatches, getComponentValidation, getComponentUniqueId]);
+  }, [componentData, componentTab, gridAddedRows, gridUnsavedChanges, componentVendorFilter, showMissingOnly, showMismatchesOnly, syncMismatches, getComponentValidation, getComponentUniqueId, componentSearch]);
 
   const handleCreateNewComponent = React.useCallback((tab) => {
     const activeList = componentData[tab] || [];
