@@ -1729,13 +1729,14 @@ export default function OpsDashboard() {
     }
 
     if (componentSearch) {
-      const searchString = normalize(componentSearch);
+      const normalizeStr = (str) => String(str || "").toLowerCase().replace(/Ã—/g, 'x').replace(/\s+/g, ' ').trim();
+      const searchString = normalizeStr(componentSearch);
       const searchTokens = searchString ? searchString.split(' ').filter(Boolean) : [];
       preFilteredList = preFilteredList.filter(item => {
         const rid = item?._rid || getComponentUniqueId(item);
         const unsaved = (gridUnsavedChanges[componentTab] || {})[rid] || {};
-        const title = normalize(unsaved.Title || item.Title || '');
-        const vendor = normalize(unsaved.Vendor || item.Vendor || '');
+        const title = normalizeStr(unsaved.Title || item.Title || '');
+        const vendor = normalizeStr(unsaved.Vendor || item.Vendor || '');
         const searchableText = `${title} ${vendor}`.toLowerCase();
         return searchTokens.every(token => searchableText.includes(token));
       });
@@ -3701,36 +3702,29 @@ export default function OpsDashboard() {
                    </div>
                    
                    {uniqueVendors.length > 0 && (
-                     <div className="mb-8 p-8 bg-white border border-zinc-100 rounded-[2rem] shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-                            <div>
-                               <div className="flex items-center justify-between mb-4">
-                                 <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Filter by Component Vendor</label>
-                                 <div className="relative">
-                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300" />
-                                    <input type="text" placeholder={`Search ${componentTab}...`} value={componentSearch} onChange={(e) => setComponentSearch(e.target.value)} className="pl-9 pr-8 py-2 w-52 rounded-xl border-2 border-zinc-100 text-xs font-bold outline-none focus:border-black transition-all placeholder:text-zinc-300 placeholder:font-bold placeholder:italic" />
-                                    {componentSearch && <button onClick={() => setComponentSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-300 hover:text-zinc-600"><X size={12} /></button>}
-                                 </div>
-                               </div>
-                               <div className="flex flex-wrap gap-2">
-                                 <button 
-                                   onClick={() => setComponentVendorFilter('All')} 
-                                   className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all ${componentVendorFilter === 'All' ? 'bg-black text-white border-black shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
-                                 >
-                                   All Vendors
-                                 </button>
-                                 {uniqueVendors.map(v => (
-                                     <button key={v} onClick={() => setComponentVendorFilter(v)} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 transition-all ${componentVendorFilter === v ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm scale-[1.02]' : 'bg-white text-zinc-500 border-zinc-100 hover:border-zinc-300'}`}>
-                                       <span className="text-[10px] font-bold uppercase tracking-tight">{v}</span>
-                                     </button>
-                                  ))}
-                               </div>
+                     <div className="mb-8 p-8 bg-white border border-zinc-100 rounded-[2rem] shadow-sm animate-in fade-in slide-in-from-top-2 duration-300 flex flex-col gap-6">
+                         <div>
+                            <div className="flex items-center justify-between mb-4">
+                              <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Filter by Component Vendor</label>
                             </div>
+                            <div className="flex flex-wrap gap-2">
+                               <button 
+                                 onClick={() => setComponentVendorFilter('All')} 
+                                 className={`px-4 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all ${componentVendorFilter === 'All' ? 'bg-black text-white border-black shadow-lg scale-105' : 'bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300'}`}
+                               >
+                                 All Vendors
+                               </button>
+                               {uniqueVendors.map(v => (
+                                   <button key={v} onClick={() => setComponentVendorFilter(v)} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 transition-all ${componentVendorFilter === v ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm scale-[1.02]' : 'bg-white text-zinc-500 border-zinc-100 hover:border-zinc-300'}`}>
+                                     <span className="text-[10px] font-bold uppercase tracking-tight">{v}</span>
+                                   </button>
+                                ))}
+                            </div>
+                         </div>
 
-                            <div className="border-l border-zinc-100 pl-8">
-                               <div className="flex items-center justify-between mb-4">
-                                 <label className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic">Data Integrity Filters</label>
-                               </div>
+                         <div className="pt-6 border-t border-zinc-100 flex items-center justify-between">
+                            <div>
+                               <label className="block text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] italic mb-4">Data Integrity Filters</label>
                                <div className="flex items-center gap-2 p-1 bg-zinc-100/50 rounded-2xl border border-zinc-100 w-fit">
                                   <button onClick={() => { setShowMissingOnly(false); setShowMismatchesOnly(false); }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(!showMissingOnly && !showMismatchesOnly) ? "bg-white text-black shadow-sm" : "text-zinc-400 hover:text-zinc-600"}`}>All</button>
                                   <button onClick={() => { setShowMissingOnly(true); setShowMismatchesOnly(false); }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showMissingOnly ? "bg-red-500 text-white shadow-lg" : "text-zinc-400 hover:text-red-500"}`}>Missing Info</button>
@@ -3742,6 +3736,12 @@ export default function OpsDashboard() {
                                   </button>
                                </div>
                                {showMissingOnly && <div className="px-4 mt-2 text-[9px] font-bold text-red-500 flex items-center gap-1 uppercase italic animate-pulse"><AlertTriangle size={12} /> Enrollment Errors Detected</div>}
+                            </div>
+                            
+                            <div className="relative">
+                               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300" />
+                               <input type="text" placeholder={`Search ${componentTab}...`} value={componentSearch} onChange={(e) => setComponentSearch(e.target.value)} className="pl-9 pr-8 py-2 w-52 rounded-xl border-2 border-zinc-100 text-xs font-bold outline-none focus:border-black transition-all placeholder:text-zinc-300 placeholder:font-bold placeholder:italic" />
+                               {componentSearch && <button onClick={() => setComponentSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-300 hover:text-zinc-600"><X size={12} /></button>}
                             </div>
                          </div>
                      </div>
